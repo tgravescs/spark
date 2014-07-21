@@ -17,10 +17,6 @@ To build Spark yourself, refer to the [building with Maven guide](building-with-
 
 Most of the configs are the same for Spark on YARN as for other deployment modes. See the [configuration page](configuration.html) for more information on those.  These are configs that are specific to Spark on YARN.
 
-#### Environment Variables
-
-* `SPARK_YARN_USER_ENV`, to add environment variables to the Spark processes launched on YARN. This can be a comma separated list of environment variables, e.g. `SPARK_YARN_USER_ENV="JAVA_HOME=/jdk64,FOO=bar"`.
-
 #### Spark Properties
 
 <table class="table">
@@ -104,6 +100,17 @@ Most of the configs are the same for Spark on YARN as for other deployment modes
     in a world-readable location on HDFS. This allows YARN to cache it on nodes so that it doesn't
     need to be distributed each time an application runs. To point to a jar on HDFS, for example,
     set this configuration to "hdfs:///some/path".
+  </td>
+</tr>
+<tr>
+  <td><code>spark.yarn.appMasterEnv.<Environment Variable Name></code></td>
+  <td>(none)</td>
+  <td>
+     Add the environment variable specified by <Environment Variable Name> to the 
+     Application Master process launched on YARN. The user can specify multiple of 
+     these and to set multiple environment variables. In yarn-cluster mode this controls 
+     the environment of the SPARK driver and in yarn-client mode it only controls 
+     the environment of the executor launcher. 
   </td>
 </tr>
 </table>

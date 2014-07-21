@@ -195,6 +195,14 @@ Apart from these, the following properties are also available, and may be useful
     Spark's dependencies and user dependencies. It is currently an experimental feature.
   </td>
 </tr>
+<tr>
+  <td><code>spark.executorEnv.<Environment Variable Name></code></td>
+  <td>(none)</td>
+  <td>
+    Add the environment variable specified by <Environment Variable Name> to the Executor 
+    process. The user can specify multiple of these and to set multiple environment variables. 
+  </td>
+</tr>
 </table>
 
 #### Shuffle Behavior
