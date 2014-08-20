@@ -62,7 +62,7 @@ class ApplicationMaster(args: ApplicationMasterArguments, conf: Configuration,
   private var uiHistoryAddress: String = _
   private val maxAppAttempts: Int = conf.getInt(
     YarnConfiguration.RM_AM_MAX_ATTEMPTS, YarnConfiguration.DEFAULT_RM_AM_MAX_ATTEMPTS)
-  private var isLastAMRetry: Boolean = true
+  @volatile private var isLastAMRetry: Boolean = true
   private var amClient: AMRMClient[ContainerRequest] = _
 
   // Default to numExecutors * 2, with minimum of 3
@@ -165,7 +165,6 @@ class ApplicationMaster(args: ApplicationMasterArguments, conf: Configuration,
           succeeded = true
         } finally {
           logDebug("Finishing main")
-          isLastAMRetry = true
           if (succeeded) {
             ApplicationMaster.this.finishApplicationMaster(FinalApplicationStatus.SUCCEEDED)
           } else {
@@ -301,6 +300,7 @@ class ApplicationMaster(args: ApplicationMasterArguments, conf: Configuration,
         return
       }
       isFinished = true
+      isLastAMRetry = true
 
       logInfo("Unregistering ApplicationMaster with " + status)
       if (registered) {
