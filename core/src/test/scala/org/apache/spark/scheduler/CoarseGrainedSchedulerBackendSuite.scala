@@ -17,16 +17,16 @@
 
 package org.apache.spark.scheduler
 
-import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages.{KillExecutors, RegisterExecutor, RequestExecutors}
-import org.apache.spark._
-import org.apache.spark.rpc.{RpcCallContext, RpcEndpoint, RpcEndpointRef, RpcEnv}
-import org.apache.spark.scheduler.cluster.CoarseGrainedSchedulerBackend
-import org.apache.spark.util.{ManualClock, RpcUtils, SerializableBuffer}
-import org.mockito.Matchers.any
-import org.mockito.Mockito.{mock, spy, when}
-
 import scala.collection.{Map, mutable}
 import scala.concurrent.Future
+import org.mockito.Mockito.{mock, spy, verify, when}
+import org.apache.spark._
+import org.apache.spark.rpc.{RpcCallContext, RpcEndpoint, RpcEndpointRef, RpcEnv}
+import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages.{KillExecutors, RegisterExecutor, RemoveExecutor, RequestExecutors}
+import org.apache.spark.scheduler.cluster.CoarseGrainedSchedulerBackend
+import org.apache.spark.util.{RpcUtils, SerializableBuffer}
+import org.mockito.Matchers
+import org.mockito.Matchers.any
 
 class CoarseGrainedSchedulerBackendSuite extends SparkFunSuite with LocalSparkContext {
 
@@ -37,7 +37,7 @@ class CoarseGrainedSchedulerBackendSuite extends SparkFunSuite with LocalSparkCo
   /**
     * Before each test, set up the SparkContext.
     */
-  override def beforeEach(): Unit = {
+ /* override def beforeEach(): Unit = {
     super.beforeEach()
     val conf = new SparkConf()
       .setMaster("local[2]")
@@ -47,7 +47,7 @@ class CoarseGrainedSchedulerBackendSuite extends SparkFunSuite with LocalSparkCo
     scheduler = mock(classOf[TaskSchedulerImpl])
     when(sc.taskScheduler).thenReturn(scheduler)
     when(scheduler.sc).thenReturn(sc)
-  }
+  }  */
 
   /**
     * After each test, clean up all state and stop the [[SparkContext]].
@@ -74,7 +74,15 @@ class CoarseGrainedSchedulerBackendSuite extends SparkFunSuite with LocalSparkCo
   }
 
 
-  test("test totalCoreCount") {
+  test("test executor removal") {
+    val conf = new SparkConf()
+      .setMaster("local[2]")
+      .setAppName("test")
+      .set("spark.dynamicAllocation.testing", "true")
+    sc = spy(new SparkContext(conf))
+    scheduler = mock(classOf[TaskSchedulerImpl])
+    when(sc.taskScheduler).thenReturn(scheduler)
+    when(scheduler.sc).thenReturn(sc)
     // Set up a fake backend and cluster manager to simulate killing executors
     val rpcEnv = sc.env.rpcEnv
     val fakeClusterManager = new FakeClusterManager(rpcEnv)
@@ -93,13 +101,21 @@ class CoarseGrainedSchedulerBackendSuite extends SparkFunSuite with LocalSparkCo
       RegisterExecutor(executorId1, dummyExecutorEndpointRef1, "1.2.3.4", 1, Map.empty))
     fakeSchedulerBackend.driverEndpoint.askSync[Boolean](
       RegisterExecutor(executorId2, dummyExecutorEndpointRef2, "1.2.3.5", 2, Map.empty))
-     assert(fakeSchedulerBackend.getTotalCores() == 3)
+    assert(fakeSchedulerBackend.getTotalCores() == 3)
+    assert(fakeSchedulerBackend.getTotalRegisteredExecutors() == 2)
+    assert(fakeSchedulerBackend.getExecutorIds == Seq[String](executorId1, executorId2))
+    fakeSchedulerBackend.driverEndpoint.askSync[Boolean](
+      RemoveExecutor(executorId1, new ExecutorLossReason("testing 1")))
+    assert(fakeSchedulerBackend.getTotalCores() == 2)
+    assert(fakeSchedulerBackend.getTotalRegisteredExecutors() == 1)
+    assert(fakeSchedulerBackend.getExecutorIds == Seq[String](executorId2))
+    verify(scheduler).executorLost(Matchers.eq(executorId1), any())
   }
 }
 
-/**
-  * Dummy RPC endpoint to simulate executors.
-  */
+/*
+ * Dummy RPC endpoint to simulate executors.
+ */
 private class FakeExecutorEndpoint(override val rpcEnv: RpcEnv) extends RpcEndpoint {
 
   override def receive: PartialFunction[Any, Unit] = {
@@ -107,10 +123,11 @@ private class FakeExecutorEndpoint(override val rpcEnv: RpcEnv) extends RpcEndpo
   }
 }
 
-/**
-  * Dummy scheduler backend to simulate executor allocation requests to the cluster manager.
-  */
-class CSBFakeSchedulerBackend(scheduler: TaskSchedulerImpl, rpcEnv: RpcEnv, clusterManagerEndpoint: RpcEndpointRef)
+/*
+ * Dummy scheduler backend to simulate executor allocation requests to the cluster manager.
+ */
+private class CSBFakeSchedulerBackend(scheduler: TaskSchedulerImpl, rpcEnv: RpcEnv,
+                              clusterManagerEndpoint: RpcEndpointRef)
   extends CoarseGrainedSchedulerBackend(scheduler, rpcEnv) {
 
   protected override def doRequestTotalExecutors(requestedTotal: Int): Future[Boolean] = {
@@ -125,12 +142,16 @@ class CSBFakeSchedulerBackend(scheduler: TaskSchedulerImpl, rpcEnv: RpcEnv, clus
   def getTotalCores(): Int = {
     totalCoreCount.get()
   }
+
+  def getTotalRegisteredExecutors(): Int = {
+    totalRegisteredExecutors.get()
+  }
 }
 
 
-  /**
-    * Dummy cluster manager to simulate responses to executor allocation requests.
-    */
+/*
+ * Dummy cluster manager to simulate responses to executor allocation requests.
+ */
 private class FakeClusterManager(override val rpcEnv: RpcEnv) extends RpcEndpoint {
   private var targetNumExecutors = 0
   private val executorIdsToKill = new mutable.HashSet[String]
