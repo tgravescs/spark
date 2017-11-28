@@ -103,12 +103,13 @@ class CoarseGrainedSchedulerBackendSuite extends SparkFunSuite with LocalSparkCo
       RegisterExecutor(executorId2, dummyExecutorEndpointRef2, "1.2.3.5", 2, Map.empty))
     assert(fakeSchedulerBackend.getTotalCores() == 3)
     assert(fakeSchedulerBackend.getTotalRegisteredExecutors() == 2)
-    assert(fakeSchedulerBackend.getExecutorIds == Seq[String](executorId1, executorId2))
+    assert(fakeSchedulerBackend.getExecutorIds.sorted == Seq[String](executorId1, executorId2)
+      .sorted)
     fakeSchedulerBackend.driverEndpoint.askSync[Boolean](
       RemoveExecutor(executorId1, new ExecutorLossReason("testing 1")))
     assert(fakeSchedulerBackend.getTotalCores() == 2)
     assert(fakeSchedulerBackend.getTotalRegisteredExecutors() == 1)
-    assert(fakeSchedulerBackend.getExecutorIds == Seq[String](executorId2))
+    assert(fakeSchedulerBackend.getExecutorIds.sorted == Seq[String](executorId2).sorted)
     verify(scheduler).executorLost(Matchers.eq(executorId1), any())
   }
 }

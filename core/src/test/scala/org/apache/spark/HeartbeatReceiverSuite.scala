@@ -174,14 +174,18 @@ class HeartbeatReceiverSuite
     val dummyExecutorEndpointRef1 = rpcEnv.setupEndpoint("fake-executor-1", dummyExecutorEndpoint1)
     val dummyExecutorEndpointRef2 = rpcEnv.setupEndpoint("fake-executor-2", dummyExecutorEndpoint2)
     fakeSchedulerBackend.driverEndpoint.askSync[Boolean](
-      RegisterExecutor(executorId1, dummyExecutorEndpointRef1, "1.2.3.4", 0, Map.empty))
+      RegisterExecutor(executorId1, dummyExecutorEndpointRef1, "1.2.3.4", 1, Map.empty))
     fakeSchedulerBackend.driverEndpoint.askSync[Boolean](
-      RegisterExecutor(executorId2, dummyExecutorEndpointRef2, "1.2.3.5", 0, Map.empty))
+      RegisterExecutor(executorId2, dummyExecutorEndpointRef2, "1.2.3.5", 2, Map.empty))
     heartbeatReceiverRef.askSync[Boolean](TaskSchedulerIsSet)
     addExecutorAndVerify(executorId1)
     addExecutorAndVerify(executorId2)
     triggerHeartbeat(executorId1, executorShouldReregister = false)
     triggerHeartbeat(executorId2, executorShouldReregister = false)
+    assert(fakeSchedulerBackend.getTotalCores() == 3)
+    assert(fakeSchedulerBackend.getTotalRegisteredExecutors() == 2)
+    assert(fakeSchedulerBackend.getExecutorIds.sorted == Seq[String](executorId1, executorId2)
+      .sorted)
 
     // Adjust the target number of executors on the cluster manager side
     assert(fakeClusterManager.getTargetNumExecutors === 0)
@@ -205,6 +209,11 @@ class HeartbeatReceiverSuite
     // explicitly request new executors. For more detail, see SPARK-8119.
     assert(fakeClusterManager.getTargetNumExecutors === 2)
     assert(fakeClusterManager.getExecutorIdsToKill === Set(executorId1, executorId2))
+
+    // These should have changed when executor timed out and got removed
+    assert(fakeSchedulerBackend.getTotalCores() == 0)
+    assert(fakeSchedulerBackend.getTotalRegisteredExecutors() == 0)
+    assert(fakeSchedulerBackend.getExecutorIds.sorted == Seq[String]().sorted)
   }
 
   /** Manually send a heartbeat and return the response. */
@@ -277,6 +286,14 @@ private class FakeSchedulerBackend(
 
   protected override def doKillExecutors(executorIds: Seq[String]): Future[Boolean] = {
     clusterManagerEndpoint.ask[Boolean](KillExecutors(executorIds))
+  }
+
+  def getTotalCores(): Int = {
+    totalCoreCount.get()
+  }
+
+  def getTotalRegisteredExecutors(): Int = {
+    totalRegisteredExecutors.get()
   }
 }
 
