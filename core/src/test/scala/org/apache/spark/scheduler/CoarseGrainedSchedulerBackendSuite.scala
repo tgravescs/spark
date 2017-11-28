@@ -79,7 +79,7 @@ class CoarseGrainedSchedulerBackendSuite extends SparkFunSuite with LocalSparkCo
     val rpcEnv = sc.env.rpcEnv
     val fakeClusterManager = new FakeClusterManager(rpcEnv)
     val fakeClusterManagerRef = rpcEnv.setupEndpoint("fake-cm", fakeClusterManager)
-    val fakeSchedulerBackend = new FakeSchedulerBackend(scheduler, rpcEnv, fakeClusterManagerRef)
+    val fakeSchedulerBackend = new CSBFakeSchedulerBackend(scheduler, rpcEnv, fakeClusterManagerRef)
     when(sc.schedulerBackend).thenReturn(fakeSchedulerBackend)
 
     // Register fake executors with our fake scheduler backend
@@ -95,59 +95,55 @@ class CoarseGrainedSchedulerBackendSuite extends SparkFunSuite with LocalSparkCo
       RegisterExecutor(executorId2, dummyExecutorEndpointRef2, "1.2.3.5", 2, Map.empty))
      assert(fakeSchedulerBackend.getTotalCores() == 3)
   }
+}
 
-  /**
-    * Dummy RPC endpoint to simulate executors.
-    */
-  private class FakeExecutorEndpoint(override val rpcEnv: RpcEnv) extends RpcEndpoint {
+/**
+  * Dummy RPC endpoint to simulate executors.
+  */
+private class FakeExecutorEndpoint(override val rpcEnv: RpcEnv) extends RpcEndpoint {
 
-    override def receive: PartialFunction[Any, Unit] = {
-      case _ =>
-    }
+  override def receive: PartialFunction[Any, Unit] = {
+    case _ =>
+  }
+}
+
+/**
+  * Dummy scheduler backend to simulate executor allocation requests to the cluster manager.
+  */
+class CSBFakeSchedulerBackend(scheduler: TaskSchedulerImpl, rpcEnv: RpcEnv, clusterManagerEndpoint: RpcEndpointRef)
+  extends CoarseGrainedSchedulerBackend(scheduler, rpcEnv) {
+
+  protected override def doRequestTotalExecutors(requestedTotal: Int): Future[Boolean] = {
+    clusterManagerEndpoint.ask[Boolean](
+      RequestExecutors(requestedTotal, localityAwareTasks, hostToLocalTaskCount, Set.empty[String]))
   }
 
-  /**
-    * Dummy scheduler backend to simulate executor allocation requests to the cluster manager.
-    */
-  private class FakeSchedulerBackend(
-                                      scheduler: TaskSchedulerImpl,
-                                      rpcEnv: RpcEnv,
-                                      clusterManagerEndpoint: RpcEndpointRef)
-    extends CoarseGrainedSchedulerBackend(scheduler, rpcEnv) {
-
-    def getTotalCores(): Int = {
-    return totalCoreCount.get();
-    }
-
-    protected override def doRequestTotalExecutors(requestedTotal: Int): Future[Boolean] = {
-      clusterManagerEndpoint.ask[Boolean](
-        RequestExecutors(requestedTotal, localityAwareTasks, hostToLocalTaskCount, Set.empty[String]))
-    }
-
-    protected override def doKillExecutors(executorIds: Seq[String]): Future[Boolean] = {
-      clusterManagerEndpoint.ask[Boolean](KillExecutors(executorIds))
-    }
+  protected override def doKillExecutors(executorIds: Seq[String]): Future[Boolean] = {
+    clusterManagerEndpoint.ask[Boolean](KillExecutors(executorIds))
   }
+
+  def getTotalCores(): Int = {
+    totalCoreCount.get()
+  }
+}
 
 
   /**
     * Dummy cluster manager to simulate responses to executor allocation requests.
     */
-  private class FakeClusterManager(override val rpcEnv: RpcEnv) extends RpcEndpoint {
-    private var targetNumExecutors = 0
-    private val executorIdsToKill = new mutable.HashSet[String]
+private class FakeClusterManager(override val rpcEnv: RpcEnv) extends RpcEndpoint {
+  private var targetNumExecutors = 0
+  private val executorIdsToKill = new mutable.HashSet[String]
 
-    def getTargetNumExecutors: Int = targetNumExecutors
-    def getExecutorIdsToKill: Set[String] = executorIdsToKill.toSet
+  def getTargetNumExecutors: Int = targetNumExecutors
+  def getExecutorIdsToKill: Set[String] = executorIdsToKill.toSet
 
-    override def receiveAndReply(context: RpcCallContext): PartialFunction[Any, Unit] = {
-      case RequestExecutors(requestedTotal, _, _, _) =>
-        targetNumExecutors = requestedTotal
-        context.reply(true)
-      case KillExecutors(executorIds) =>
-        executorIdsToKill ++= executorIds
-        context.reply(true)
-    }
-
-
+  override def receiveAndReply(context: RpcCallContext): PartialFunction[Any, Unit] = {
+    case RequestExecutors(requestedTotal, _, _, _) =>
+      targetNumExecutors = requestedTotal
+      context.reply(true)
+    case KillExecutors(executorIds) =>
+      executorIdsToKill ++= executorIds
+      context.reply(true)
   }
+}
