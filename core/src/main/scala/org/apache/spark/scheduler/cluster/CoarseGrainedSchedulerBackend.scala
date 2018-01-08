@@ -182,7 +182,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
           addressToExecutorId(executorAddress) = executorId
           totalCoreCount.addAndGet(cores)
           totalRegisteredExecutors.addAndGet(1)
-          val data = new ExecutorData(executorRef, executorRef.address, hostname,
+          val data = new ExecutorData(executorRef, executorAddress, hostname,
             cores, cores, logUrls)
           // This must be synchronized because variables mutated
           // in this block are read when requesting executors
@@ -264,14 +264,19 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
     private def makeOffers(executorId: String) {
       // Make sure no executor is killed while some task is launching on it
       val taskDescs = CoarseGrainedSchedulerBackend.this.synchronized {
-        // Filter out executors under killing
-        if (executorIsAlive(executorId)) {
-          val executorData = executorDataMap(executorId)
-          val workOffers = IndexedSeq(
-            new WorkerOffer(executorId, executorData.executorHost, executorData.freeCores))
-          scheduler.resourceOffers(workOffers)
-        } else {
-          Seq.empty
+        executorDataMap.get(executorId) match {
+          case Some(executorData) =>
+            // Filter out executors under killing
+            if (executorIsAlive(executorId) ) {
+              val workOffers = IndexedSeq(
+                new WorkerOffer(executorId, executorData.executorHost, executorData.freeCores))
+              scheduler.resourceOffers(workOffers)
+            } else {
+              Seq.empty
+            }
+          case None =>
+            logWarning(s"Expected executorId: $executorId to be in the executorDataMap but wasn't")
+            Seq.empty
         }
       }
       if (!taskDescs.isEmpty) {
@@ -603,6 +608,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
       executorIds: Seq[String],
       replace: Boolean,
       force: Boolean): Seq[String] = {
+
     logInfo(s"Requesting to kill executor(s) ${executorIds.mkString(", ")}")
 
     val response = synchronized {

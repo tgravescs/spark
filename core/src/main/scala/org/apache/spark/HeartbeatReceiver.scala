@@ -78,7 +78,7 @@ private[spark] class HeartbeatReceiver(sc: SparkContext, clock: Clock)
   private val slaveTimeoutMs =
     sc.conf.getTimeAsMs("spark.storage.blockManagerSlaveTimeoutMs", "120s")
   private val executorTimeoutMs =
-    sc.conf.getTimeAsSeconds("spark.network.timeout", s"${slaveTimeoutMs}ms") * 1000
+    sc.conf.getTimeAsSeconds("spark.test.network.timeout", s"${slaveTimeoutMs}ms") * 1000
 
   // "spark.network.timeoutInterval" uses "seconds", while
   // "spark.storage.blockManagerTimeoutIntervalMs" uses "milliseconds"
@@ -200,13 +200,10 @@ private[spark] class HeartbeatReceiver(sc: SparkContext, clock: Clock)
           s"${now - lastSeenMs} ms exceeds timeout $executorTimeoutMs ms")
         sc.schedulerBackend match {
           case b: CoarseGrainedSchedulerBackend =>
-            logInfo("calling removeExecutor via ask")
-
             b.driverEndpoint.ask[Boolean](RemoveExecutor(executorId, new ExecutorLossReason
             ("Heartbeat timed out"))).failed.foreach(t => logError(t.getMessage, t))(ThreadUtils
               .sameThread)
           case _ =>
-            logInfo("calling executorLost")
             scheduler.executorLost(executorId, SlaveLost("Executor heartbeat " +
               s"timed out after ${now - lastSeenMs} ms"))
         }
