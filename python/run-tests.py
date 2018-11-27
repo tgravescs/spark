@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/home/y/bin/python
 
 #
 # Licensed to the Apache Software Foundation (ASF) under one or more
@@ -251,7 +251,7 @@ def main():
         for module in modules_to_test:
             if python_implementation not in module.blacklisted_python_implementations:
                 for test_goal in module.python_test_goals:
-                    if test_goal in ('pyspark.streaming.tests', 'pyspark.mllib.tests',
+                    if test_goal in ('pyspark.streaming.tests',
                                      'pyspark.tests', 'pyspark.sql.tests'):
                         priority = 0
                     else:
