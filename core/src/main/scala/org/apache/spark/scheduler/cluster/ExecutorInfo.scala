@@ -16,8 +16,8 @@
  */
 package org.apache.spark.scheduler.cluster
 
+import org.apache.spark.ResourceInformation
 import org.apache.spark.annotation.DeveloperApi
-import org.apache.spark.scheduler.ResourceInformation
 
 /**
  * :: DeveloperApi ::

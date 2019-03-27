@@ -30,6 +30,9 @@ import org.apache.spark.util.collection.unsafe.sort.UnsafeSorterSpillReader.MAX_
 
 package object config {
 
+  private[spark] val SPARK_EXECUTOR_RESOURCE_PREFIX = "spark.executor.resource"
+  private[spark] val SPARK_TASK_RESOURCE_PREFIX = "spark.task.resource"
+
   private[spark] val DRIVER_CLASS_PATH =
     ConfigBuilder(SparkLauncher.DRIVER_EXTRA_CLASSPATH).stringConf.createOptional
 
@@ -320,10 +323,10 @@ package object config {
   // for instance every type of accelerators, then for each accelerator various configs like
   // count, could add a type, etc..
   private[spark] val GPUS_PER_TASK =
-    ConfigBuilder(SPARK_TASK_ACCELERATOR_PREFIX + ".gpu.count").intConf.createWithDefault(0)
+    ConfigBuilder(SPARK_TASK_RESOURCE_PREFIX + ".gpu.count").intConf.createWithDefault(0)
 
   private[spark] val GPU_DISCOVERY_SCRIPT =
-    ConfigBuilder(SPARK_EXECUTOR_ACCELERATOR_PREFIX + ".gpu.discoveryScript").
+    ConfigBuilder(SPARK_EXECUTOR_RESOURCE_PREFIX + ".gpu.discoveryScript").
       stringConf.
       createOptional
 
@@ -1313,7 +1316,4 @@ package object config {
     .doc("Staging directory used while submitting applications.")
     .stringConf
     .createOptional
-
-  private[spark] val SPARK_EXECUTOR_ACCELERATOR_PREFIX = "spark.executor.accelerator"
-  private[spark] val SPARK_TASK_ACCELERATOR_PREFIX = "spark.task.accelerator"
 }

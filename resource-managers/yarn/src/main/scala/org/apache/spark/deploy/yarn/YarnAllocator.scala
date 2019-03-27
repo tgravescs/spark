@@ -258,12 +258,6 @@ private[yarn] class YarnAllocator(
 
     val allocatedContainers = allocateResponse.getAllocatedContainers()
     allocatorBlacklistTracker.setNumClusterNodes(allocateResponse.getNumClusterNodes)
-    for (container <- allocatedContainers) {
-      // ? this in 3.1?
-      // container.getResourceMappings()
-    }
-
-    // NVIDIA_VISIBLE_DEVICES
 
     if (allocatedContainers.size > 0) {
       logDebug(("Allocated containers: %d. Current executor count: %d. " +

@@ -17,6 +17,8 @@
 
 package org.apache.spark.scheduler
 
+import org.apache.spark.ResourceInformation
+
 /**
  * Represents free resources available on an executor.
  */

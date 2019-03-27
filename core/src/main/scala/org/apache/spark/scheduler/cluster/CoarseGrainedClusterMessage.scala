@@ -19,9 +19,10 @@ package org.apache.spark.scheduler.cluster
 
 import java.nio.ByteBuffer
 
+import org.apache.spark.ResourceInformation
 import org.apache.spark.TaskState.TaskState
 import org.apache.spark.rpc.RpcEndpointRef
-import org.apache.spark.scheduler.{ExecutorLossReason, ResourceInformation}
+import org.apache.spark.scheduler.ExecutorLossReason
 import org.apache.spark.util.SerializableBuffer
 
 private[spark] sealed trait CoarseGrainedClusterMessage extends Serializable

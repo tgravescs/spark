@@ -15,14 +15,13 @@
  * limitations under the License.
  */
 
-package org.apache.spark.scheduler
+package org.apache.spark
 
 /**
- * ResourceInformation determines unit/name/value of resource types in addition to
- * memory and vcores.
+ * ResourceInformation, name of accerlator and a array of values to use.
+ * For instances, for GPUs the values would be an array of indexes of the gpus.
  */
 private[spark]
 case class ResourceInformation(
-    name: String,  // probably don't need name here
-    value: Long,
-    unit: String)
+    name: String,
+    value: Array[String])

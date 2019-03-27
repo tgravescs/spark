@@ -19,62 +19,47 @@ package org.apache.spark.executor
 
 import java.io.File
 
-import scala.collection.mutable.Set
-
-import org.apache.spark.{SparkConf, SparkException}
+import org.apache.spark.{ResourceInformation, SparkConf, SparkException}
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config._
-import org.apache.spark.scheduler.ResourceInformation
 import org.apache.spark.util.Utils.executeAndGetOutput
 
 /**
- * Discover resources available based on user input, currently this just knows about gpus
- * but could easily be made more generic.
+ * Discovers resources (gpu/fpgas/etc) available to an executor. Currently this just
+ * knows about gpus but could easily be made more generic.
  */
 private[spark] class ResourceDiscoverer(sparkconf: SparkConf) extends Logging {
 
-   def findResources(): Array[String] = {
-     val resourceTypes = "gpu"
-     val allResourceInfo = Set[ResourceInformation]()
+  def findResources(): Map[String, ResourceInformation] = {
+    Map("gpu" -> getGPUResources)
+  }
 
-     if (sparkconf.get) {
-       val types = resourceTypes.get.split(",")
-
-       for (resourceType <- types) {
-         val lookupType = SPARK_RESOURCE_TYPES_PREFIX + "." + resourceType
-         val resourceConfigs = sparkconf.getAllWithPrefix(lookupType).toMap
-         val unit = resourceConfigs.get("unit").getOrElse("")
-         val resourceVal = resourceConfigs.get("value").getOrElse("0").toLong
-         allResourceInfo += new ResourceInformation(resourceType, resourceVal, unit)
-       }
-     }
-
-     return
-   }
-
-  def getGPUResources: Map[String, ResourceInformation] = {
-    val resources = Map[String, ResourceInformation]
+  private def getGPUResources: ResourceInformation = {
     val script = sparkconf.get(GPU_DISCOVERY_SCRIPT)
-    if (script.nonEmpty) {
+    val result = if (script.nonEmpty) {
       val scriptFile = new File(script.get)
-      // check that script exists and try to execute
+      // check that script exists and try to execute, assume we don't call
+      // this if manually specified
       if (scriptFile.exists()) {
         try {
           val output = executeAndGetOutput(Seq(script.get), new File("."))
           // sanity check output is a comma separate list of ints
-          val gpu_ids = output.split(",")
+          val gpu_ids = output.split(",").map(_.trim())
           for (gpu <- gpu_ids) {
-            Integer.parseInt(gpu.trim())
-            resources + "gpu" -> new ResourceInformation("gpu", 0, "")
+            Integer.parseInt(gpu)
           }
-          output
+          gpu_ids
         } catch {
-          case _: SparkException | _: NumberFormatException =>
-            logError("The gpu discover script threw exception, assuming no gpu's", _)
-            ""
+          case e @ (_: SparkException | _: NumberFormatException) =>
+            logError("The gpu discover script threw exception, assuming no gpu's", e)
+            Array.empty[String]
         }
+      } else {
+        throw new SparkException(s"Gpu script: $scriptFile to discover gpu's doesn't exist!")
       }
+    } else {
+      Array.empty[String]
     }
-    resources
+    new ResourceInformation("gpu", result)
   }
 }
