@@ -32,7 +32,7 @@ import org.apache.spark.rpc.RpcEndpointAddress
 import org.apache.spark.scheduler._
 import org.apache.spark.util.Utils
 
-/**
+/**org.apache.spark.executor.CoarseGrainedExecutorBackend
  * A [[SchedulerBackend]] implementation for Spark's standalone cluster manager.
  */
 private[spark] class StandaloneSchedulerBackend(

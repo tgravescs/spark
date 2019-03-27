@@ -18,14 +18,11 @@
 package org.apache.spark.scheduler
 
 /**
- * Represents free resources available on an executor.
+ * ResourceInformation determines unit/name/value of resource types in addition to
+ * memory and vcores.
  */
 private[spark]
-case class WorkerOffer(
-    executorId: String,
-    host: String,
-    cores: Int,
-    // `address` is an optional hostPort string, it provide more useful information than `host`
-    // when multiple executors are launched on the same host.
-    address: Option[String] = None,
-    resources: Map[String, ResourceInformation] = Map.empty)
+case class ResourceInformation(
+    name: String,  // probably don't need name here
+    value: Long,
+    unit: String)

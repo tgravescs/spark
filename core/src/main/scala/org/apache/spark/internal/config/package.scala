@@ -316,6 +316,17 @@ package object config {
 
   private[spark] val CPUS_PER_TASK = ConfigBuilder("spark.task.cpus").intConf.createWithDefault(1)
 
+  // this is formatted this way to allow grabbing a bunch of sub pieces of the config,
+  // for instance every type of accelerators, then for each accelerator various configs like
+  // count, could add a type, etc..
+  private[spark] val GPUS_PER_TASK =
+    ConfigBuilder(SPARK_TASK_ACCELERATOR_PREFIX + ".gpu.count").intConf.createWithDefault(0)
+
+  private[spark] val GPU_DISCOVERY_SCRIPT =
+    ConfigBuilder(SPARK_EXECUTOR_ACCELERATOR_PREFIX + ".gpu.discoveryScript").
+      stringConf.
+      createOptional
+
   private[spark] val DYN_ALLOCATION_ENABLED =
     ConfigBuilder("spark.dynamicAllocation.enabled").booleanConf.createWithDefault(false)
 
@@ -1302,4 +1313,7 @@ package object config {
     .doc("Staging directory used while submitting applications.")
     .stringConf
     .createOptional
+
+  private[spark] val SPARK_EXECUTOR_ACCELERATOR_PREFIX = "spark.executor.accelerator"
+  private[spark] val SPARK_TASK_ACCELERATOR_PREFIX = "spark.task.accelerator"
 }

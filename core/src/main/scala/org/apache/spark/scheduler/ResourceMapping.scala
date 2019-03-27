@@ -17,15 +17,29 @@
 
 package org.apache.spark.scheduler
 
+import scala.collection.mutable.Map
+
 /**
- * Represents free resources available on an executor.
+ * This class is used to store assigned resource to a single container by
+ * resource types.
+ *
+ * Assigned resource could be list of String
+ *
+ * For example, we can assign container to:
+ * "numa": ["numa0"]
+ * "gpu": ["0", "1", "2", "3"]
+ * "fpga": ["1", "3"]
+ *
+ * This will be used for NM restart container recovery.
  */
-private[spark]
-case class WorkerOffer(
-    executorId: String,
-    host: String,
-    cores: Int,
-    // `address` is an optional hostPort string, it provide more useful information than `host`
-    // when multiple executors are launched on the same host.
-    address: Option[String] = None,
-    resources: Map[String, ResourceInformation] = Map.empty)
+private[spark] class ResourceMapping(
+   val resources: Map[String, Array[String]]) {
+
+   def getAssignedResources(resourceType: String): Array[String] = {
+     return resources.get(resourceType).getOrElse(Array.empty)
+   }
+
+   def addAssignedResource(resourceType: String, values: Array[String]): Unit = {
+     resources += resourceType -> values
+   }
+}

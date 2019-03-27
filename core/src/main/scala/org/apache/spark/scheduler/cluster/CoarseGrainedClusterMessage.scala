@@ -21,7 +21,7 @@ import java.nio.ByteBuffer
 
 import org.apache.spark.TaskState.TaskState
 import org.apache.spark.rpc.RpcEndpointRef
-import org.apache.spark.scheduler.ExecutorLossReason
+import org.apache.spark.scheduler.{ExecutorLossReason, ResourceInformation}
 import org.apache.spark.util.SerializableBuffer
 
 private[spark] sealed trait CoarseGrainedClusterMessage extends Serializable
@@ -63,8 +63,10 @@ private[spark] object CoarseGrainedClusterMessages {
       executorRef: RpcEndpointRef,
       hostname: String,
       cores: Int,
+      // resources: Map[String, ResourceInformation],
       logUrls: Map[String, String],
-      attributes: Map[String, String])
+      attributes: Map[String, String],
+      resources: Map[String, ResourceInformation])
     extends CoarseGrainedClusterMessage
 
   case class StatusUpdate(executorId: String, taskId: Long, state: TaskState,

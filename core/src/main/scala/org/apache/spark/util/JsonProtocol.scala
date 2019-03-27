@@ -1069,7 +1069,7 @@ private[spark] object JsonProtocol {
       case Some(attr) => mapFromJson(attr).toMap
       case None => Map.empty[String, String]
     }
-    new ExecutorInfo(executorHost, totalCores, logUrls, attributes)
+    new ExecutorInfo(executorHost, totalCores, logUrls, attributes, Map.empty)
   }
 
   def blockUpdatedInfoFromJson(json: JValue): BlockUpdatedInfo = {

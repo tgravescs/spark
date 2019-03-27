@@ -17,6 +17,7 @@
 
 package org.apache.spark.executor
 
+import java.io.File
 import java.net.URL
 import java.nio.ByteBuffer
 import java.util.Locale
@@ -31,11 +32,13 @@ import org.apache.spark.TaskState.TaskState
 import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.deploy.worker.WorkerWatcher
 import org.apache.spark.internal.Logging
+import org.apache.spark.internal.config._
 import org.apache.spark.rpc._
-import org.apache.spark.scheduler.{ExecutorLossReason, TaskDescription}
+import org.apache.spark.scheduler.{ExecutorLossReason, ResourceInformation, TaskDescription}
 import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages._
 import org.apache.spark.serializer.SerializerInstance
 import org.apache.spark.util.{ThreadUtils, Utils}
+import org.apache.spark.util.Utils.executeAndGetOutput
 
 private[spark] class CoarseGrainedExecutorBackend(
     override val rpcEnv: RpcEnv,
@@ -60,8 +63,9 @@ private[spark] class CoarseGrainedExecutorBackend(
     rpcEnv.asyncSetupEndpointRefByURI(driverUrl).flatMap { ref =>
       // This is a very fast action so we can use "ThreadUtils.sameThread"
       driver = Some(ref)
+      val resources = getGPUResources
       ref.ask[Boolean](RegisterExecutor(executorId, self, hostname, cores, extractLogUrls,
-        extractAttributes))
+        extractAttributes, resources))
     }(ThreadUtils.sameThread).onComplete {
       // This is a very fast action so we can use "ThreadUtils.sameThread"
       case Success(msg) =>
@@ -69,6 +73,32 @@ private[spark] class CoarseGrainedExecutorBackend(
       case Failure(e) =>
         exitExecutor(1, s"Cannot register with driver: $driverUrl", e, notifyDriver = false)
     }(ThreadUtils.sameThread)
+  }
+
+  def getGPUResources: Map[String, ResourceInformation] = {
+    val resources = Map[String, ResourceInformation]
+    val script = env.conf.get(GPU_DISCOVERY_SCRIPT)
+    if (script.nonEmpty) {
+      val scriptFile = new File(script.get)
+      // check that script exists and try to execute
+      if (scriptFile.exists()) {
+        try {
+          val output = executeAndGetOutput(Seq(script.get), new File("."))
+          // sanity check output is a comma separate list of ints
+          val gpu_ids = output.split(",")
+          for (gpu <- gpu_ids) {
+            Integer.parseInt(gpu.trim())
+            resources + "gpu" -> new ResourceInformation("gpu", 0, "")
+          }
+          output
+        } catch {
+          case _: SparkException | _: NumberFormatException =>
+            logError("The gpu discover script threw exception, assuming no gpu's", _)
+            ""
+        }
+      }
+    }
+    resources
   }
 
   def extractLogUrls: Map[String, String] = {
@@ -255,6 +285,12 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
     var executorId: String = null
     var hostname: String = null
     var cores: Int = 0
+    var gpu_devices: String = null  // auto mean auto figure it out
+    // manual config probably needed standalone?
+    // Otherwise yarn/kubernetes should only show us usable?
+    // Specify GPU devices which can be managed by Spark (split by comma).
+    // Number of GPU devices will be reported to the driver to make scheduling decisions.
+    // This is a comma separated list of minor device ids.
     var appId: String = null
     var workerUrl: Option[String] = None
     val userClassPath = new mutable.ListBuffer[URL]()
@@ -273,6 +309,9 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
           argv = tail
         case ("--cores") :: value :: tail =>
           cores = value.toInt
+          argv = tail
+        case ("--gpu-devices") :: value :: tail =>
+          gpus = value
           argv = tail
         case ("--app-id") :: value :: tail =>
           appId = value

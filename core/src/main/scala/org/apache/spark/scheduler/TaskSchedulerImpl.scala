@@ -417,6 +417,15 @@ private[spark] class TaskSchedulerImpl(
     val shuffledOffers = shuffleOffers(filteredOffers)
     // Build a list of tasks to assign to each worker.
     val tasks = shuffledOffers.map(o => new ArrayBuffer[TaskDescription](o.cores / CPUS_PER_TASK))
+    val availableResources = shuffledOffers.map(o => o.resources).toArray
+    for (hostResource <- availableResources) {
+      for (resource <- hostResource) {
+        val value = resource._2
+        if (value.name.equals("gpu")) {
+          logInfo(" gpu resource with: " + value.value)
+        }
+      }
+    }
     val availableCpus = shuffledOffers.map(o => o.cores).toArray
     val availableSlots = shuffledOffers.map(o => o.cores / CPUS_PER_TASK).sum
     val sortedTaskSets = rootPool.getSortedTaskSetQueue

@@ -187,7 +187,8 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
 
     override def receiveAndReply(context: RpcCallContext): PartialFunction[Any, Unit] = {
 
-      case RegisterExecutor(executorId, executorRef, hostname, cores, logUrls, attributes) =>
+      case RegisterExecutor(executorId, executorRef, hostname, cores, logUrls,
+          attributes, resources) =>
         if (executorDataMap.contains(executorId)) {
           executorRef.send(RegisterExecutorFailed("Duplicate executor ID: " + executorId))
           context.reply(true)
@@ -211,7 +212,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
           totalCoreCount.addAndGet(cores)
           totalRegisteredExecutors.addAndGet(1)
           val data = new ExecutorData(executorRef, executorAddress, hostname,
-            cores, cores, logUrlHandler.applyPattern(logUrls, attributes), attributes)
+            cores, cores, logUrlHandler.applyPattern(logUrls, attributes), attributes, resources)
           // This must be synchronized because variables mutated
           // in this block are read when requesting executors
           CoarseGrainedSchedulerBackend.this.synchronized {
@@ -264,7 +265,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
         val workOffers = activeExecutors.map {
           case (id, executorData) =>
             new WorkerOffer(id, executorData.executorHost, executorData.freeCores,
-              Some(executorData.executorAddress.hostPort))
+              Some(executorData.executorAddress.hostPort), executorData.resources)
         }.toIndexedSeq
         scheduler.resourceOffers(workOffers)
       }
@@ -290,7 +291,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
           val executorData = executorDataMap(executorId)
           val workOffers = IndexedSeq(
             new WorkerOffer(executorId, executorData.executorHost, executorData.freeCores,
-              Some(executorData.executorAddress.hostPort)))
+              Some(executorData.executorAddress.hostPort), executorData.resources))
           scheduler.resourceOffers(workOffers)
         } else {
           Seq.empty
