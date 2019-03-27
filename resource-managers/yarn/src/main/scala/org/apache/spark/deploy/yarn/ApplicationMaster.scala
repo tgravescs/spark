@@ -486,9 +486,6 @@ private[spark] class ApplicationMaster(
 
   private def runDriver(): Unit = {
 
-    val gpus = System.getenv("NVIDIA_VISIBLE_DEVICES")
-    logInfo("gpus information is: " + gpus)
-
     addAmIpFilter(None, System.getenv(ApplicationConstants.APPLICATION_WEB_PROXY_BASE_ENV))
     userClassThread = startUserApplication()
 

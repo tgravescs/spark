@@ -278,12 +278,12 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
     var executorId: String = null
     var hostname: String = null
     var cores: Int = 0
-    var gpuDevices: String = null  // auto mean auto figure it out
-    // manual config probably needed standalone?
-    // Otherwise yarn/kubernetes should only show us usable?
     // Specify GPU devices which can be managed by Spark (split by comma).
+    // This is optional, if users specifies a script to auto discover this doesn't need
+    // to be specified.
     // Number of GPU devices will be reported to the driver to make scheduling decisions.
     // This is a comma separated list of minor device ids.
+    var gpuDevices: String = null
     var appId: String = null
     var workerUrl: Option[String] = None
     val userClassPath = new mutable.ListBuffer[URL]()

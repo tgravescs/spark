@@ -865,17 +865,6 @@ private[spark] class Client(
 
     val launchEnv = setupLaunchEnv(stagingDirPath, pySparkArchives)
 
-    /* val amResources =
-      if (isClusterMode) {
-        sparkConf.getAllWithPrefix(config.YARN_DRIVER_RESOURCE_TYPES_PREFIX).toMap
-      } else {
-        sparkConf.getAllWithPrefix(config.YARN_AM_RESOURCE_TYPES_PREFIX).toMap
-      }
-
-    if (amResources.get("spark.yarn.driver.resource.yarn.io/gpu").isDefined) {
-      // requesting GPU's
-    } */
-
     val localResources = prepareLocalResources(stagingDirPath, pySparkArchives)
 
     val amContainer = Records.newRecord(classOf[ContainerLaunchContext])
