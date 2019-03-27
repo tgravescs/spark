@@ -485,7 +485,6 @@ private[spark] class ApplicationMaster(
   }
 
   private def runDriver(): Unit = {
-
     addAmIpFilter(None, System.getenv(ApplicationConstants.APPLICATION_WEB_PROXY_BASE_ENV))
     userClassThread = startUserApplication()
 
