@@ -488,8 +488,8 @@ private[spark] object JsonProtocol {
     ("Host" -> executorInfo.executorHost) ~
     ("Total Cores" -> executorInfo.totalCores) ~
     ("Log Urls" -> mapToJson(executorInfo.logUrlMap)) ~
-    ("Attributes" -> mapToJson(executorInfo.attributes)) ~
-    ("Resources" -> mapToJson(executorInfo.resources))
+    ("Attributes" -> mapToJson(executorInfo.attributes))
+    // ("Resources" -> mapToJson(executorInfo.resources))
   }
 
   // TODO - add this in
