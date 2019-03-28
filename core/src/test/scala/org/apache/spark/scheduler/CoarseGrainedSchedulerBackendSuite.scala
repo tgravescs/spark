@@ -20,12 +20,10 @@ package org.apache.spark.scheduler
 import java.util.concurrent.atomic.AtomicBoolean
 
 import scala.concurrent.duration._
-
 import org.scalatest.concurrent.Eventually
 import org.scalatest.mockito.MockitoSugar._
-
 import org.apache.spark.{LocalSparkContext, SparkConf, SparkContext, SparkException, SparkFunSuite}
-import org.apache.spark.internal.config.{CPUS_PER_TASK, UI}
+import org.apache.spark.internal.config.{CPUS_PER_TASK, GPUS_PER_TASK, UI}
 import org.apache.spark.internal.config.Network.RPC_MESSAGE_MAX_SIZE
 import org.apache.spark.rdd.RDD
 import org.apache.spark.rpc.{RpcAddress, RpcEndpointRef}
@@ -169,6 +167,52 @@ class CoarseGrainedSchedulerBackendSuite extends SparkFunSuite with LocalSparkCo
       RegisterExecutor("2", mockEndpointRef, mockAddress.host, 1, logUrls, attributes, Map.empty))
     backend.driverEndpoint.askSync[Boolean](
       RegisterExecutor("3", mockEndpointRef, mockAddress.host, 1, logUrls, attributes, Map.empty))
+
+    sc.listenerBus.waitUntilEmpty(executorUpTimeout.toMillis)
+    assert(executorAddedCount === 3)
+  }
+
+  test("extra gpu resources from executor") {
+
+    val conf = new SparkConf()
+      .set(GPUS_PER_TASK.key, "1")
+      .setMaster("local-cluster[0, 3, 1024]")
+      .setAppName("test")
+
+    sc = new SparkContext(conf)
+    val backend = sc.schedulerBackend.asInstanceOf[CoarseGrainedSchedulerBackend]
+    val mockEndpointRef = mock[RpcEndpointRef]
+    val mockAddress = mock[RpcAddress]
+
+    val logUrls = Map(
+      "stdout" -> "http://oldhost:8888/logs/dummy/stdout",
+      "stderr" -> "http://oldhost:8888/logs/dummy/stderr")
+    val attributes = Map(
+      "CLUSTER_ID" -> "cl1",
+      "USER" -> "dummy",
+      "CONTAINER_ID" -> "container1",
+      "LOG_FILES" -> "stdout,stderr")
+    val baseUrl = s"http://newhost:9999/logs/clusters/${attributes("CLUSTER_ID")}" +
+      s"/users/${attributes("USER")}/containers/${attributes("CONTAINER_ID")}"
+    val resources = Map("gpu" -> Array("0"))
+
+    var executorAddedCount: Int = 0
+    val listener = new SparkListener() {
+      override def onExecutorAdded(executorAdded: SparkListenerExecutorAdded): Unit = {
+        executorAddedCount += 1
+        assert(executorAdded.executorInfo.resources.get("gpu").nonEmpty)
+        assert(executorAdded.executorInfo.resources.get("gpu").get === Array("0"))
+      }
+    }
+
+    sc.addSparkListener(listener)
+
+    backend.driverEndpoint.askSync[Boolean](
+      RegisterExecutor("1", mockEndpointRef, mockAddress.host, 1, logUrls, attributes, resources))
+    backend.driverEndpoint.askSync[Boolean](
+      RegisterExecutor("2", mockEndpointRef, mockAddress.host, 1, logUrls, attributes, resources))
+    backend.driverEndpoint.askSync[Boolean](
+      RegisterExecutor("3", mockEndpointRef, mockAddress.host, 1, logUrls, attributes, resources))
 
     sc.listenerBus.waitUntilEmpty(executorUpTimeout.toMillis)
     assert(executorAddedCount === 3)

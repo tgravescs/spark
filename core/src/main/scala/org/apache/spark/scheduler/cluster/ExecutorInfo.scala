@@ -16,7 +16,6 @@
  */
 package org.apache.spark.scheduler.cluster
 
-import org.apache.spark.ResourceInformation
 import org.apache.spark.annotation.DeveloperApi
 
 /**
@@ -29,7 +28,7 @@ class ExecutorInfo(
    val totalCores: Int,
    val logUrlMap: Map[String, String],
    val attributes: Map[String, String],
-   val resources: Map[String, ResourceInformation] = Map.empty) {
+   val resources: Map[String, Array[String]] = Map.empty) {
 
   def this(executorHost: String, totalCores: Int, logUrlMap: Map[String, String]) = {
     this(executorHost, totalCores, logUrlMap, Map.empty, Map.empty)

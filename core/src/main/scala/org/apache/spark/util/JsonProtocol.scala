@@ -492,9 +492,9 @@ private[spark] object JsonProtocol {
     ("Resources" -> resourcesMapToJson(executorInfo.resources))
   }
 
-  def resourcesMapToJson(m: Map[String, ResourceInformation]): JValue = {
+  def resourcesMapToJson(m: Map[String, Array[String]]): JValue = {
     val jsonFields = m.map {
-      case (k, v) => JField(k, JArray(v.value.map(JString(_)).toList))
+      case (k, v) => JField(k, JArray(v.map(JString(_)).toList))
     }
     JObject(jsonFields.toList)
   }
@@ -1094,10 +1094,10 @@ private[spark] object JsonProtocol {
    * Util JSON deserialization methods |
    * --------------------------------- */
 
-  def resourcesMapFromJson(json: JValue): Map[String, ResourceInformation] = {
+  def resourcesMapFromJson(json: JValue): Map[String, Array[String]] = {
     val jsonFields = json.asInstanceOf[JObject].obj
     jsonFields.map { case JField(k, JArray(v)) =>
-      (k, new ResourceInformation(k, v.map(_.extract[String]).toArray))
+      (k, v.map(_.extract[String]).toArray)
     }.toMap
   }
 

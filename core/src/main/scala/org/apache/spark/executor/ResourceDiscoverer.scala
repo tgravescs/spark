@@ -19,7 +19,7 @@ package org.apache.spark.executor
 
 import java.io.File
 
-import org.apache.spark.{ResourceInformation, SparkConf, SparkException}
+import org.apache.spark.{SparkConf, SparkException}
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config._
 import org.apache.spark.util.Utils.executeAndGetOutput
@@ -30,16 +30,16 @@ import org.apache.spark.util.Utils.executeAndGetOutput
  */
 private[spark] class ResourceDiscoverer(sparkconf: SparkConf) extends Logging {
 
-  def findResources(): Map[String, ResourceInformation] = {
+  def findResources(): Map[String, Array[String]] = {
     val gpus = getGPUResources
-    if (gpus.value.isEmpty) {
+    if (gpus.isEmpty) {
       Map()
     } else {
       Map("gpu" -> gpus)
     }
   }
 
-  private def getGPUResources: ResourceInformation = {
+  private def getGPUResources: Array[String] = {
     val script = sparkconf.get(GPU_DISCOVERY_SCRIPT)
     val result = if (script.nonEmpty) {
       val scriptFile = new File(script.get)
@@ -66,6 +66,6 @@ private[spark] class ResourceDiscoverer(sparkconf: SparkConf) extends Logging {
       logWarning("User is expecting to use gpu resources but didn't specify a script to find them!")
       Array.empty[String]
     }
-    new ResourceInformation("gpu", result)
+    result
   }
 }

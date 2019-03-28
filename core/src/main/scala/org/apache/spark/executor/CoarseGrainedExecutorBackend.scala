@@ -69,7 +69,7 @@ private[spark] class CoarseGrainedExecutorBackend(
           val resourceDiscoverer = new ResourceDiscoverer(env.conf)
           resourceDiscoverer.findResources()
         } else {
-          val gpuInfo = new ResourceInformation("gpu", gpuDevices.split(",").map(_.trim()))
+          val gpuInfo = gpuDevices.split(",").map(_.trim())
           Map("gpu" -> gpuInfo)
         }
         if (gpuResources.get("gpu").isEmpty) {
@@ -77,10 +77,10 @@ private[spark] class CoarseGrainedExecutorBackend(
             s"and user specified its required in: $GPUS_PER_TASK")
         }
         logInfo(s"Executor ${executorId} using GPU resources: " +
-          s"${stringOf(gpuResources.get("gpu").get.value)}")
+          s"${stringOf(gpuResources.get("gpu").get)}")
         gpuResources
       } else {
-        Map.empty[String, ResourceInformation]
+        Map.empty[String, Array[String]]
       }
 
       ref.ask[Boolean](RegisterExecutor(executorId, self, hostname, cores, extractLogUrls,

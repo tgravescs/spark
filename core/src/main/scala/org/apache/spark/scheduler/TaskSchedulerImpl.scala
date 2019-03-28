@@ -420,11 +420,8 @@ private[spark] class TaskSchedulerImpl(
     // TODO - placeholder to combine with scheduler work
     val availableResources = shuffledOffers.map(o => o.resources).toArray
     for (hostResource <- availableResources) {
-      for (resource <- hostResource) {
-        val value = resource._2
-        if (value.name.equals("gpu")) {
-          logInfo(" gpu resource with: " + value.value.deep.mkString(","))
-        }
+      for (resource <- hostResource.get("put")) {
+        logInfo(" gpu resource with: " + resource.deep.mkString(","))
       }
     }
     val availableCpus = shuffledOffers.map(o => o.cores).toArray

@@ -30,7 +30,6 @@ import org.scalatest.exceptions.TestFailedException
 
 import org.apache.spark._
 import org.apache.spark.executor._
-import org.apache.spark.internal.Logging
 import org.apache.spark.metrics.ExecutorMetricType
 import org.apache.spark.rdd.RDDOperationScope
 import org.apache.spark.scheduler._
@@ -38,7 +37,7 @@ import org.apache.spark.scheduler.cluster.ExecutorInfo
 import org.apache.spark.shuffle.MetadataFetchFailedException
 import org.apache.spark.storage._
 
-class JsonProtocolSuite extends SparkFunSuite with Logging {
+class JsonProtocolSuite extends SparkFunSuite {
   import JsonProtocolSuite._
 
   test("SparkListenerEvent") {
@@ -78,7 +77,7 @@ class JsonProtocolSuite extends SparkFunSuite with Logging {
     val unpersistRdd = SparkListenerUnpersistRDD(12345)
     val logUrlMap = Map("stderr" -> "mystderr", "stdout" -> "mystdout").toMap
     val attributes = Map("ContainerId" -> "ct1", "User" -> "spark").toMap
-    val resources = Map("gpu" -> new ResourceInformation("gpu", Array("0", "1"))).toMap
+    val resources = Map("gpu" -> Array("0", "1")).toMap
     val applicationStart = SparkListenerApplicationStart("The winner of all", Some("appId"),
       42L, "Garfield", Some("appAttempt"))
     val applicationStartWithLogs = SparkListenerApplicationStart("The winner of all", Some("appId"),
@@ -142,7 +141,7 @@ class JsonProtocolSuite extends SparkFunSuite with Logging {
   test("Dependent Classes") {
     val logUrlMap = Map("stderr" -> "mystderr", "stdout" -> "mystdout").toMap
     val attributes = Map("ContainerId" -> "ct1", "User" -> "spark").toMap
-    val resources = Map("gpu" -> new ResourceInformation("gpu", Array[String]("0"))).toMap
+    val resources = Map("gpu" -> Array[String]("0")).toMap
     testRDDInfo(makeRddInfo(2, 3, 4, 5L, 6L))
     testStageInfo(makeStageInfo(10, 20, 30, 40L, 50L))
     testTaskInfo(makeTaskInfo(999L, 888, 55, 777L, false))
@@ -477,7 +476,7 @@ class JsonProtocolSuite extends SparkFunSuite with Logging {
 }
 
 
-private[spark] object JsonProtocolSuite extends Assertions with Logging {
+private[spark] object JsonProtocolSuite extends Assertions {
   import InternalAccumulator._
 
   private val jobSubmissionTime = 1421191042750L
@@ -667,9 +666,9 @@ private[spark] object JsonProtocolSuite extends Assertions with Logging {
     assert(info1.totalCores == info2.totalCores)
     assert(info1.resources.size == info2.resources.size)
     info1.resources.zip(info2.resources).foreach {
-      case ((key1, values1: ResourceInformation), (key2, values2: ResourceInformation)) =>
+      case ((key1, values1: Array[String]), (key2, values2: Array[String])) =>
         assert(key1 === key2)
-        values1.value.zip(values2.value).foreach { case (v1, v2) => assert(v1 === v2) }
+        values1.zip(values2).foreach { case (v1, v2) => assert(v1 === v2) }
     }
 
   }

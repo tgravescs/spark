@@ -354,6 +354,29 @@ class SparkConfSuite extends SparkFunSuite with LocalSparkContext with ResetSyst
     }
   }
 
+  test("spark.task.resource.gpu.count should be multiple of spark.task.cpus") {
+    val conf = new SparkConf()
+    conf.validateSettings()
+
+    conf.set(GPUS_PER_TASK.key, "2")
+    intercept[SparkException] {
+      conf.validateSettings()
+    }
+
+    conf.set(GPUS_PER_TASK.key, "1")
+    conf.validateSettings()
+
+    conf.set(GPUS_PER_TASK.key, "3")
+    conf.set(EXECUTOR_CORES.key, "4")
+    intercept[SparkException] {
+      conf.validateSettings()
+    }
+
+    conf.set(GPUS_PER_TASK.key, "2")
+    conf.set(EXECUTOR_CORES.key, "8")
+    conf.validateSettings()
+  }
+
   val defaultIllegalValue = "SomeIllegalValue"
   val illegalValueTests : Map[String, (SparkConf, String) => Any] = Map(
     "getTimeAsSeconds" -> (_.getTimeAsSeconds(_)),

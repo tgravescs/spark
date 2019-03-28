@@ -17,8 +17,6 @@
 
 package org.apache.spark.scheduler
 
-import org.apache.spark.ResourceInformation
-
 /**
  * Represents free resources available on an executor.
  */
@@ -30,4 +28,4 @@ case class WorkerOffer(
     // `address` is an optional hostPort string, it provide more useful information than `host`
     // when multiple executors are launched on the same host.
     address: Option[String] = None,
-    resources: Map[String, ResourceInformation] = Map.empty)
+    resources: Map[String, Array[String]] = Map.empty)
