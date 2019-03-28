@@ -325,6 +325,7 @@ package object config {
   private[spark] val GPUS_PER_TASK =
     ConfigBuilder(SPARK_TASK_RESOURCE_PREFIX + ".gpu.count").intConf.createWithDefault(0)
 
+  // Script that outputs comma separate list of gpu indexes available on that executor
   private[spark] val GPU_DISCOVERY_SCRIPT =
     ConfigBuilder(SPARK_EXECUTOR_RESOURCE_PREFIX + ".gpu.discoveryScript").
       stringConf.

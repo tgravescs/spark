@@ -207,6 +207,15 @@ of the most common options to set are:
   </td>
 </tr>
 <tr>
+ <td><code>spark.executor.resource.gpu.discoveryScript</code></td>
+  <td>None</td>
+  <td>
+    The script the executor should run to discover GPU's.  This should return a comma separated list
+    of GPU index's for the task to use.
+  </td>
+</tr>
+
+<tr>
   <td><code>spark.extraListeners</code></td>
   <td>(none)</td>
   <td>
@@ -1768,6 +1777,13 @@ Apart from these, the following properties are also available, and may be useful
   <td>1</td>
   <td>
     Number of cores to allocate for each task.
+  </td>
+</tr>
+<tr>
+  <td><code>spark.task.resource.gpu.count</code></td>
+  <td>1</td>
+  <td>
+    Number of gpus to allocate for each task.
   </td>
 </tr>
 <tr>
