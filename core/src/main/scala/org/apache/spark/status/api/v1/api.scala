@@ -20,14 +20,12 @@ import java.lang.{Long => JLong}
 import java.util.Date
 
 import scala.xml.{NodeSeq, Text}
-
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.core.{JsonGenerator, JsonParser}
 import com.fasterxml.jackson.core.`type`.TypeReference
 import com.fasterxml.jackson.databind.{DeserializationContext, JsonDeserializer, JsonSerializer, SerializerProvider}
 import com.fasterxml.jackson.databind.annotation.{JsonDeserialize, JsonSerialize}
-
-import org.apache.spark.JobExecutionStatus
+import org.apache.spark.{JobExecutionStatus, ResourceInformation}
 import org.apache.spark.executor.ExecutorMetrics
 import org.apache.spark.metrics.ExecutorMetricType
 
@@ -107,7 +105,8 @@ class ExecutorSummary private[spark](
     @JsonSerialize(using = classOf[ExecutorMetricsJsonSerializer])
     @JsonDeserialize(using = classOf[ExecutorMetricsJsonDeserializer])
     val peakMemoryMetrics: Option[ExecutorMetrics],
-    val attributes: Map[String, String])
+    val attributes: Map[String, String],
+    val resources: Map[String, ResourceInformation])
 
 class MemoryMetrics private[spark](
     val usedOnHeapStorageMemory: Long,
