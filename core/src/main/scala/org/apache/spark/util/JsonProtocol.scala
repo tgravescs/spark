@@ -488,8 +488,17 @@ private[spark] object JsonProtocol {
     ("Host" -> executorInfo.executorHost) ~
     ("Total Cores" -> executorInfo.totalCores) ~
     ("Log Urls" -> mapToJson(executorInfo.logUrlMap)) ~
-    ("Attributes" -> mapToJson(executorInfo.attributes))
+    ("Attributes" -> mapToJson(executorInfo.attributes)) ~
+    ("Resources" -> mapToJson(executorInfo.resources))
   }
+
+  // TODO - add this in
+  /* def resourceInfoToJson(resourceInfo: Map[String, ResourceInformation]): JValue = {
+    val jsonFields = resourceInfo.map {
+      case (k, v) => JField(k, JString(v.name), JArray(v.value))
+    }
+    JObject(jsonFields.toList)
+  } */
 
   def blockUpdatedInfoToJson(blockUpdatedInfo: BlockUpdatedInfo): JValue = {
     ("Block Manager ID" -> blockManagerIdToJson(blockUpdatedInfo.blockManagerId)) ~
@@ -1069,6 +1078,7 @@ private[spark] object JsonProtocol {
       case Some(attr) => mapFromJson(attr).toMap
       case None => Map.empty[String, String]
     }
+    val resources = (json \ "Resource").extract[String]
     new ExecutorInfo(executorHost, totalCores, logUrls, attributes, Map.empty)
   }
 

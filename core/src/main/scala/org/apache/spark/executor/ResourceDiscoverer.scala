@@ -31,7 +31,12 @@ import org.apache.spark.util.Utils.executeAndGetOutput
 private[spark] class ResourceDiscoverer(sparkconf: SparkConf) extends Logging {
 
   def findResources(): Map[String, ResourceInformation] = {
-    Map("gpu" -> getGPUResources)
+    val gpus = getGPUResources
+    if (gpus.value.isEmpty) {
+      Map()
+    } else {
+      Map("gpu" -> gpus)
+    }
   }
 
   private def getGPUResources: ResourceInformation = {
@@ -51,13 +56,14 @@ private[spark] class ResourceDiscoverer(sparkconf: SparkConf) extends Logging {
           gpu_ids
         } catch {
           case e @ (_: SparkException | _: NumberFormatException) =>
-            logError("The gpu discover script threw exception, assuming no gpu's", e)
-            Array.empty[String]
+            throw new SparkException("The gpu discover script threw exception, assuming no gpu's",
+              e)
         }
       } else {
         throw new SparkException(s"Gpu script: $scriptFile to discover gpu's doesn't exist!")
       }
     } else {
+      logWarning("User is expecting to use gpu resources but didn't specify a script to find them!")
       Array.empty[String]
     }
     new ResourceInformation("gpu", result)

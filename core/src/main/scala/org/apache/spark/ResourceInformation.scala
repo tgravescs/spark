@@ -18,7 +18,7 @@
 package org.apache.spark
 
 /**
- * ResourceInformation, name of accerlator and a array of values to use.
+ * ResourceInformation, name of resource and a array of values to use.
  * For instances, for GPUs the values would be an array of indexes of the gpus.
  */
 private[spark]

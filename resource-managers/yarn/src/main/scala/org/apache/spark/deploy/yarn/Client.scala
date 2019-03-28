@@ -863,7 +863,6 @@ private[spark] class Client(
       }
 
     val launchEnv = setupLaunchEnv(stagingDirPath, pySparkArchives)
-
     val localResources = prepareLocalResources(stagingDirPath, pySparkArchives)
 
     val amContainer = Records.newRecord(classOf[ContainerLaunchContext])
