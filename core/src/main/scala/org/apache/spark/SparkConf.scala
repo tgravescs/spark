@@ -591,7 +591,7 @@ class SparkConf(loadDefaults: Boolean) extends Cloneable with Logging with Seria
       val taskGpus = get(GPUS_PER_TASK)
       val taskCpus = get(CPUS_PER_TASK)
       if (taskGpus > 0 && taskCpus % taskGpus != 0) {
-        throw new SparkException(s"Gpu's per task: ${taskGpus} must be a multiple of the " +
+        throw new SparkException(s"GPU's per task: ${taskGpus} must be a multiple of the " +
           s"the cpus per task: ${taskCpus} " +
           s"so that you don't waste resources")
       }
