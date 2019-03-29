@@ -21,6 +21,8 @@ import java.io.File
 import java.net.URL
 import java.nio.ByteBuffer
 
+import scala.collection.mutable
+
 import org.apache.spark.{SparkConf, SparkContext, SparkEnv, TaskState}
 import org.apache.spark.TaskState.TaskState
 import org.apache.spark.executor.{Executor, ExecutorBackend}
@@ -131,7 +133,7 @@ private[spark] class LocalSchedulerBackend(
       System.currentTimeMillis,
       executorEndpoint.localExecutorId,
       new ExecutorInfo(executorEndpoint.localExecutorHostname, totalCores, Map.empty,
-        Map.empty, Map.empty)))
+        Map.empty, mutable.Map.empty)))
     launcherBackend.setAppId(appId)
     launcherBackend.setState(SparkAppHandle.State.RUNNING)
   }

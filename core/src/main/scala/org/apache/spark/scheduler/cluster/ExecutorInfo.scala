@@ -16,7 +16,10 @@
  */
 package org.apache.spark.scheduler.cluster
 
+import scala.collection.mutable
+
 import org.apache.spark.annotation.DeveloperApi
+
 
 /**
  * :: DeveloperApi ::
@@ -28,10 +31,10 @@ class ExecutorInfo(
    val totalCores: Int,
    val logUrlMap: Map[String, String],
    val attributes: Map[String, String],
-   val resources: Map[String, Array[String]] = Map.empty) {
+   val resources: mutable.Map[String, Array[String]] = mutable.Map.empty) {
 
   def this(executorHost: String, totalCores: Int, logUrlMap: Map[String, String]) = {
-    this(executorHost, totalCores, logUrlMap, Map.empty, Map.empty)
+    this(executorHost, totalCores, logUrlMap, Map.empty, mutable.Map.empty)
   }
 
   def canEqual(other: Any): Boolean = other.isInstanceOf[ExecutorInfo]

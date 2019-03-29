@@ -1077,8 +1077,9 @@ private[spark] object JsonProtocol {
       case Some(attr) => mapFromJson(attr).toMap
       case None => Map.empty[String, String]
     }
-    val resources = resourcesMapFromJson(json \ "Resources").toMap
-    new ExecutorInfo(executorHost, totalCores, logUrls, attributes, resources)
+    val resources = resourcesMapFromJson(json \ "Resources")
+    new ExecutorInfo(executorHost, totalCores, logUrls, attributes,
+      scala.collection.mutable.Map[String, Array[String]]() ++ resources)
   }
 
   def blockUpdatedInfoFromJson(json: JValue): BlockUpdatedInfo = {

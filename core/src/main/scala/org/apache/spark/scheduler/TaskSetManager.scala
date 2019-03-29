@@ -446,7 +446,8 @@ private[spark] class TaskSetManager(
   def resourceOffer(
       execId: String,
       host: String,
-      maxLocality: TaskLocality.TaskLocality)
+      maxLocality: TaskLocality.TaskLocality,
+      resources: Map[String, Array[String]])
     : Option[TaskDescription] =
   {
     val offerBlacklisted = taskSetBlacklistHelperOpt.exists { blacklist =>
@@ -512,6 +513,7 @@ private[spark] class TaskSetManager(
           s"partition ${task.partitionId}, $taskLocality, ${serializedTask.limit()} bytes)")
 
         sched.dagScheduler.taskStarted(task, info)
+        val taskResources = Map("gpu" -> resources("gpu").take(sched.GPUS_PER_TASK))
         new TaskDescription(
           taskId,
           attemptNum,
@@ -522,6 +524,7 @@ private[spark] class TaskSetManager(
           addedFiles,
           addedJars,
           task.localProperties,
+          taskResources,
           serializedTask)
       }
     } else {

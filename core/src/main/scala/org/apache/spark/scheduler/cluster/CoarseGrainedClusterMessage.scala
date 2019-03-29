@@ -19,6 +19,8 @@ package org.apache.spark.scheduler.cluster
 
 import java.nio.ByteBuffer
 
+import scala.collection.mutable
+
 import org.apache.spark.TaskState.TaskState
 import org.apache.spark.rpc.RpcEndpointRef
 import org.apache.spark.scheduler.ExecutorLossReason
@@ -63,7 +65,6 @@ private[spark] object CoarseGrainedClusterMessages {
       executorRef: RpcEndpointRef,
       hostname: String,
       cores: Int,
-      // resources: Map[String, ResourceInformation],
       logUrls: Map[String, String],
       attributes: Map[String, String],
       resources: Map[String, Array[String]])
