@@ -66,7 +66,7 @@ object TaskContext {
    * An empty task context that does not represent an actual task.  This is only used in tests.
    */
   private[spark] def empty(): TaskContextImpl = {
-    new TaskContextImpl(0, 0, 0, 0, 0, null, new Properties, null)
+    new TaskContextImpl(0, 0, 0, 0, 0, null, new Properties, null, TaskMetrics.empty, null)
   }
 }
 
@@ -175,6 +175,11 @@ abstract class TaskContext extends Serializable {
    * `org.apache.spark.SparkContext.setLocalProperty`.
    */
   def getLocalProperty(key: String): String
+
+  /**
+   * GPU device identifiers that this task attempt can access.
+   */
+  def gpus(): Array[String]
 
   @DeveloperApi
   def taskMetrics(): TaskMetrics

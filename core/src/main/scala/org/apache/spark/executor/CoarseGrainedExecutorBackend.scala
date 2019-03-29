@@ -23,6 +23,7 @@ import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 
 import scala.collection.mutable
+import scala.collection.mutable.{HashMap, ListBuffer}
 import scala.runtime.ScalaRunTime._
 import scala.util.{Failure, Success}
 import scala.util.control.NonFatal
@@ -47,7 +48,7 @@ private[spark] class CoarseGrainedExecutorBackend(
     cores: Int,
     userClassPath: Seq[URL],
     env: SparkEnv,
-    gpuDevices: String)
+    gpuDevices: Option[String])
   extends ThreadSafeRpcEndpoint with ExecutorBackend with Logging {
 
   private[this] val stopping = new AtomicBoolean(false)
@@ -58,6 +59,8 @@ private[spark] class CoarseGrainedExecutorBackend(
   // to be changed so that we don't share the serializer instance across threads
   private[this] val ser: SerializerInstance = env.closureSerializer.newInstance()
 
+  private[this] val taskResources = new HashMap[Long, mutable.Map[String, Array[String]]]
+
   override def onStart() {
     logInfo("Connecting to driver: " + driverUrl)
     rpcEnv.asyncSetupEndpointRefByURI(driverUrl).flatMap { ref =>
@@ -65,13 +68,8 @@ private[spark] class CoarseGrainedExecutorBackend(
       driver = Some(ref)
 
       val resourceInfo = if (env.conf.get(GPUS_PER_TASK) > 0) {
-        val gpuResources = if (gpuDevices == null) {
-          val resourceDiscoverer = new ResourceDiscoverer(env.conf)
-          resourceDiscoverer.findResources()
-        } else {
-          val gpuInfo = gpuDevices.split(",").map(_.trim())
-          Map("gpu" -> gpuInfo)
-        }
+        val gpuResources = gpuDevices.map(ids => Map("gpu" -> ids.split(",").map(_.trim())))
+          .getOrElse(new ResourceDiscoverer(env.conf).findResources())
         if (gpuResources.get("gpu").isEmpty) {
           throw new SparkException(s"Executor couldn't find any GPU resources available " +
             s"and user specified its required in: $GPUS_PER_TASK")
@@ -125,6 +123,7 @@ private[spark] class CoarseGrainedExecutorBackend(
       } else {
         val taskDesc = TaskDescription.decode(data.value)
         logInfo("Got assigned task " + taskDesc.taskId)
+        taskResources(taskDesc.taskId) = taskDesc.resources
         executor.launchTask(this, taskDesc)
       }
 
@@ -171,7 +170,11 @@ private[spark] class CoarseGrainedExecutorBackend(
   }
 
   override def statusUpdate(taskId: Long, state: TaskState, data: ByteBuffer) {
-    val msg = StatusUpdate(executorId, taskId, state, data)
+    val resources = taskResources.getOrElse(taskId, Map.empty[String, Array[String]])
+    val msg = StatusUpdate(executorId, taskId, state, data, resources.toMap)
+    if (TaskState.isFinished(state)) {
+      taskResources.remove(taskId)
+    }
     driver match {
       case Some(driverRef) => driverRef.send(msg)
       case None => logWarning(s"Drop $msg because has not yet connected to driver")
@@ -211,8 +214,8 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
       cores: Int,
       appId: String,
       workerUrl: Option[String],
-      userClassPath: mutable.ListBuffer[URL],
-      gpuDevices: String)
+      userClassPath: ListBuffer[URL],
+      gpuDevices: Option[String])
 
   def main(args: Array[String]): Unit = {
     val createFn: (RpcEnv, Arguments, SparkEnv) =>
@@ -284,10 +287,10 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
     // to be specified.
     // Number of GPU devices will be reported to the driver to make scheduling decisions.
     // This is a comma separated list of minor device ids.
-    var gpuDevices: String = null
+    var gpuDevices: Option[String] = None
     var appId: String = null
     var workerUrl: Option[String] = None
-    val userClassPath = new mutable.ListBuffer[URL]()
+    val userClassPath = new ListBuffer[URL]()
 
     var argv = args.toList
     while (!argv.isEmpty) {
@@ -305,7 +308,7 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
           cores = value.toInt
           argv = tail
         case ("--gpu-devices") :: value :: tail =>
-          gpuDevices = value
+          gpuDevices = Some(value)
           argv = tail
         case ("--app-id") :: value :: tail =>
           appId = value
@@ -346,6 +349,7 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
       |   --executor-id <executorId>
       |   --hostname <hostname>
       |   --cores <cores>
+      |   --gpu-devices <gpuDeviceIds>
       |   --app-id <appid>
       |   --worker-url <workerUrl>
       |   --user-class-path <url>

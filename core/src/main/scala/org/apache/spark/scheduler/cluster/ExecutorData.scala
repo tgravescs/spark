@@ -27,6 +27,7 @@ import org.apache.spark.rpc.{RpcAddress, RpcEndpointRef}
  * @param executorHost The hostname that this executor is running on
  * @param freeCores  The current number of cores available for work on the executor
  * @param totalCores The total number of cores available to the executor
+ * @param resources The identifiers of all resources available to the executor
  */
 private[cluster] class ExecutorData(
    val executorEndpoint: RpcEndpointRef,
