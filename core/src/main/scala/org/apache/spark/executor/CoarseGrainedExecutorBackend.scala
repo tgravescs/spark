@@ -23,6 +23,7 @@ import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 
 import scala.collection.mutable
+import scala.collection.mutable.{HashMap, ListBuffer}
 import scala.runtime.ScalaRunTime._
 import scala.util.{Failure, Success}
 import scala.util.control.NonFatal
@@ -57,6 +58,8 @@ private[spark] class CoarseGrainedExecutorBackend(
   // If this CoarseGrainedExecutorBackend is changed to support multiple threads, then this may need
   // to be changed so that we don't share the serializer instance across threads
   private[this] val ser: SerializerInstance = env.closureSerializer.newInstance()
+
+  private[this] val taskResources = new HashMap[Long, mutable.Map[String, Array[String]]]
 
   override def onStart() {
     logInfo("Connecting to driver: " + driverUrl)
@@ -120,6 +123,7 @@ private[spark] class CoarseGrainedExecutorBackend(
       } else {
         val taskDesc = TaskDescription.decode(data.value)
         logInfo("Got assigned task " + taskDesc.taskId)
+        taskResources(taskDesc.taskId) = taskDesc.resources
         executor.launchTask(this, taskDesc)
       }
 
@@ -166,7 +170,11 @@ private[spark] class CoarseGrainedExecutorBackend(
   }
 
   override def statusUpdate(taskId: Long, state: TaskState, data: ByteBuffer) {
-    val msg = StatusUpdate(executorId, taskId, state, data)
+    val resources = taskResources.getOrElse(taskId, Map.empty[String, Array[String]])
+    val msg = StatusUpdate(executorId, taskId, state, data, resources.toMap)
+    if (TaskState.isFinished(state)) {
+      taskResources.remove(taskId)
+    }
     driver match {
       case Some(driverRef) => driverRef.send(msg)
       case None => logWarning(s"Drop $msg because has not yet connected to driver")
@@ -206,7 +214,7 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
       cores: Int,
       appId: String,
       workerUrl: Option[String],
-      userClassPath: mutable.ListBuffer[URL],
+      userClassPath: ListBuffer[URL],
       gpuDevices: Option[String])
 
   def main(args: Array[String]): Unit = {
@@ -282,7 +290,7 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
     var gpuDevices: Option[String] = None
     var appId: String = null
     var workerUrl: Option[String] = None
-    val userClassPath = new mutable.ListBuffer[URL]()
+    val userClassPath = new ListBuffer[URL]()
 
     var argv = args.toList
     while (!argv.isEmpty) {
