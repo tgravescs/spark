@@ -19,6 +19,7 @@ package org.apache.spark.scheduler.cluster
 
 import java.nio.ByteBuffer
 
+import org.apache.spark.AcceleratorType
 import org.apache.spark.TaskState.TaskState
 import org.apache.spark.rpc.RpcEndpointRef
 import org.apache.spark.scheduler.ExecutorLossReason
@@ -66,7 +67,7 @@ private[spark] object CoarseGrainedClusterMessages {
       // resources: Map[String, ResourceInformation],
       logUrls: Map[String, String],
       attributes: Map[String, String],
-      resources: Map[String, Array[String]])
+      resources: Map[AcceleratorType, Array[String]])
     extends CoarseGrainedClusterMessage
 
   case class StatusUpdate(executorId: String, taskId: Long, state: TaskState,

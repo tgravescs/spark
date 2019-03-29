@@ -173,7 +173,23 @@ package object config {
 
   private[spark] val EXECUTOR_CORES = ConfigBuilder(SparkLauncher.EXECUTOR_CORES)
     .intConf
+    .checkValue(_ > 0, "Each executor must contain at least 1 cpu core.")
     .createWithDefault(1)
+
+  private[spark] val EXECUTOR_GPUS =
+    ConfigBuilder("spark.executor.accelerator.gpu.count")
+      .doc("The number of GPUs assigned to each executor, each executor in the same application " +
+        "shall have the same number of GPUs.")
+      .intConf
+      .checkValue(_ >= 0, "The number of GPUs for each executor must be non-negative.")
+      .createWithDefault(0)
+
+  private[spark] val DRIVER_GPUS =
+    ConfigBuilder("spark.driver.accelerator.gpu.count")
+      .doc("The number of GPUs assigned to the driver.")
+      .intConf
+      .checkValue(_ >= 0, "The number of GPUs for the driver must be non-negative.")
+      .createWithDefault(0)
 
   private[spark] val EXECUTOR_MEMORY = ConfigBuilder(SparkLauncher.EXECUTOR_MEMORY)
     .doc("Amount of memory to use per executor process, in MiB unless otherwise specified.")
@@ -317,7 +333,20 @@ package object config {
   private[spark] val IS_PYTHON_APP = ConfigBuilder("spark.yarn.isPython").internal()
     .booleanConf.createWithDefault(false)
 
-  private[spark] val CPUS_PER_TASK = ConfigBuilder("spark.task.cpus").intConf.createWithDefault(1)
+  private[spark] val CPUS_PER_TASK =
+    ConfigBuilder("spark.task.cpus")
+      .intConf
+      .checkValue(_ > 0, "Each task must require at least 1 cpu core.")
+      .createWithDefault(1)
+
+  private[spark] val GPUS_PER_TASK =
+    ConfigBuilder("spark.task.accelerator.gpu.count")
+      .doc("The number of GPUs required per task. This config is global, so each task in the " +
+        "same Spark application share the same config value. The default value is 0 so if user " +
+        "doesn't specify then task shall not require GPUs.")
+      .intConf
+      .checkValue(_ >= 0, "The number of GPUs required by each task must be non-negative.")
+      .createWithDefault(0)
 
   // this is formatted this way to allow grabbing a bunch of sub pieces of the config,
   // for instance every type of accelerators, then for each accelerator various configs like
