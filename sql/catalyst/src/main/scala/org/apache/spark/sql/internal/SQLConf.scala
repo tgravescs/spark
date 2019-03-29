@@ -254,7 +254,7 @@ object SQLConf {
       "command <code>ANALYZE TABLE &lt;tableName&gt; COMPUTE STATISTICS noscan</code> has been " +
       "run, and file-based data source tables where the statistics are computed directly on " +
       "the files of data.")
-    .longConf
+    .bytesConf(ByteUnit.BYTE)
     .createWithDefault(10L * 1024 * 1024)
 
   val LIMIT_SCALE_UP_FACTOR = buildConf("spark.sql.limit.scaleUpFactor")
@@ -853,7 +853,7 @@ object SQLConf {
 
   val FILES_MAX_PARTITION_BYTES = buildConf("spark.sql.files.maxPartitionBytes")
     .doc("The maximum number of bytes to pack into a single partition when reading files.")
-    .longConf
+    .bytesConf(ByteUnit.BYTE)
     .createWithDefault(128 * 1024 * 1024) // parquet.block.size
 
   val FILES_OPEN_COST_IN_BYTES = buildConf("spark.sql.files.openCostInBytes")
@@ -886,6 +886,12 @@ object SQLConf {
   val EXCHANGE_REUSE_ENABLED = buildConf("spark.sql.exchange.reuse")
     .internal()
     .doc("When true, the planner will try to find out duplicated exchanges and re-use them.")
+    .booleanConf
+    .createWithDefault(true)
+
+  val SUBQUERY_REUSE_ENABLED = buildConf("spark.sql.subquery.reuse")
+    .internal()
+    .doc("When true, the planner will try to find out duplicated subqueries and re-use them.")
     .booleanConf
     .createWithDefault(true)
 
@@ -1156,7 +1162,7 @@ object SQLConf {
       s"which is larger than `${AUTO_BROADCASTJOIN_THRESHOLD.key}` to be more conservative. " +
       "That is to say by default the optimizer will not choose to broadcast a table unless it " +
       "knows for sure its size is small enough.")
-    .longConf
+    .bytesConf(ByteUnit.BYTE)
     .createWithDefault(Long.MaxValue)
 
   val NDV_MAX_ERROR =
@@ -1887,6 +1893,8 @@ class SQLConf extends Serializable with Logging {
   def codegenCacheMaxEntries: Int = getConf(StaticSQLConf.CODEGEN_CACHE_MAX_ENTRIES)
 
   def exchangeReuseEnabled: Boolean = getConf(EXCHANGE_REUSE_ENABLED)
+
+  def subqueryReuseEnabled: Boolean = getConf(SUBQUERY_REUSE_ENABLED)
 
   def caseSensitiveAnalysis: Boolean = getConf(SQLConf.CASE_SENSITIVE)
 
