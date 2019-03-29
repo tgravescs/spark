@@ -28,7 +28,6 @@ import scala.util.{Failure, Success}
 import scala.util.control.NonFatal
 
 import org.apache.spark._
-import org.apache.spark.AcceleratorType.GPU
 import org.apache.spark.TaskState.TaskState
 import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.deploy.worker.WorkerWatcher
@@ -66,13 +65,8 @@ private[spark] class CoarseGrainedExecutorBackend(
       driver = Some(ref)
 
       val resourceInfo = if (env.conf.get(GPUS_PER_TASK) > 0) {
-        val gpuResources = if (gpuDevices == null) {
-          val resourceDiscoverer = new ResourceDiscoverer(env.conf)
-          resourceDiscoverer.findResources()
-        } else {
-          val gpuInfo = gpuDevices.get.split(",").map(_.trim())
-          Map("gpu" -> gpuInfo)
-        }
+        val gpuResources = gpuDevices.map(ids => Map("gpu" -> ids.split(",").map(_.trim())))
+          .getOrElse(new ResourceDiscoverer(env.conf).findResources())
         if (gpuResources.get("gpu").isEmpty) {
           throw new SparkException(s"Executor couldn't find any GPU resources available " +
             s"and user specified its required in: $GPUS_PER_TASK")

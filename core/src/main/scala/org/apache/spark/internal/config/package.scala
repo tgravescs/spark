@@ -30,8 +30,8 @@ import org.apache.spark.util.collection.unsafe.sort.UnsafeSorterSpillReader.MAX_
 
 package object config {
 
-  private[spark] val SPARK_EXECUTOR_RESOURCE_PREFIX = "spark.executor.resource"
-  private[spark] val SPARK_TASK_RESOURCE_PREFIX = "spark.task.resource"
+  private[spark] val SPARK_EXECUTOR_RESOURCE_PREFIX = "spark.executor.resource."
+  private[spark] val SPARK_TASK_RESOURCE_PREFIX = "spark.task.resource."
 
   private[spark] val DRIVER_CLASS_PATH =
     ConfigBuilder(SparkLauncher.DRIVER_EXTRA_CLASSPATH).stringConf.createOptional
@@ -339,8 +339,11 @@ package object config {
       .checkValue(_ > 0, "Each task must require at least 1 cpu core.")
       .createWithDefault(1)
 
+  // this is formatted this way to allow grabbing a bunch of sub pieces of the config,
+  // for instance every type of accelerators, then for each accelerator various configs like
+  // count, could add a type, etc.
   private[spark] val GPUS_PER_TASK =
-    ConfigBuilder("spark.task.accelerator.gpu.count")
+    ConfigBuilder(s"${SPARK_TASK_RESOURCE_PREFIX}gpu.count")
       .doc("The number of GPUs required per task. This config is global, so each task in the " +
         "same Spark application share the same config value. The default value is 0 so if user " +
         "doesn't specify then task shall not require GPUs.")
@@ -348,15 +351,9 @@ package object config {
       .checkValue(_ >= 0, "The number of GPUs required by each task must be non-negative.")
       .createWithDefault(0)
 
-  // this is formatted this way to allow grabbing a bunch of sub pieces of the config,
-  // for instance every type of accelerators, then for each accelerator various configs like
-  // count, could add a type, etc..
-  private[spark] val GPUS_PER_TASK =
-    ConfigBuilder(SPARK_TASK_RESOURCE_PREFIX + ".gpu.count").intConf.createWithDefault(0)
-
   // Script that outputs comma separate list of gpu indexes available on that executor
   private[spark] val GPU_DISCOVERY_SCRIPT =
-    ConfigBuilder(SPARK_EXECUTOR_RESOURCE_PREFIX + ".gpu.discoveryScript").
+    ConfigBuilder(s"${SPARK_EXECUTOR_RESOURCE_PREFIX}gpu.discoveryScript").
       stringConf.
       createOptional
 

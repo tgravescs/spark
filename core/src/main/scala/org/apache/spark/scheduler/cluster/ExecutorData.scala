@@ -17,7 +17,6 @@
 
 package org.apache.spark.scheduler.cluster
 
-import org.apache.spark.AcceleratorType
 import org.apache.spark.rpc.{RpcAddress, RpcEndpointRef}
 
 /**
