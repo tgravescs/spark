@@ -20,8 +20,10 @@ package org.apache.spark.scheduler
 import java.util.concurrent.atomic.AtomicBoolean
 
 import scala.concurrent.duration._
+
 import org.scalatest.concurrent.Eventually
 import org.scalatest.mockito.MockitoSugar._
+
 import org.apache.spark.{LocalSparkContext, SparkConf, SparkContext, SparkException, SparkFunSuite}
 import org.apache.spark.internal.config.{CPUS_PER_TASK, GPUS_PER_TASK, UI}
 import org.apache.spark.internal.config.Network.RPC_MESSAGE_MAX_SIZE

@@ -20,6 +20,7 @@ import java.lang.{Long => JLong}
 import java.util.Date
 
 import scala.xml.{NodeSeq, Text}
+
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.core.{JsonGenerator, JsonParser}
 import com.fasterxml.jackson.core.`type`.TypeReference
