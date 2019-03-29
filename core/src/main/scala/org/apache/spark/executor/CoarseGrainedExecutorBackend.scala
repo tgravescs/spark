@@ -28,6 +28,7 @@ import scala.util.{Failure, Success}
 import scala.util.control.NonFatal
 
 import org.apache.spark._
+import org.apache.spark.AcceleratorType.GPU
 import org.apache.spark.TaskState.TaskState
 import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.deploy.worker.WorkerWatcher
@@ -47,7 +48,7 @@ private[spark] class CoarseGrainedExecutorBackend(
     cores: Int,
     userClassPath: Seq[URL],
     env: SparkEnv,
-    gpuDevices: String)
+    gpuDevices: Option[String])
   extends ThreadSafeRpcEndpoint with ExecutorBackend with Logging {
 
   private[this] val stopping = new AtomicBoolean(false)
@@ -69,7 +70,7 @@ private[spark] class CoarseGrainedExecutorBackend(
           val resourceDiscoverer = new ResourceDiscoverer(env.conf)
           resourceDiscoverer.findResources()
         } else {
-          val gpuInfo = gpuDevices.split(",").map(_.trim())
+          val gpuInfo = gpuDevices.get.split(",").map(_.trim())
           Map("gpu" -> gpuInfo)
         }
         if (gpuResources.get("gpu").isEmpty) {
@@ -212,7 +213,7 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
       appId: String,
       workerUrl: Option[String],
       userClassPath: mutable.ListBuffer[URL],
-      gpuDevices: String)
+      gpuDevices: Option[String])
 
   def main(args: Array[String]): Unit = {
     val createFn: (RpcEnv, Arguments, SparkEnv) =>
@@ -284,7 +285,7 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
     // to be specified.
     // Number of GPU devices will be reported to the driver to make scheduling decisions.
     // This is a comma separated list of minor device ids.
-    var gpuDevices: String = null
+    var gpuDevices: Option[String] = None
     var appId: String = null
     var workerUrl: Option[String] = None
     val userClassPath = new mutable.ListBuffer[URL]()
@@ -305,7 +306,7 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
           cores = value.toInt
           argv = tail
         case ("--gpu-devices") :: value :: tail =>
-          gpuDevices = value
+          gpuDevices = Some(value)
           argv = tail
         case ("--app-id") :: value :: tail =>
           appId = value
@@ -346,6 +347,7 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
       |   --executor-id <executorId>
       |   --hostname <hostname>
       |   --cores <cores>
+      |   --gpu-devices <gpuDeviceIds>
       |   --app-id <appid>
       |   --worker-url <workerUrl>
       |   --user-class-path <url>

@@ -212,7 +212,8 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
           totalCoreCount.addAndGet(cores)
           totalRegisteredExecutors.addAndGet(1)
           val data = new ExecutorData(executorRef, executorAddress, hostname,
-            cores, cores, logUrlHandler.applyPattern(logUrls, attributes), attributes, resources)
+            cores, cores, logUrlHandler.applyPattern(logUrls, attributes), attributes,
+            parseAccelerators(resources))
           // This must be synchronized because variables mutated
           // in this block are read when requesting executors
           CoarseGrainedSchedulerBackend.this.synchronized {
@@ -254,6 +255,18 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
           SparkEnv.get.securityManager.getIOEncryptionKey(),
           Option(delegationTokens.get()))
         context.reply(reply)
+    }
+
+    private def parseAccelerators(
+        accelerators: Map[AcceleratorType, String]): Map[AcceleratorType, Set[Int]] = {
+      accelerators.map { case (accelerator, identifiers) =>
+        accelerator match {
+          case AcceleratorType.GPU =>
+            (accelerator, identifiers.split(',').map(_.toInt).toSet)
+          case _ =>
+            throw new SparkException(s"Not supported accelerator type ${accelerator.name}.")
+        }
+      }
     }
 
     // Make fake resource offers on all executors
