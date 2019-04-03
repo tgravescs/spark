@@ -66,6 +66,7 @@ class TaskDescriptionSuite extends SparkFunSuite {
       originalFiles,
       originalJars,
       originalProperties,
+      resources = Map.empty,
       taskBuffer
     )
 

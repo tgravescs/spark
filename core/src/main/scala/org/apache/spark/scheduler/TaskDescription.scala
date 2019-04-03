@@ -23,6 +23,7 @@ import java.nio.charset.StandardCharsets
 import java.util.Properties
 
 import scala.collection.JavaConverters._
+import scala.collection.immutable
 import scala.collection.mutable.{ArrayBuffer, HashMap, Map}
 
 import org.apache.spark.util.{ByteBufferInputStream, ByteBufferOutputStream, Utils}
@@ -54,7 +55,7 @@ private[spark] class TaskDescription(
     val addedFiles: Map[String, Long],
     val addedJars: Map[String, Long],
     val properties: Properties,
-    val resources: Map[String, Array[String]],
+    val resources: immutable.Map[String, Array[String]],
     val serializedTask: ByteBuffer) {
 
   override def toString: String = "TaskDescription(TID=%d, index=%d)".format(taskId, index)
@@ -69,7 +70,7 @@ private[spark] object TaskDescription {
     }
   }
 
-  private def serializeResources(map: Map[String, Array[String]],
+  private def serializeResources(map: immutable.Map[String, Array[String]],
       dataOut: DataOutputStream): Unit = {
     dataOut.writeInt(map.size)
     for ((key, value) <- map) {
@@ -128,7 +129,8 @@ private[spark] object TaskDescription {
     map
   }
 
-  private def deserializeResources(dataIn: DataInputStream): Map[String, Array[String]] = {
+  private def deserializeResources(dataIn: DataInputStream):
+      immutable.Map[String, Array[String]] = {
     val map = new HashMap[String, Array[String]]()
     val mapSize = dataIn.readInt()
     for (i <- 0 until mapSize) {
@@ -136,11 +138,11 @@ private[spark] object TaskDescription {
       val numIdentifier = dataIn.readInt()
       val identifiers = new ArrayBuffer[String](numIdentifier)
       for (j <- 0 until numIdentifier) {
-        identifiers(i) = dataIn.readUTF()
+        identifiers += dataIn.readUTF()
       }
       map(resType) = identifiers.toArray
     }
-    map
+    map.toMap
   }
 
   def decode(byteBuffer: ByteBuffer): TaskDescription = {

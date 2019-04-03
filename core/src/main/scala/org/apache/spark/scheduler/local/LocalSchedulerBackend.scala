@@ -21,6 +21,8 @@ import java.io.File
 import java.net.URL
 import java.nio.ByteBuffer
 
+import scala.collection.mutable
+
 import org.apache.spark.{SparkConf, SparkContext, SparkEnv, TaskState}
 import org.apache.spark.TaskState.TaskState
 import org.apache.spark.executor.{Executor, ExecutorBackend}
@@ -83,7 +85,7 @@ private[spark] class LocalEndpoint(
   def reviveOffers() {
     // local mode doesn't support extra resources like GPUs right now
     val offers = IndexedSeq(new WorkerOffer(localExecutorId, localExecutorHostname, freeCores,
-      Some(rpcEnv.address.hostPort), Map.empty))
+      Some(rpcEnv.address.hostPort), mutable.Map.empty))
     for (task <- scheduler.resourceOffers(offers).flatten) {
       freeCores -= scheduler.CPUS_PER_TASK
       executor.launchTask(executorBackend, task)
@@ -131,7 +133,7 @@ private[spark] class LocalSchedulerBackend(
       System.currentTimeMillis,
       executorEndpoint.localExecutorId,
       new ExecutorInfo(executorEndpoint.localExecutorHostname, totalCores, Map.empty,
-        Map.empty, Map.empty)))
+        Map.empty, mutable.Map.empty)))
     launcherBackend.setAppId(appId)
     launcherBackend.setState(SparkAppHandle.State.RUNNING)
   }

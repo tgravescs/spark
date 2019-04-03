@@ -38,7 +38,7 @@ private[spark] class YarnCoarseGrainedExecutorBackend(
     cores: Int,
     userClassPath: Seq[URL],
     env: SparkEnv,
-    gpuDevices: String)
+    gpuDevices: Option[String])
   extends CoarseGrainedExecutorBackend(
     rpcEnv,
     driverUrl,

@@ -21,6 +21,7 @@ import java.util.Properties
 
 import scala.collection.JavaConverters._
 import scala.collection.Map
+import scala.collection.mutable
 
 import org.json4s.JsonAST.{JArray, JInt, JString, JValue}
 import org.json4s.JsonDSL._
@@ -77,7 +78,7 @@ class JsonProtocolSuite extends SparkFunSuite {
     val unpersistRdd = SparkListenerUnpersistRDD(12345)
     val logUrlMap = Map("stderr" -> "mystderr", "stdout" -> "mystdout").toMap
     val attributes = Map("ContainerId" -> "ct1", "User" -> "spark").toMap
-    val resources = Map("gpu" -> Array("0", "1")).toMap
+    val resources = mutable.Map("gpu" -> Array("0", "1"))
     val applicationStart = SparkListenerApplicationStart("The winner of all", Some("appId"),
       42L, "Garfield", Some("appAttempt"))
     val applicationStartWithLogs = SparkListenerApplicationStart("The winner of all", Some("appId"),

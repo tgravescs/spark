@@ -20,6 +20,9 @@ package org.apache.spark
 import java.io.File
 import java.net.{MalformedURLException, URI}
 import java.nio.charset.StandardCharsets
+import java.nio.file.{Files => JavaFiles}
+import java.nio.file.attribute.PosixFilePermission._
+import java.util.EnumSet
 import java.util.concurrent.{CountDownLatch, Semaphore, TimeUnit}
 
 import scala.concurrent.duration._
@@ -33,6 +36,7 @@ import org.apache.hadoop.mapreduce.lib.input.{TextInputFormat => NewTextInputFor
 import org.scalatest.Matchers._
 import org.scalatest.concurrent.Eventually
 
+import org.apache.spark.executor.ResourceDiscoverer
 import org.apache.spark.internal.config._
 import org.apache.spark.internal.config.UI._
 import org.apache.spark.scheduler.{SparkListener, SparkListenerExecutorMetricsUpdate, SparkListenerJobStart, SparkListenerTaskEnd, SparkListenerTaskStart}
@@ -708,6 +712,44 @@ class SparkContextSuite extends SparkFunSuite with LocalSparkContext with Eventu
       assert(runningTaskIds != null)
       // Verify there is no running task.
       assert(runningTaskIds.isEmpty)
+    }
+  }
+
+  test("test gpu support under local-cluster mode") {
+    withGpus(0 to 2) { scriptPath =>
+      val conf = new SparkConf()
+        .set(GPUS_PER_TASK.key, "1")
+        .set(GPU_DISCOVERY_SCRIPT.key, scriptPath)
+        .setMaster("local-cluster[3, 3, 1024]")
+        .setAppName("test-cluster")
+      sc = new SparkContext(conf)
+
+      // Ensure all executors has started
+      eventually(timeout(10.seconds)) {
+        assert(sc.statusTracker.getExecutorInfos.size == 3)
+      }
+      val rdd = sc.makeRDD(1 to 10, 9).mapPartitions { it =>
+        val context = TaskContext.get()
+        context.gpus().iterator
+      }
+      val gpus = rdd.collect()
+      assert(gpus.sorted === Seq("0", "0", "0", "1", "1", "1", "2", "2", "2"))
+
+      eventually(timeout(10.seconds)) {
+        assert(sc.statusTracker.getExecutorInfos.map(_.numRunningTasks()).sum == 0)
+      }
+    }
+  }
+
+  private def withGpus(gpus: Seq[Int])(f: String => Unit): Unit = {
+    val tmpFile = File.createTempFile("test", "resourceDiscoverScript1")
+    try {
+      Files.write(s"echo ${gpus.mkString(",")}", tmpFile, StandardCharsets.UTF_8)
+      JavaFiles.setPosixFilePermissions(tmpFile.toPath(),
+        EnumSet.of(OWNER_READ, OWNER_EXECUTE, OWNER_WRITE))
+      f(tmpFile.getPath())
+    } finally {
+      JavaFiles.deleteIfExists(tmpFile.toPath())
     }
   }
 }

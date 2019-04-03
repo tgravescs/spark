@@ -216,7 +216,8 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
           totalCoreCount.addAndGet(cores)
           totalRegisteredExecutors.addAndGet(1)
           val data = new ExecutorData(executorRef, executorAddress, hostname,
-            cores, cores, logUrlHandler.applyPattern(logUrls, attributes), attributes, resources)
+            cores, cores, logUrlHandler.applyPattern(logUrls, attributes),
+            attributes, scala.collection.mutable.Map() ++ resources)
           // This must be synchronized because variables mutated
           // in this block are read when requesting executors
           CoarseGrainedSchedulerBackend.this.synchronized {
@@ -332,8 +333,8 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
           val executorData = executorDataMap(task.executorId)
           executorData.freeCores -= scheduler.CPUS_PER_TASK
           val availableGpus = executorData.resources("gpu")
-          task.resources("gpu") = availableGpus.take(scheduler.GPUS_PER_TASK)
-          executorData.resources("gpu") = availableGpus.drop(scheduler.GPUS_PER_TASK)
+          // task.resources("gpu") = availableGpus.take(scheduler.GPUS_PER_TASK)
+          // executorData.resources("gpu") = availableGpus.drop(scheduler.GPUS_PER_TASK)
 
           logDebug(s"Launching task ${task.taskId} on executor id: ${task.executorId} hostname: " +
             s"${executorData.executorHost}.")

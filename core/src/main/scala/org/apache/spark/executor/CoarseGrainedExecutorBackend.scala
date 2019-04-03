@@ -22,7 +22,6 @@ import java.nio.ByteBuffer
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 
-import scala.collection.mutable
 import scala.collection.mutable.{HashMap, ListBuffer}
 import scala.runtime.ScalaRunTime._
 import scala.util.{Failure, Success}
@@ -59,7 +58,7 @@ private[spark] class CoarseGrainedExecutorBackend(
   // to be changed so that we don't share the serializer instance across threads
   private[this] val ser: SerializerInstance = env.closureSerializer.newInstance()
 
-  private[this] val taskResources = new HashMap[Long, mutable.Map[String, Array[String]]]
+  private[this] val taskResources = new HashMap[Long, Map[String, Array[String]]]
 
   override def onStart() {
     logInfo("Connecting to driver: " + driverUrl)
@@ -171,7 +170,7 @@ private[spark] class CoarseGrainedExecutorBackend(
 
   override def statusUpdate(taskId: Long, state: TaskState, data: ByteBuffer) {
     val resources = taskResources.getOrElse(taskId, Map.empty[String, Array[String]])
-    val msg = StatusUpdate(executorId, taskId, state, data, resources.toMap)
+    val msg = StatusUpdate(executorId, taskId, state, data, resources)
     if (TaskState.isFinished(state)) {
       taskResources.remove(taskId)
     }
