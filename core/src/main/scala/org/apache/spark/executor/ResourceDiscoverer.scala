@@ -26,7 +26,7 @@ import org.apache.spark.util.Utils.executeAndGetOutput
 
 /**
  * Discovers resources (gpu/fpgas/etc) available to an executor. Currently this just
- * knows about gpus but could easily be made more generic.
+ * knows about gpus but could easily be extended.
  */
 private[spark] class ResourceDiscoverer(sparkconf: SparkConf) extends Logging {
 
@@ -43,8 +43,7 @@ private[spark] class ResourceDiscoverer(sparkconf: SparkConf) extends Logging {
     val script = sparkconf.get(GPU_DISCOVERY_SCRIPT)
     val result = if (script.nonEmpty) {
       val scriptFile = new File(script.get)
-      // check that script exists and try to execute, assume we don't call
-      // this if manually specified
+      // check that script exists and try to execute
       if (scriptFile.exists()) {
         try {
           val output = executeAndGetOutput(Seq(script.get), new File("."))

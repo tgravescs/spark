@@ -333,8 +333,6 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
           val executorData = executorDataMap(task.executorId)
           executorData.freeCores -= scheduler.CPUS_PER_TASK
           val availableGpus = executorData.resources("gpu")
-          // task.resources("gpu") = availableGpus.take(scheduler.GPUS_PER_TASK)
-          // executorData.resources("gpu") = availableGpus.drop(scheduler.GPUS_PER_TASK)
 
           logDebug(s"Launching task ${task.taskId} on executor id: ${task.executorId} hostname: " +
             s"${executorData.executorHost}.")

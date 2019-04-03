@@ -30,6 +30,7 @@ import org.apache.spark.util.collection.unsafe.sort.UnsafeSorterSpillReader.MAX_
 
 package object config {
 
+  private[spark] val SPARK_DRIVER_RESOURCE_PREFIX = "spark.driver.resource."
   private[spark] val SPARK_EXECUTOR_RESOURCE_PREFIX = "spark.executor.resource."
   private[spark] val SPARK_TASK_RESOURCE_PREFIX = "spark.task.resource."
 
@@ -177,7 +178,7 @@ package object config {
     .createWithDefault(1)
 
   private[spark] val EXECUTOR_GPUS =
-    ConfigBuilder("spark.executor.accelerator.gpu.count")
+    ConfigBuilder(s"${SPARK_EXECUTOR_RESOURCE_PREFIX}gpu.count")
       .doc("The number of GPUs assigned to each executor, each executor in the same application " +
         "shall have the same number of GPUs.")
       .intConf
@@ -185,7 +186,7 @@ package object config {
       .createWithDefault(0)
 
   private[spark] val DRIVER_GPUS =
-    ConfigBuilder("spark.driver.accelerator.gpu.count")
+    ConfigBuilder(s"${SPARK_DRIVER_RESOURCE_PREFIX}gpu.count")
       .doc("The number of GPUs assigned to the driver.")
       .intConf
       .checkValue(_ >= 0, "The number of GPUs for the driver must be non-negative.")
@@ -340,7 +341,7 @@ package object config {
       .createWithDefault(1)
 
   // this is formatted this way to allow grabbing a bunch of sub pieces of the config,
-  // for instance every type of accelerators, then for each accelerator various configs like
+  // for instance every type of resources, then for each resource various configs like
   // count, could add a type, etc.
   private[spark] val GPUS_PER_TASK =
     ConfigBuilder(s"${SPARK_TASK_RESOURCE_PREFIX}gpu.count")

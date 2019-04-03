@@ -19,17 +19,19 @@ package org.apache.spark
 
 import scala.collection.Map
 
+import org.apache.spark.internal.config.SPARK_TASK_RESOURCE_PREFIX
+
 /**
  * Resource requirements for each task.
  */
 case class TaskResourceRequirements(
     numCores: Int,
-    accelerators: Map[String, Int] = Map.empty) extends Serializable
+    resources: Map[String, Int] = Map.empty) extends Serializable
 
 object TaskResourceRequirements {
 
   def parse(conf: SparkConf): TaskResourceRequirements =
     TaskResourceRequirements(conf.getInt("spark.task.cpus", 1),
-      conf.getAllWithPrefix("spark.task.accelerator.")
+      conf.getAllWithPrefix(SPARK_TASK_RESOURCE_PREFIX)
         .map { case (k, v) if k.endsWith(".count") => (k.stripSuffix(".count"), v.toInt) }.toMap)
 }

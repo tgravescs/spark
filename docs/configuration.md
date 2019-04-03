@@ -137,6 +137,13 @@ of the most common options to set are:
   </td>
 </tr>
 <tr>
+  <td><code>spark.driver.resource.gpu.count</code></td>
+  <td>0</td>
+  <td>
+    Number of gpus to use for the driver process, only in cluster mode.
+  </td>
+</tr>
+<tr>
   <td><code>spark.driver.maxResultSize</code></td>
   <td>1g</td>
   <td>
@@ -204,6 +211,13 @@ of the most common options to set are:
     This is memory that accounts for things like VM overheads, interned strings, other native 
     overheads, etc. This tends to grow with the executor size (typically 6-10%).
     This option is currently supported on YARN and Kubernetes.
+  </td>
+</tr>
+<tr>
+ <td><code>spark.executor.resource.gpu.count</code></td>
+  <td>0</td>
+  <td>
+        The number of gpus to use on each executor.
   </td>
 </tr>
 <tr>
