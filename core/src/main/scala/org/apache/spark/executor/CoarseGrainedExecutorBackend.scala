@@ -22,7 +22,6 @@ import java.nio.ByteBuffer
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 
-import scala.collection.mutable
 import scala.collection.mutable.{HashMap, ListBuffer}
 import scala.runtime.ScalaRunTime._
 import scala.util.{Failure, Success}

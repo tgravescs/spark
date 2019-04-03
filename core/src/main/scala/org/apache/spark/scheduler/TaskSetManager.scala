@@ -447,7 +447,7 @@ private[spark] class TaskSetManager(
       execId: String,
       host: String,
       maxLocality: TaskLocality.TaskLocality,
-      resources: Map[String, Array[String]])
+      resources: Map[String, Array[String]] = Map.empty)
     : Option[TaskDescription] =
   {
     val offerBlacklisted = taskSetBlacklistHelperOpt.exists { blacklist =>
