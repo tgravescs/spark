@@ -270,7 +270,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
         val workOffers = activeExecutors.map {
           case (id, executorData) =>
             new WorkerOffer(id, executorData.executorHost, executorData.freeCores,
-              Some(executorData.executorAddress.hostPort), executorData.resources.toMap)
+              Some(executorData.executorAddress.hostPort), executorData.resources)
         }.toIndexedSeq
         scheduler.resourceOffers(workOffers)
       }
@@ -296,7 +296,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
           val executorData = executorDataMap(executorId)
           val workOffers = IndexedSeq(
             new WorkerOffer(executorId, executorData.executorHost, executorData.freeCores,
-              Some(executorData.executorAddress.hostPort), executorData.resources.toMap))
+              Some(executorData.executorAddress.hostPort), executorData.resources))
           scheduler.resourceOffers(workOffers)
         } else {
           Seq.empty
@@ -335,9 +335,6 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
           val availableGpus = executorData.resources("gpu")
           // task.resources("gpu") = availableGpus.take(scheduler.GPUS_PER_TASK)
           // executorData.resources("gpu") = availableGpus.drop(scheduler.GPUS_PER_TASK)
-          // TODO - see if cheaper way to do this?
-          val resourcesLeft = ArrayBuffer[String]() ++ availableGpus --= task.resources("gpu")
-          executorData.resources("gpu") = resourcesLeft.toArray
 
           logDebug(s"Launching task ${task.taskId} on executor id: ${task.executorId} hostname: " +
             s"${executorData.executorHost}.")

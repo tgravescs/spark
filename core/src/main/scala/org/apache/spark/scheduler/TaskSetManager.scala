@@ -21,7 +21,8 @@ import java.io.NotSerializableException
 import java.nio.ByteBuffer
 import java.util.concurrent.ConcurrentLinkedQueue
 
-import scala.collection.mutable.{ArrayBuffer, BitSet, HashMap, HashSet}
+import scala.collection.immutable
+import scala.collection.mutable.{ArrayBuffer, BitSet, HashMap, HashSet, Map}
 import scala.math.max
 import scala.util.control.NonFatal
 
@@ -512,8 +513,13 @@ private[spark] class TaskSetManager(
         logInfo(s"Starting $taskName (TID $taskId, $host, executor ${info.executorId}, " +
           s"partition ${task.partitionId}, $taskLocality, ${serializedTask.limit()} bytes)")
 
+        // TODO - see if cheaper way to do this?
+        val availableGpus = resources("gpu")
+        val taskGpus = availableGpus.take(sched.GPUS_PER_TASK)
+        val resourcesLeft = ArrayBuffer[String]() ++ availableGpus --= taskGpus
+        resources("gpu") = resourcesLeft.toArray
         sched.dagScheduler.taskStarted(task, info)
-        val taskResources = Map("gpu" -> resources("gpu").take(sched.GPUS_PER_TASK))
+
         new TaskDescription(
           taskId,
           attemptNum,
@@ -524,7 +530,7 @@ private[spark] class TaskSetManager(
           addedFiles,
           addedJars,
           task.localProperties,
-          taskResources,
+          immutable.Map("gpu" -> taskGpus),
           serializedTask)
       }
     } else {

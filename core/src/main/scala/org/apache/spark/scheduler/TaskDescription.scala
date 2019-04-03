@@ -138,7 +138,7 @@ private[spark] object TaskDescription {
       val numIdentifier = dataIn.readInt()
       val identifiers = new ArrayBuffer[String](numIdentifier)
       for (j <- 0 until numIdentifier) {
-        identifiers(i) = dataIn.readUTF()
+        identifiers += dataIn.readUTF()
       }
       map(resType) = identifiers.toArray
     }
