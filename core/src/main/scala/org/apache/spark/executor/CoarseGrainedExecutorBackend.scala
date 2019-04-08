@@ -77,7 +77,7 @@ private[spark] class CoarseGrainedExecutorBackend(
             s"and user specified its required in: $GPUS_PER_TASK")
         }
         logInfo(s"Executor ${executorId} using GPU resources: " +
-          s"${stringOf(gpuResources.get("gpu").get)}")
+          s"${stringOf(gpuResources.get("gpu").get.getAddresses())}")
         gpuResources
       } else {
         Map.empty[String, ResourceInformation]

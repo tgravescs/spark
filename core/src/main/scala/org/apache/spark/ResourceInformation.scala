@@ -20,9 +20,10 @@ package org.apache.spark
 import org.apache.spark.annotation.Evolving
 
 /**
- * Class to hold information about a type of Resource allocated to a task. Currently we have a
- * resource name, unit of the resource which could be empty for a simple count, the count of
- * that resource available, and then an optional Array of values.
+ * Class to hold information about a type of Resource. A resource could be a gpu, fpga, numa, etc.
+ * Currently we have a resource name, unit of the resource which could be empty for a simple count,
+ * the count of that resource available, and then an optional Array of strings which describe the
+ * address of the resource. For instance, for gpus the addresses would be the indexes of the gpus.
  */
 @Evolving
 class ResourceInformation(
@@ -31,12 +32,15 @@ class ResourceInformation(
     private val count: Long,
     private val addresses: Array[String] = Array.empty) {
 
-  // known types of resources
-  final val GPU: String = "gpu"
-
-
   def getName(): String = name
   def getUnits(): String = units
   def getCount(): Long = count
   def getAddresses(): Array[String] = addresses
+}
+
+object ResourceInformation {
+  // known types of resources
+  final val GPU: String = "gpu"
+
+
 }

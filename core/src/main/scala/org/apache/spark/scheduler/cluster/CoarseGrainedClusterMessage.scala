@@ -21,7 +21,6 @@ import java.nio.ByteBuffer
 
 import org.apache.spark.ResourceInformation
 
-import scala.collection.mutable
 import org.apache.spark.TaskState.TaskState
 import org.apache.spark.rpc.RpcEndpointRef
 import org.apache.spark.scheduler.ExecutorLossReason

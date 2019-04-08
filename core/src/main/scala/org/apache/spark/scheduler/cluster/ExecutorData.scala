@@ -29,8 +29,9 @@ import org.apache.spark.scheduler.SchedulerResourceInformation
  * @param executorHost The hostname that this executor is running on
  * @param freeCores  The current number of cores available for work on the executor
  * @param totalCores The total number of cores available to the executor
- * @param resources The identifiers of all resources available to the executor
- */
+ * @param totalResources The information of all resources on the executor
+ * @param availableResources The information of the currently available resources on the executor
+  */
 private[cluster] class ExecutorData(
    val executorEndpoint: RpcEndpointRef,
    val executorAddress: RpcAddress,

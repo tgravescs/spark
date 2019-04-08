@@ -185,6 +185,12 @@ package object config {
       .checkValue(_ >= 0, "The number of GPUs for each executor must be non-negative.")
       .createWithDefault(0)
 
+  // Script that outputs comma separate list of gpu indexes available on that executor
+  private[spark] val GPU_DISCOVERY_SCRIPT =
+    ConfigBuilder(s"${SPARK_EXECUTOR_RESOURCE_PREFIX}gpu.discoveryScript").
+      stringConf.
+      createOptional
+
   private[spark] val DRIVER_GPUS =
     ConfigBuilder(s"${SPARK_DRIVER_RESOURCE_PREFIX}gpu.count")
       .doc("The number of GPUs assigned to the driver.")
@@ -351,12 +357,6 @@ package object config {
       .intConf
       .checkValue(_ >= 0, "The number of GPUs required by each task must be non-negative.")
       .createWithDefault(0)
-
-  // Script that outputs comma separate list of gpu indexes available on that executor
-  private[spark] val GPU_DISCOVERY_SCRIPT =
-    ConfigBuilder(s"${SPARK_EXECUTOR_RESOURCE_PREFIX}gpu.discoveryScript").
-      stringConf.
-      createOptional
 
   private[spark] val DYN_ALLOCATION_ENABLED =
     ConfigBuilder("spark.dynamicAllocation.enabled").booleanConf.createWithDefault(false)
