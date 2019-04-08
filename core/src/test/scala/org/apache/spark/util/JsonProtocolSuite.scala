@@ -21,7 +21,6 @@ import java.util.Properties
 
 import scala.collection.JavaConverters._
 import scala.collection.Map
-import scala.collection.mutable
 
 import org.json4s.JsonAST.{JArray, JInt, JString, JValue}
 import org.json4s.JsonDSL._
@@ -78,14 +77,14 @@ class JsonProtocolSuite extends SparkFunSuite {
     val unpersistRdd = SparkListenerUnpersistRDD(12345)
     val logUrlMap = Map("stderr" -> "mystderr", "stdout" -> "mystdout").toMap
     val attributes = Map("ContainerId" -> "ct1", "User" -> "spark").toMap
-    val resources = mutable.Map("gpu" -> Array("0", "1"))
+    val resources = Map("gpu" -> new ResourceInformation("gpu", "", 2, Array("0", "1")))
     val applicationStart = SparkListenerApplicationStart("The winner of all", Some("appId"),
       42L, "Garfield", Some("appAttempt"))
     val applicationStartWithLogs = SparkListenerApplicationStart("The winner of all", Some("appId"),
       42L, "Garfield", Some("appAttempt"), Some(logUrlMap))
     val applicationEnd = SparkListenerApplicationEnd(42L)
     val executorAdded = SparkListenerExecutorAdded(executorAddedTime, "exec1",
-      new ExecutorInfo("Hostee.awesome.com", 11, logUrlMap, attributes, resources))
+      new ExecutorInfo("Hostee.awesome.com", 11, logUrlMap, attributes, resources.toMap))
     val executorRemoved = SparkListenerExecutorRemoved(executorRemovedTime, "exec2", "test reason")
     val executorBlacklisted = SparkListenerExecutorBlacklisted(executorBlacklistedTime, "exec1", 22)
     val executorUnblacklisted =
@@ -665,11 +664,17 @@ private[spark] object JsonProtocolSuite extends Assertions {
   private def assertEquals(info1: ExecutorInfo, info2: ExecutorInfo) {
     assert(info1.executorHost == info2.executorHost)
     assert(info1.totalCores == info2.totalCores)
-    assert(info1.resources.size == info2.resources.size)
-    info1.resources.zip(info2.resources).foreach {
-      case ((key1, values1: Array[String]), (key2, values2: Array[String])) =>
+    assert(info1.totalResources.size == info2.totalResources.size)
+
+    info1.totalResources.zip(info2.totalResources).foreach {
+      case ((key1, values1: ResourceInformation), (key2, values2: ResourceInformation)) =>
         assert(key1 === key2)
-        values1.zip(values2).foreach { case (v1, v2) => assert(v1 === v2) }
+        assert(values1.getCount() == values2.getCount())
+        assert(values1.getName() == values2.getName())
+        assert(values1.getUnits() == values2.getUnits())
+        values1.getAddresses().zip(values2.getAddresses()).foreach {
+          case (v1, v2) => assert(v1 === v2)
+        }
     }
 
   }

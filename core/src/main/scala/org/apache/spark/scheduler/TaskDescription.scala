@@ -26,6 +26,7 @@ import scala.collection.JavaConverters._
 import scala.collection.immutable
 import scala.collection.mutable.{ArrayBuffer, HashMap, Map}
 
+import org.apache.spark.ResourceInformation
 import org.apache.spark.util.{ByteBufferInputStream, ByteBufferOutputStream, Utils}
 
 /**
@@ -55,7 +56,7 @@ private[spark] class TaskDescription(
     val addedFiles: Map[String, Long],
     val addedJars: Map[String, Long],
     val properties: Properties,
-    val resources: immutable.Map[String, Array[String]],
+    val resources: immutable.Map[String, ResourceInformation],
     val serializedTask: ByteBuffer) {
 
   override def toString: String = "TaskDescription(TID=%d, index=%d)".format(taskId, index)
@@ -70,13 +71,16 @@ private[spark] object TaskDescription {
     }
   }
 
-  private def serializeResources(map: immutable.Map[String, Array[String]],
+  private def serializeResources(map: immutable.Map[String, ResourceInformation],
       dataOut: DataOutputStream): Unit = {
     dataOut.writeInt(map.size)
     for ((key, value) <- map) {
       dataOut.writeUTF(key)
-      dataOut.writeInt(value.size)
-      for (identifier <- value) {
+      dataOut.writeUTF(value.getName())
+      dataOut.writeUTF(value.getUnits())
+      dataOut.writeLong(value.getCount())
+      dataOut.writeInt(value.getAddresses.size)
+      for (identifier <- value.getAddresses()) {
         dataOut.writeUTF(identifier)
       }
     }
@@ -130,17 +134,20 @@ private[spark] object TaskDescription {
   }
 
   private def deserializeResources(dataIn: DataInputStream):
-      immutable.Map[String, Array[String]] = {
-    val map = new HashMap[String, Array[String]]()
+      immutable.Map[String, ResourceInformation] = {
+    val map = new HashMap[String, ResourceInformation]()
     val mapSize = dataIn.readInt()
     for (i <- 0 until mapSize) {
       val resType = dataIn.readUTF()
+      val name = dataIn.readUTF()
+      val units = dataIn.readUTF()
+      val count = dataIn.readLong()
       val numIdentifier = dataIn.readInt()
       val identifiers = new ArrayBuffer[String](numIdentifier)
       for (j <- 0 until numIdentifier) {
         identifiers += dataIn.readUTF()
       }
-      map(resType) = identifiers.toArray
+      map(resType) = new ResourceInformation(name, units, count, identifiers.toArray)
     }
     map.toMap
   }

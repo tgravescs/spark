@@ -16,8 +16,7 @@
  */
 package org.apache.spark.scheduler.cluster
 
-import scala.collection.mutable
-
+import org.apache.spark.ResourceInformation
 import org.apache.spark.annotation.DeveloperApi
 
 
@@ -31,10 +30,10 @@ class ExecutorInfo(
    val totalCores: Int,
    val logUrlMap: Map[String, String],
    val attributes: Map[String, String],
-   val resources: mutable.Map[String, Array[String]] = mutable.Map.empty) {
+   val totalResources: Map[String, ResourceInformation] = Map.empty) {
 
   def this(executorHost: String, totalCores: Int, logUrlMap: Map[String, String]) = {
-    this(executorHost, totalCores, logUrlMap, Map.empty, mutable.Map.empty)
+    this(executorHost, totalCores, logUrlMap, Map.empty, Map.empty)
   }
 
   def canEqual(other: Any): Boolean = other.isInstanceOf[ExecutorInfo]
@@ -46,12 +45,12 @@ class ExecutorInfo(
         totalCores == that.totalCores &&
         logUrlMap == that.logUrlMap &&
         attributes == that.attributes &&
-        resources == that.resources
+        totalResources == that.totalResources
     case _ => false
   }
 
   override def hashCode(): Int = {
-    val state = Seq(executorHost, totalCores, logUrlMap, attributes, resources)
+    val state = Seq(executorHost, totalCores, logUrlMap, attributes, totalResources)
     state.map(_.hashCode()).foldLeft(0)((a, b) => 31 * a + b)
   }
 }

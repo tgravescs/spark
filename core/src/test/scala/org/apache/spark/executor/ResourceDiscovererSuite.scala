@@ -53,8 +53,8 @@ class ResourceDiscovererSuite extends SparkFunSuite
       val resources = discoverer.findResources()
       val gpuValue = resources.get("gpu")
       assert(gpuValue.nonEmpty, "Should have a gpu entry")
-      assert(gpuValue.get.size == 2, "Should have 2 indexes")
-      assert(gpuValue.get.deep == Array("0", "1").deep, "should have 0,1 entries")
+      assert(gpuValue.get.getAddresses().size == 2, "Should have 2 indexes")
+      assert(gpuValue.get.getAddresses().deep == Array("0", "1").deep, "should have 0,1 entries")
 
     } finally {
       JavaFiles.deleteIfExists(file1.toPath())

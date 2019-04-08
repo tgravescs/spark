@@ -730,7 +730,7 @@ class SparkContextSuite extends SparkFunSuite with LocalSparkContext with Eventu
       }
       val rdd = sc.makeRDD(1 to 10, 9).mapPartitions { it =>
         val context = TaskContext.get()
-        context.gpus().iterator
+        context.getResources().get("gpu").get.getAddresses().iterator
       }
       val gpus = rdd.collect()
       assert(gpus.sorted === Seq("0", "0", "0", "1", "1", "1", "2", "2", "2"))

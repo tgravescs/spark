@@ -191,7 +191,7 @@ private[spark] class AppStatusListener(
     exec.maxTasks = event.executorInfo.totalCores / coresPerTask
     exec.executorLogs = event.executorInfo.logUrlMap
     exec.attributes = event.executorInfo.attributes
-    exec.resources = event.executorInfo.resources.toMap
+    exec.resources = event.executorInfo.totalResources
     liveUpdate(exec, System.nanoTime())
   }
 

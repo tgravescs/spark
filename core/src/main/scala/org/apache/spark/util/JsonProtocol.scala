@@ -489,12 +489,13 @@ private[spark] object JsonProtocol {
     ("Total Cores" -> executorInfo.totalCores) ~
     ("Log Urls" -> mapToJson(executorInfo.logUrlMap)) ~
     ("Attributes" -> mapToJson(executorInfo.attributes)) ~
-    ("Resources" -> resourcesMapToJson(executorInfo.resources))
+    ("Resources" -> resourcesMapToJson(executorInfo.totalResources))
   }
 
-  def resourcesMapToJson(m: Map[String, Array[String]]): JValue = {
+  def resourcesMapToJson(m: Map[String, ResourceInformation]): JValue = {
     val jsonFields = m.map {
-      case (k, v) => JField(k, JArray(v.map(JString(_)).toList))
+      // TODO - need to do entire ResourceInformation object
+      case (k, v) => JField(k, JArray(v.getAddresses().map(JString(_)).toList))
     }
     JObject(jsonFields.toList)
   }
@@ -1077,9 +1078,8 @@ private[spark] object JsonProtocol {
       case Some(attr) => mapFromJson(attr).toMap
       case None => Map.empty[String, String]
     }
-    val resources = resourcesMapFromJson(json \ "Resources")
-    new ExecutorInfo(executorHost, totalCores, logUrls, attributes,
-      scala.collection.mutable.Map[String, Array[String]]() ++ resources)
+    val resources = resourcesMapFromJson(json \ "Resources").toMap
+    new ExecutorInfo(executorHost, totalCores, logUrls, attributes, resources)
   }
 
   def blockUpdatedInfoFromJson(json: JValue): BlockUpdatedInfo = {
@@ -1095,10 +1095,12 @@ private[spark] object JsonProtocol {
    * Util JSON deserialization methods |
    * --------------------------------- */
 
-  def resourcesMapFromJson(json: JValue): Map[String, Array[String]] = {
+  def resourcesMapFromJson(json: JValue): Map[String, ResourceInformation] = {
     val jsonFields = json.asInstanceOf[JObject].obj
     jsonFields.map { case JField(k, JArray(v)) =>
-      (k, v.map(_.extract[String]).toArray)
+      val addrs = v.map(_.extract[String]).toArray
+      // TODO - need to get units here
+      (k, new ResourceInformation(k, "", addrs.size, addrs))
     }.toMap
   }
 

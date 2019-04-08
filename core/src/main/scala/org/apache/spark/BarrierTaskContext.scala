@@ -186,7 +186,7 @@ class BarrierTaskContext private[spark] (
     taskContext.getMetricsSources(sourceName)
   }
 
-  override def gpus(): Array[String] = taskContext.gpus()
+  override def getResources(): Map[String, ResourceInformation] = taskContext.getResources()
 
   override private[spark] def killTaskIfInterrupted(): Unit = taskContext.killTaskIfInterrupted()
 

@@ -17,21 +17,26 @@
 
 package org.apache.spark
 
-import scala.collection.Map
-
-import org.apache.spark.internal.config.SPARK_TASK_RESOURCE_PREFIX
+import org.apache.spark.annotation.Evolving
 
 /**
- * Resource requirements for each task.
+ * Class to hold information about a type of Resource allocated to a task. Currently we have a
+ * resource name, unit of the resource which could be empty for a simple count, the count of
+ * that resource available, and then an optional Array of values.
  */
-case class TaskResourceRequirements(
-    numCores: Int,
-    resources: Map[String, Int] = Map.empty) extends Serializable
+@Evolving
+class ResourceInformation(
+    private val name: String,
+    private val units: String,
+    private val count: Long,
+    private val addresses: Array[String] = Array.empty) {
 
-object TaskResourceRequirements {
+  // known types of resources
+  final val GPU: String = "gpu"
 
-  def parse(conf: SparkConf): TaskResourceRequirements =
-    TaskResourceRequirements(conf.getInt("spark.task.cpus", 1),
-      conf.getAllWithPrefix(SPARK_TASK_RESOURCE_PREFIX)
-        .map { case (k, v) if k.endsWith(".count") => (k.stripSuffix(".count"), v.toInt) }.toMap)
+
+  def getName(): String = name
+  def getUnits(): String = units
+  def getCount(): Long = count
+  def getAddresses(): Array[String] = addresses
 }

@@ -17,9 +17,9 @@
 
 package org.apache.spark.scheduler.cluster
 
-import scala.collection.mutable
-
+import org.apache.spark.ResourceInformation
 import org.apache.spark.rpc.{RpcAddress, RpcEndpointRef}
+import org.apache.spark.scheduler.SchedulerResourceInformation
 
 /**
  * Grouping of data for an executor used by CoarseGrainedSchedulerBackend.
@@ -39,5 +39,6 @@ private[cluster] class ExecutorData(
    override val totalCores: Int,
    override val logUrlMap: Map[String, String],
    override val attributes: Map[String, String],
-   override val resources: mutable.Map[String, Array[String]]
-) extends ExecutorInfo(executorHost, totalCores, logUrlMap, attributes, resources)
+   override val totalResources: Map[String, ResourceInformation],
+   val availableResources: Map[String, SchedulerResourceInformation]
+) extends ExecutorInfo(executorHost, totalCores, logUrlMap, attributes, totalResources)

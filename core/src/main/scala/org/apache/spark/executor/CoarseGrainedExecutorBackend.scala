@@ -58,7 +58,7 @@ private[spark] class CoarseGrainedExecutorBackend(
   // to be changed so that we don't share the serializer instance across threads
   private[this] val ser: SerializerInstance = env.closureSerializer.newInstance()
 
-  private[this] val taskResources = new HashMap[Long, Map[String, Array[String]]]
+  private[this] val taskResources = new HashMap[Long, Map[String, ResourceInformation]]
 
   override def onStart() {
     logInfo("Connecting to driver: " + driverUrl)
@@ -67,8 +67,11 @@ private[spark] class CoarseGrainedExecutorBackend(
       driver = Some(ref)
 
       val resourceInfo = if (env.conf.get(GPUS_PER_TASK) > 0) {
-        val gpuResources = gpuDevices.map(ids => Map("gpu" -> ids.split(",").map(_.trim())))
-          .getOrElse(new ResourceDiscoverer(env.conf).findResources())
+        val gpuResources = gpuDevices.map(ids => {
+          val gpuIds = ids.split(",").map(_.trim())
+          Map("gpu" -> new ResourceInformation("gpu", "", gpuIds.size, gpuIds))
+        }).getOrElse(new ResourceDiscoverer(env.conf).findResources())
+
         if (gpuResources.get("gpu").isEmpty) {
           throw new SparkException(s"Executor couldn't find any GPU resources available " +
             s"and user specified its required in: $GPUS_PER_TASK")
@@ -77,7 +80,7 @@ private[spark] class CoarseGrainedExecutorBackend(
           s"${stringOf(gpuResources.get("gpu").get)}")
         gpuResources
       } else {
-        Map.empty[String, Array[String]]
+        Map.empty[String, ResourceInformation]
       }
 
       ref.ask[Boolean](RegisterExecutor(executorId, self, hostname, cores, extractLogUrls,
@@ -169,7 +172,7 @@ private[spark] class CoarseGrainedExecutorBackend(
   }
 
   override def statusUpdate(taskId: Long, state: TaskState, data: ByteBuffer) {
-    val resources = taskResources.getOrElse(taskId, Map.empty[String, Array[String]])
+    val resources = taskResources.getOrElse(taskId, Map.empty[String, ResourceInformation])
     val msg = StatusUpdate(executorId, taskId, state, data, resources)
     if (TaskState.isFinished(state)) {
       taskResources.remove(taskId)

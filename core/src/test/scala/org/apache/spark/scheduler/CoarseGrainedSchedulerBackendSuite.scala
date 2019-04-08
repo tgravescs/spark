@@ -24,7 +24,7 @@ import scala.concurrent.duration._
 import org.scalatest.concurrent.Eventually
 import org.scalatest.mockito.MockitoSugar._
 
-import org.apache.spark.{LocalSparkContext, SparkConf, SparkContext, SparkException, SparkFunSuite}
+import org.apache.spark.{LocalSparkContext, ResourceInformation, SparkConf, SparkContext, SparkException, SparkFunSuite}
 import org.apache.spark.internal.config.{CPUS_PER_TASK, GPUS_PER_TASK, UI}
 import org.apache.spark.internal.config.Network.RPC_MESSAGE_MAX_SIZE
 import org.apache.spark.rdd.RDD
@@ -196,14 +196,18 @@ class CoarseGrainedSchedulerBackendSuite extends SparkFunSuite with LocalSparkCo
       "LOG_FILES" -> "stdout,stderr")
     val baseUrl = s"http://newhost:9999/logs/clusters/${attributes("CLUSTER_ID")}" +
       s"/users/${attributes("USER")}/containers/${attributes("CONTAINER_ID")}"
-    val resources = Map("gpu" -> Array("0"))
+    val resources = Map("gpu" -> new ResourceInformation("gpu", "", 1, Array("0")))
 
     var executorAddedCount: Int = 0
     val listener = new SparkListener() {
       override def onExecutorAdded(executorAdded: SparkListenerExecutorAdded): Unit = {
         executorAddedCount += 1
-        assert(executorAdded.executorInfo.resources.get("gpu").nonEmpty)
-        assert(executorAdded.executorInfo.resources.get("gpu").get === Array("0"))
+        assert(executorAdded.executorInfo.totalResources.get("gpu").nonEmpty)
+        val totalResources = executorAdded.executorInfo.totalResources.get("gpu").get
+        assert(totalResources.getAddresses() === Array("0"))
+        assert(totalResources.getCount() == 1)
+        assert(totalResources.getName() == "gpu")
+        assert(totalResources.getUnits() == "")
       }
     }
 

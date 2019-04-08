@@ -426,7 +426,7 @@ private[spark] class Executor(
             taskAttemptId = taskId,
             attemptNumber = taskDescription.attemptNumber,
             metricsSystem = env.metricsSystem,
-            gpus = taskDescription.resources.getOrElse("gpu", Array.empty[String]))
+            resources = taskDescription.resources)
           threwException = false
           res
         } {

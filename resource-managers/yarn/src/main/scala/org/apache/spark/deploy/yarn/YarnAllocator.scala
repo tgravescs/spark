@@ -141,8 +141,22 @@ private[yarn] class YarnAllocator(
   // Number of cores per executor.
   protected val executorCores = sparkConf.get(EXECUTOR_CORES)
 
-  private val executorResourceRequests =
-    sparkConf.getAllWithPrefix(config.YARN_EXECUTOR_RESOURCE_TYPES_PREFIX).toMap
+  private val executorResourceRequests = getExecutorResources
+
+  def getExecutorResources: Map[String, String] = {
+    val sparkExecutorResources =
+      sparkConf.getAllWithPrefix(SPARK_EXECUTOR_RESOURCE_PREFIX).toMap
+    val yarnResources =
+      sparkConf.getAllWithPrefix(config.YARN_EXECUTOR_RESOURCE_TYPES_PREFIX).toMap
+    if (getExecutorResources.get("gpu").nonEmpty) {
+      if (yarnResources.get("io.yarn/gpu").nonEmpty) {
+        logInfo("setting the yarn resource based on spark driver resource for gpu being set")
+        // TODO -immutable
+        // yarnResources("io.yarn/gpu") = getExecutorResources.get("gpu").get
+      }
+    }
+    yarnResources
+  }
 
   // Resource capability requested for each executor
   private[yarn] val resource: Resource = {
@@ -510,6 +524,7 @@ private[yarn] class YarnAllocator(
         s"location: $location, resource: $matchingResource")
     val matchingRequests = amClient.getMatchingRequests(allocatedContainer.getPriority, location,
       matchingResource)
+
 
     // Match the allocation to a request
     if (!matchingRequests.isEmpty) {

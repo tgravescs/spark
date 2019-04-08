@@ -19,8 +19,9 @@ package org.apache.spark.scheduler.cluster
 
 import java.nio.ByteBuffer
 
-import scala.collection.mutable
+import org.apache.spark.ResourceInformation
 
+import scala.collection.mutable
 import org.apache.spark.TaskState.TaskState
 import org.apache.spark.rpc.RpcEndpointRef
 import org.apache.spark.scheduler.ExecutorLossReason
@@ -67,7 +68,7 @@ private[spark] object CoarseGrainedClusterMessages {
       cores: Int,
       logUrls: Map[String, String],
       attributes: Map[String, String],
-      resources: Map[String, Array[String]])
+      resources: Map[String, ResourceInformation])
     extends CoarseGrainedClusterMessage
 
   case class StatusUpdate(
@@ -75,13 +76,13 @@ private[spark] object CoarseGrainedClusterMessages {
       taskId: Long,
       state: TaskState,
       data: SerializableBuffer,
-      resources: Map[String, Array[String]] = Map.empty)
+      resources: Map[String, ResourceInformation] = Map.empty)
     extends CoarseGrainedClusterMessage
 
   object StatusUpdate {
     /** Alternate factory method that takes a ByteBuffer directly for the data field */
     def apply(executorId: String, taskId: Long, state: TaskState, data: ByteBuffer,
-        resources: Map[String, Array[String]]): StatusUpdate = {
+        resources: Map[String, ResourceInformation]): StatusUpdate = {
       StatusUpdate(executorId, taskId, state, new SerializableBuffer(data), resources)
     }
   }

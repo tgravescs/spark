@@ -238,12 +238,26 @@ private[spark] class Client(
   def createApplicationSubmissionContext(
       newApp: YarnClientApplication,
       containerContext: ContainerLaunchContext): ApplicationSubmissionContext = {
+    // TODO - what about if set via spark.driver.resources
+    // we could map certain ones into the yarn ones like gpu's, but
+    // otherwise user would have to set both
     val amResources =
       if (isClusterMode) {
         sparkConf.getAllWithPrefix(config.YARN_DRIVER_RESOURCE_TYPES_PREFIX).toMap
       } else {
         sparkConf.getAllWithPrefix(config.YARN_AM_RESOURCE_TYPES_PREFIX).toMap
       }
+    val sparkDriverResources =
+      sparkConf.getAllWithPrefix(SPARK_DRIVER_RESOURCE_PREFIX).toMap
+    if (sparkDriverResources.get("gpu").nonEmpty) {
+      if (amResources.get("io.yarn/gpu").nonEmpty) {
+        logInfo("setting the yarn resource based on spark driver resource for gpu being set")
+        // TODO - immutable
+        // amResources("io.yarn/gpu") = sparkDriverResources.get("gpu").get
+        throw new IllegalArgumentException("shouldn't specify both driver.resource.gpu and" +
+          " the yarn resource config")
+      }
+    }
     logDebug(s"AM resources: $amResources")
     val appContext = newApp.getApplicationSubmissionContext
     appContext.setApplicationName(sparkConf.get("spark.app.name", "Spark"))

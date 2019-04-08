@@ -148,8 +148,8 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
             case Some(executorInfo) =>
               executorInfo.freeCores += scheduler.CPUS_PER_TASK
               if (resources.contains("gpu")) {
-                val availableGpus = executorInfo.resources.getOrElse("gpu", Array.empty[String])
-                executorInfo.resources("gpu") = availableGpus ++ resources("gpu")
+                executorInfo.availableResources("gpu").addCount(scheduler.GPUS_PER_TASK)
+                executorInfo.availableResources("gpu").addAddresses(resources("gpu").getAddresses())
               }
               makeOffers(executorId)
             case None =>
@@ -216,8 +216,9 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
           totalCoreCount.addAndGet(cores)
           totalRegisteredExecutors.addAndGet(1)
           val data = new ExecutorData(executorRef, executorAddress, hostname,
-            cores, cores, logUrlHandler.applyPattern(logUrls, attributes),
-            attributes, scala.collection.mutable.Map() ++ resources)
+            cores, cores, logUrlHandler.applyPattern(logUrls, attributes), attributes, resources,
+            resources.mapValues(v => new SchedulerResourceInformation(v.getName(), v.getUnits(),
+              v.getCount(), v.getAddresses().to[ArrayBuffer])))
           // This must be synchronized because variables mutated
           // in this block are read when requesting executors
           CoarseGrainedSchedulerBackend.this.synchronized {
@@ -270,7 +271,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
         val workOffers = activeExecutors.map {
           case (id, executorData) =>
             new WorkerOffer(id, executorData.executorHost, executorData.freeCores,
-              Some(executorData.executorAddress.hostPort), executorData.resources)
+              Some(executorData.executorAddress.hostPort), executorData.availableResources)
         }.toIndexedSeq
         scheduler.resourceOffers(workOffers)
       }
@@ -296,7 +297,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
           val executorData = executorDataMap(executorId)
           val workOffers = IndexedSeq(
             new WorkerOffer(executorId, executorData.executorHost, executorData.freeCores,
-              Some(executorData.executorAddress.hostPort), executorData.resources))
+              Some(executorData.executorAddress.hostPort), executorData.availableResources))
           scheduler.resourceOffers(workOffers)
         } else {
           Seq.empty
@@ -332,7 +333,11 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
         else {
           val executorData = executorDataMap(task.executorId)
           executorData.freeCores -= scheduler.CPUS_PER_TASK
-          val availableGpus = executorData.resources("gpu")
+          if (executorData.availableResources.contains("gpu") && task.resources.contains("gpu")) {
+            val taskAssignedGpus = task.resources.get("gpu").get.getAddresses()
+            executorData.availableResources("gpu").removeAddresses(taskAssignedGpus)
+            executorData.availableResources("gpu").decCount(scheduler.GPUS_PER_TASK)
+          }
 
           logDebug(s"Launching task ${task.taskId} on executor id: ${task.executorId} hostname: " +
             s"${executorData.executorHost}.")

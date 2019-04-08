@@ -19,7 +19,7 @@ package org.apache.spark.executor
 
 import java.io.File
 
-import org.apache.spark.{SparkConf, SparkException}
+import org.apache.spark.{ResourceInformation, SparkConf, SparkException}
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config._
 import org.apache.spark.util.Utils.executeAndGetOutput
@@ -30,12 +30,12 @@ import org.apache.spark.util.Utils.executeAndGetOutput
  */
 private[spark] class ResourceDiscoverer(sparkconf: SparkConf) extends Logging {
 
-  def findResources(): Map[String, Array[String]] = {
+  def findResources(): Map[String, ResourceInformation] = {
     val gpus = getGPUResources
     if (gpus.isEmpty) {
       Map()
     } else {
-      Map("gpu" -> gpus)
+      Map("gpu" -> new ResourceInformation("gpu", "", gpus.size, gpus))
     }
   }
 
