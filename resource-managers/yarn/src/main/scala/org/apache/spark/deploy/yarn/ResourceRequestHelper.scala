@@ -66,7 +66,9 @@ private object ResourceRequestHelper extends Logging {
       (EXECUTOR_CORES.key, YARN_EXECUTOR_RESOURCE_TYPES_PREFIX + "vcores"),
       (AM_CORES.key, YARN_AM_RESOURCE_TYPES_PREFIX + "cpu-vcores"),
       (DRIVER_CORES.key, YARN_DRIVER_RESOURCE_TYPES_PREFIX + "cpu-vcores"),
-      (EXECUTOR_CORES.key, YARN_EXECUTOR_RESOURCE_TYPES_PREFIX + "cpu-vcores"))
+      (EXECUTOR_CORES.key, YARN_EXECUTOR_RESOURCE_TYPES_PREFIX + "cpu-vcores"),
+      (EXECUTOR_GPUS.key, YARN_EXECUTOR_RESOURCE_TYPES_PREFIX + "yarn.io/gpu"),
+      (DRIVER_GPUS.key, YARN_DRIVER_RESOURCE_TYPES_PREFIX + "yarn.io/gpu"))
     val errorMessage = new mutable.StringBuilder()
 
     resourceDefinitions.foreach { case (sparkName, resourceRequest) =>

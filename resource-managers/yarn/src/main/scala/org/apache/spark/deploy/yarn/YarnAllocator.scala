@@ -142,20 +142,16 @@ private[yarn] class YarnAllocator(
   private val executorResourceRequests = getExecutorResources
 
   def getExecutorResources: Map[String, String] = {
-    val sparkExecutorResources =
-      sparkConf.getAllWithPrefix(SPARK_EXECUTOR_RESOURCE_PREFIX).toMap
     var yarnResources =
       sparkConf.getAllWithPrefix(config.YARN_EXECUTOR_RESOURCE_TYPES_PREFIX).toMap
-    if (sparkExecutorResources.get(ResourceInformation.GPU_COUNT).nonEmpty) {
-      if (yarnResources.get(YARN_GPU_RESOURCE_CONFIG).nonEmpty) {
-          throw new IllegalArgumentException(s"Only set the spark config " +
-          s"${SPARK_EXECUTOR_RESOURCE_PREFIX + ResourceInformation.GPU_COUNT} to specify " +
-          s"gpus, do not use: " +
-          s"${YARN_EXECUTOR_RESOURCE_TYPES_PREFIX + YARN_GPU_RESOURCE_CONFIG}")
-        }
-        yarnResources = yarnResources ++ Map(YARN_GPU_RESOURCE_CONFIG ->
-          sparkExecutorResources.get(ResourceInformation.GPU_COUNT).get)
-      }
+
+    val sparkExecutorResources =
+      sparkConf.getAllWithPrefix(SPARK_EXECUTOR_RESOURCE_PREFIX).toMap
+
+    sparkExecutorResources.get(ResourceInformation.GPU_COUNT).map( count =>
+      yarnResources = yarnResources ++ Map(YARN_GPU_RESOURCE_CONFIG -> count))
+    
+    logWarning(" yarn executo resources: " + yarnResources)
     yarnResources
   }
 

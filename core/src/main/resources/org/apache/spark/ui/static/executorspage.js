@@ -42,11 +42,11 @@ function formatStatus(status, type, row) {
 function formatResourceCells(resources) {
     var result = ""
     var count = 0
-    $.each(resources, function (name, indexes) {
+    $.each(resources, function (name, resInfo) {
         if (count > 0) {
             result += "\n"
         }
-        result += name + ': ' + indexes.join(", ")
+        result += name + ': [count: ' + resInfo.count + resInfo.units + " addrs: (" + resInfo.addresses.join(", ") + ')]'
         count += 1
     });
     return result

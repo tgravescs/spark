@@ -245,19 +245,14 @@ private[spark] class Client(
       } else {
         sparkConf.getAllWithPrefix(config.YARN_AM_RESOURCE_TYPES_PREFIX).toMap
       }
+
     val sparkDriverResources =
       sparkConf.getAllWithPrefix(SPARK_DRIVER_RESOURCE_PREFIX).toMap
-    if (sparkDriverResources.get(ResourceInformation.GPU_COUNT).nonEmpty) {
-      if (amResources.get(YARN_GPU_RESOURCE_CONFIG).nonEmpty) {
-        throw new IllegalArgumentException(s"Only set the spark config " +
-          s"${SPARK_DRIVER_RESOURCE_PREFIX + ResourceInformation.GPU_COUNT} to specify " +
-          s"gpus, do not use: " +
-          s"${YARN_DRIVER_RESOURCE_TYPES_PREFIX + YARN_GPU_RESOURCE_CONFIG}")
-      }
-      amResources = amResources ++ Map(YARN_GPU_RESOURCE_CONFIG ->
-        sparkDriverResources.get(ResourceInformation.GPU_COUNT).get)
-    }
-    logDebug(s"AM resources: $amResources")
+    sparkDriverResources.get(ResourceInformation.GPU_COUNT).map( count =>
+      amResources = amResources ++ Map(YARN_GPU_RESOURCE_CONFIG -> count))
+
+    logWarning(s"AM resources: $amResources")
+    logWarning(s"spark resource: $sparkDriverResources")
 
     val appContext = newApp.getApplicationSubmissionContext
     appContext.setApplicationName(sparkConf.get("spark.app.name", "Spark"))
