@@ -18,7 +18,7 @@
 package org.apache.spark.deploy.yarn
 
 import java.io.{FileSystem => _, _}
-import java.net.{InetAddress, UnknownHostException, URI}
+import java.net.{InetAddress, URI, UnknownHostException}
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import java.util.{Locale, Properties, UUID}
@@ -27,7 +27,6 @@ import java.util.zip.{ZipEntry, ZipOutputStream}
 import scala.collection.JavaConverters._
 import scala.collection.mutable.{ArrayBuffer, HashMap, HashSet, ListBuffer, Map}
 import scala.util.control.NonFatal
-
 import com.google.common.base.Objects
 import com.google.common.io.Files
 import org.apache.hadoop.conf.Configuration
@@ -46,8 +45,7 @@ import org.apache.hadoop.yarn.conf.YarnConfiguration
 import org.apache.hadoop.yarn.exceptions.ApplicationNotFoundException
 import org.apache.hadoop.yarn.security.AMRMTokenIdentifier
 import org.apache.hadoop.yarn.util.Records
-
-import org.apache.spark.{SecurityManager, SparkConf, SparkException}
+import org.apache.spark.{ResourceInformation, SecurityManager, SparkConf, SparkException}
 import org.apache.spark.deploy.{SparkApplication, SparkHadoopUtil}
 import org.apache.spark.deploy.security.HadoopDelegationTokenManager
 import org.apache.spark.deploy.yarn.config._
@@ -241,7 +239,7 @@ private[spark] class Client(
     // TODO - what about if set via spark.driver.resources
     // we could map certain ones into the yarn ones like gpu's, but
     // otherwise user would have to set both
-    val amResources =
+    var amResources =
       if (isClusterMode) {
         sparkConf.getAllWithPrefix(config.YARN_DRIVER_RESOURCE_TYPES_PREFIX).toMap
       } else {
@@ -249,16 +247,18 @@ private[spark] class Client(
       }
     val sparkDriverResources =
       sparkConf.getAllWithPrefix(SPARK_DRIVER_RESOURCE_PREFIX).toMap
-    if (sparkDriverResources.get("gpu").nonEmpty) {
-      if (amResources.get("io.yarn/gpu").nonEmpty) {
-        logInfo("setting the yarn resource based on spark driver resource for gpu being set")
-        // TODO - immutable
-        // amResources("io.yarn/gpu") = sparkDriverResources.get("gpu").get
-        throw new IllegalArgumentException("shouldn't specify both driver.resource.gpu and" +
-          " the yarn resource config")
+    if (sparkDriverResources.get(ResourceInformation.GPU_COUNT).nonEmpty) {
+      if (amResources.get(YARN_GPU_RESOURCE_CONFIG).nonEmpty) {
+        throw new IllegalArgumentException(s"Only set the spark config " +
+          s"${SPARK_DRIVER_RESOURCE_PREFIX + ResourceInformation.GPU_COUNT} to specify " +
+          s"gpus, do not use: " +
+          s"${YARN_DRIVER_RESOURCE_TYPES_PREFIX + YARN_GPU_RESOURCE_CONFIG}")
       }
+      amResources = amResources ++ Map(YARN_GPU_RESOURCE_CONFIG ->
+        sparkDriverResources.get(ResourceInformation.GPU_COUNT).get)
     }
     logDebug(s"AM resources: $amResources")
+
     val appContext = newApp.getApplicationSubmissionContext
     appContext.setApplicationName(sparkConf.get("spark.app.name", "Spark"))
     appContext.setQueue(sparkConf.get(QUEUE_NAME))

@@ -495,7 +495,11 @@ private[spark] object JsonProtocol {
   def resourcesMapToJson(m: Map[String, ResourceInformation]): JValue = {
     val jsonFields = m.map {
       // TODO - need to do entire ResourceInformation object
-      case (k, v) => JField(k, JArray(v.getAddresses().map(JString(_)).toList))
+      case (k, v) => JField(k,
+        ("Name" -> v.getName()) ~
+        ("Units" -> v.getUnits()) ~
+        ("Count" -> v.getCount()) ~
+        ("Addresses" -> JArray(v.getAddresses().map(JString(_)).toList)))
     }
     JObject(jsonFields.toList)
   }

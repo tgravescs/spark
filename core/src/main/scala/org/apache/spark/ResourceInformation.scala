@@ -30,7 +30,7 @@ class ResourceInformation(
     private val name: String,
     private val units: String,
     private val count: Long,
-    private val addresses: Array[String] = Array.empty) {
+    private val addresses: Array[String] = Array.empty) extends Serializable {
 
   def getName(): String = name
   def getUnits(): String = units
@@ -41,6 +41,7 @@ class ResourceInformation(
 object ResourceInformation {
   // known types of resources
   final val GPU: String = "gpu"
+  final val GPU_COUNT: String = "gpu.count"
 
 
 }

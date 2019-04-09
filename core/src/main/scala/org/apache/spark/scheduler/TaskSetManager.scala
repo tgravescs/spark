@@ -513,12 +513,13 @@ private[spark] class TaskSetManager(
         logInfo(s"Starting $taskName (TID $taskId, $host, executor ${info.executorId}, " +
           s"partition ${task.partitionId}, $taskLocality, ${serializedTask.limit()} bytes)")
 
-        // should have already confirmed we have enough gpu's, so just decrement
-        val availableGpus = resources("gpu")
-        resources("gpu").decCount(sched.GPUS_PER_TASK)
-        val taskGpus = resources("gpu").takeAddresses(sched.GPUS_PER_TASK).toArray
-        val taskResourceInfo = new ResourceInformation(availableGpus.getName(),
-          availableGpus.getUnits(), sched.GPUS_PER_TASK, taskGpus)
+        val availableGpus = resources.get(ResourceInformation.GPU)
+        val taskResourceInfo = availableGpus.map(gpuResource => {
+          gpuResource.decCount(sched.GPUS_PER_TASK)
+          val taskGpus = gpuResource.takeAddresses(sched.GPUS_PER_TASK).toArray
+          Map(ResourceInformation.GPU -> new ResourceInformation(gpuResource.getName(),
+            gpuResource.getUnits(), sched.GPUS_PER_TASK, taskGpus))
+        }).getOrElse(Map.empty[String, ResourceInformation])
 
         sched.dagScheduler.taskStarted(task, info)
 
@@ -532,7 +533,7 @@ private[spark] class TaskSetManager(
           addedFiles,
           addedJars,
           task.localProperties,
-          Map("gpu" -> taskResourceInfo),
+          taskResourceInfo,
           serializedTask)
       }
     } else {

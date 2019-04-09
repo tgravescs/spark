@@ -35,7 +35,8 @@ private[spark] class ResourceDiscoverer(sparkconf: SparkConf) extends Logging {
     if (gpus.isEmpty) {
       Map()
     } else {
-      Map("gpu" -> new ResourceInformation("gpu", "", gpus.size, gpus))
+      Map(ResourceInformation.GPU ->
+        new ResourceInformation(ResourceInformation.GPU, "", gpus.size, gpus))
     }
   }
 

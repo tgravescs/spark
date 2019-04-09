@@ -82,7 +82,6 @@ private[spark] class CoarseGrainedExecutorBackend(
       } else {
         Map.empty[String, ResourceInformation]
       }
-
       ref.ask[Boolean](RegisterExecutor(executorId, self, hostname, cores, extractLogUrls,
         extractAttributes, resourceInfo))
     }(ThreadUtils.sameThread).onComplete {

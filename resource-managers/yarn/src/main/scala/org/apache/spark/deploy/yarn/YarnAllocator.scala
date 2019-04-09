@@ -25,13 +25,11 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, HashMap, HashSet}
 import scala.util.control.NonFatal
-
 import org.apache.hadoop.yarn.api.records._
 import org.apache.hadoop.yarn.client.api.AMRMClient
 import org.apache.hadoop.yarn.client.api.AMRMClient.ContainerRequest
 import org.apache.hadoop.yarn.conf.YarnConfiguration
-
-import org.apache.spark.{SecurityManager, SparkConf, SparkException}
+import org.apache.spark.{ResourceInformation, SecurityManager, SparkConf, SparkException}
 import org.apache.spark.deploy.yarn.YarnSparkHadoopUtil._
 import org.apache.spark.deploy.yarn.config._
 import org.apache.spark.internal.Logging
@@ -146,15 +144,18 @@ private[yarn] class YarnAllocator(
   def getExecutorResources: Map[String, String] = {
     val sparkExecutorResources =
       sparkConf.getAllWithPrefix(SPARK_EXECUTOR_RESOURCE_PREFIX).toMap
-    val yarnResources =
+    var yarnResources =
       sparkConf.getAllWithPrefix(config.YARN_EXECUTOR_RESOURCE_TYPES_PREFIX).toMap
-    if (getExecutorResources.get("gpu").nonEmpty) {
-      if (yarnResources.get("io.yarn/gpu").nonEmpty) {
-        logInfo("setting the yarn resource based on spark driver resource for gpu being set")
-        // TODO -immutable
-        // yarnResources("io.yarn/gpu") = getExecutorResources.get("gpu").get
+    if (sparkExecutorResources.get(ResourceInformation.GPU_COUNT).nonEmpty) {
+      if (yarnResources.get(YARN_GPU_RESOURCE_CONFIG).nonEmpty) {
+          throw new IllegalArgumentException(s"Only set the spark config " +
+          s"${SPARK_EXECUTOR_RESOURCE_PREFIX + ResourceInformation.GPU_COUNT} to specify " +
+          s"gpus, do not use: " +
+          s"${YARN_EXECUTOR_RESOURCE_TYPES_PREFIX + YARN_GPU_RESOURCE_CONFIG}")
+        }
+        yarnResources = yarnResources ++ Map(YARN_GPU_RESOURCE_CONFIG ->
+          sparkExecutorResources.get(ResourceInformation.GPU_COUNT).get)
       }
-    }
     yarnResources
   }
 

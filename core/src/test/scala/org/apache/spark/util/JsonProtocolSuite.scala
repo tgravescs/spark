@@ -77,7 +77,8 @@ class JsonProtocolSuite extends SparkFunSuite {
     val unpersistRdd = SparkListenerUnpersistRDD(12345)
     val logUrlMap = Map("stderr" -> "mystderr", "stdout" -> "mystdout").toMap
     val attributes = Map("ContainerId" -> "ct1", "User" -> "spark").toMap
-    val resources = Map("gpu" -> new ResourceInformation("gpu", "", 2, Array("0", "1")))
+    val resources = Map(ResourceInformation.GPU ->
+      new ResourceInformation(ResourceInformation.GPU, "", 2, Array("0", "1")))
     val applicationStart = SparkListenerApplicationStart("The winner of all", Some("appId"),
       42L, "Garfield", Some("appAttempt"))
     val applicationStartWithLogs = SparkListenerApplicationStart("The winner of all", Some("appId"),
@@ -141,7 +142,7 @@ class JsonProtocolSuite extends SparkFunSuite {
   test("Dependent Classes") {
     val logUrlMap = Map("stderr" -> "mystderr", "stdout" -> "mystdout").toMap
     val attributes = Map("ContainerId" -> "ct1", "User" -> "spark").toMap
-    val resources = Map("gpu" -> Array[String]("0")).toMap
+    val resources = Map(ResourceInformation.GPU -> Array[String]("0")).toMap
     testRDDInfo(makeRddInfo(2, 3, 4, 5L, 6L))
     testStageInfo(makeStageInfo(10, 20, 30, 40L, 50L))
     testTaskInfo(makeTaskInfo(999L, 888, 55, 777L, false))
