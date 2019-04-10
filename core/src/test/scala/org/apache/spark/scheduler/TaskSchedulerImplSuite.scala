@@ -19,15 +19,13 @@ package org.apache.spark.scheduler
 
 import java.nio.ByteBuffer
 
-import scala.collection.mutable.HashMap
+import scala.collection.mutable.{ArrayBuffer, HashMap}
 import scala.concurrent.duration._
-
 import org.mockito.ArgumentMatchers.{any, anyInt, anyString, eq => meq}
 import org.mockito.Mockito.{atLeast, atMost, never, spy, times, verify, when}
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.concurrent.Eventually
 import org.scalatest.mockito.MockitoSugar
-
 import org.apache.spark._
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config
@@ -181,6 +179,62 @@ class TaskSchedulerImplSuite extends SparkFunSuite with LocalSparkContext with B
     assert(1 === taskDescriptions.length)
     assert("executor0" === taskDescriptions(0).executorId)
     assert(!failedTaskSet)
+  }
+
+  test("Scheduler correctly accounts for GPUs per task") {
+    val taskCpus = 1
+    val taskGpus = 1
+    val executorGpus = 4
+    val executorCpus = 4
+    val taskScheduler = setupScheduler(config.CPUS_PER_TASK.key -> taskCpus.toString,
+      config.GPUS_PER_TASK.key -> taskGpus.toString,
+      config.EXECUTOR_GPUS.key -> executorGpus.toString,
+      config.EXECUTOR_CORES.key -> executorCpus.toString)
+    // Give zero core offers. Should not generate any tasks
+    val taskSet = FakeTask.createTaskSet(3)
+
+    val numFreeCores = 2
+    val gpuresources = Map("gpu" ->
+      new SchedulerResourceInformation("gpu", "", 4, ArrayBuffer("0", "1", "2", "3")))
+    val singleCoreWorkerOffers =
+      IndexedSeq(new WorkerOffer("executor0", "host0", numFreeCores, None, gpuresources))
+    taskScheduler.submitTasks(taskSet)
+    var taskDescriptions = taskScheduler.resourceOffers(singleCoreWorkerOffers).flatten
+    assert(2 === taskDescriptions.length)
+    assert(!failedTaskSet)
+    assert(1 === taskDescriptions(0).resources.get("gpu").get.getCount())
+    assert(ArrayBuffer("2", "3") === gpuresources.get("gpu").get.getAddresses())
+    assert(2 === gpuresources.get("gpu").get.getCount())
+    assert(ArrayBuffer("0") === taskDescriptions(0).resources.get("gpu").get.getAddresses())
+    assert(ArrayBuffer("1") === taskDescriptions(1).resources.get("gpu").get.getAddresses())
+  }
+
+  test("Scheduler correctly accounts for GPUs per task 2") {
+    val taskCpus = 1
+    val taskGpus = 1
+    val executorGpus = 4
+    val executorCpus = 4
+    val taskScheduler = setupScheduler(config.CPUS_PER_TASK.key -> taskCpus.toString,
+      config.GPUS_PER_TASK.key -> taskGpus.toString,
+      config.EXECUTOR_GPUS.key -> executorGpus.toString,
+      config.EXECUTOR_CORES.key -> executorCpus.toString)
+    // Give zero core offers. Should not generate any tasks
+    val taskSet = FakeTask.createTaskSet(3)
+
+    val numFreeCores = 2
+    val gpuresources = Map("gpu" ->
+      new SchedulerResourceInformation("gpu", "", 4, ArrayBuffer("0", "1", "2", "3")))
+    val singleCoreWorkerOffers =
+      IndexedSeq(new WorkerOffer("executor0", "host0", numFreeCores, None, gpuresources))
+    taskScheduler.submitTasks(taskSet)
+    var taskDescriptions = taskScheduler.resourceOffers(singleCoreWorkerOffers).flatten
+    assert(2 === taskDescriptions.length)
+    assert(!failedTaskSet)
+    assert(1 === taskDescriptions(0).resources.get("gpu").get.getCount())
+    assert(ArrayBuffer("2", "3") === gpuresources.get("gpu").get.getAddresses())
+    assert(2 === gpuresources.get("gpu").get.getCount())
+    assert(ArrayBuffer("0") === taskDescriptions(0).resources.get("gpu").get.getAddresses())
+    assert(ArrayBuffer("1") === taskDescriptions(1).resources.get("gpu").get.getAddresses())
   }
 
   test("Scheduler does not crash when tasks are not serializable") {

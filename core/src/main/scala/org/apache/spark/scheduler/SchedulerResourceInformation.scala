@@ -32,11 +32,7 @@ private[spark] class SchedulerResourceInformation(
     private val name: String,
     private val units: String,
     private var count: Long,
-    private var addresses: ArrayBuffer[String] = ArrayBuffer.empty) {
-
-  // known types of resources
-  final val GPU: String = "gpu"
-
+    private val addresses: ArrayBuffer[String] = ArrayBuffer.empty) {
 
   def getName(): String = name
   def getUnits(): String = units

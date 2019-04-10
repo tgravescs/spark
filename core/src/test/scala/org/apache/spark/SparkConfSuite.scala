@@ -358,22 +358,26 @@ class SparkConfSuite extends SparkFunSuite with LocalSparkContext with ResetSyst
     val conf = new SparkConf()
     conf.validateSettings()
 
+    // no executor gpus
     conf.set(GPUS_PER_TASK.key, "2")
     intercept[SparkException] {
       conf.validateSettings()
     }
 
-    conf.set(GPUS_PER_TASK.key, "1")
-    conf.validateSettings()
-
+    // gpus need to be multiple of executor
     conf.set(GPUS_PER_TASK.key, "3")
+    conf.set(EXECUTOR_GPUS.key, "3")
     conf.set(EXECUTOR_CORES.key, "4")
+    conf.set(CPUS_PER_TASK.key, "1")
     intercept[SparkException] {
       conf.validateSettings()
     }
 
+    // make sure # of tasks running use all the resources for cpu and gpu
     conf.set(GPUS_PER_TASK.key, "2")
-    conf.set(EXECUTOR_CORES.key, "8")
+    conf.set(EXECUTOR_GPUS.key, "8")
+    conf.set(EXECUTOR_CORES.key, "4")
+    conf.set(CPUS_PER_TASK.key, "1")
     conf.validateSettings()
   }
 

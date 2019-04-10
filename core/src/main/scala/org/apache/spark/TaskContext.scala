@@ -177,7 +177,7 @@ abstract class TaskContext extends Serializable {
   def getLocalProperty(key: String): String
 
   /**
-   * Get other Resources allocated to the task. This includes things such as GPUs.
+   * Get other Resources allocated to the task. Currently gpus are the only resource supported.
    */
   @Evolving
   def getResources(): Map[String, ResourceInformation]

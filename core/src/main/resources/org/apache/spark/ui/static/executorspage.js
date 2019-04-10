@@ -44,9 +44,9 @@ function formatResourceCells(resources) {
     var count = 0
     $.each(resources, function (name, resInfo) {
         if (count > 0) {
-            result += "\n"
+            result += ", "
         }
-        result += name + ': [count: ' + resInfo.count + resInfo.units + " addrs: (" + resInfo.addresses.join(", ") + ')]'
+        result += name + ': (count: ' + resInfo.count + resInfo.units + " addrs: [" + resInfo.addresses.join(", ") + '])'
         count += 1
     });
     return result

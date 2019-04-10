@@ -448,6 +448,7 @@ private[spark] class TaskSetManager(
       execId: String,
       host: String,
       maxLocality: TaskLocality.TaskLocality,
+      hostGpuIndices: ArrayBuffer[String],
       resources: Map[String, SchedulerResourceInformation] = Map.empty)
     : Option[TaskDescription] =
   {
@@ -513,13 +514,20 @@ private[spark] class TaskSetManager(
         logInfo(s"Starting $taskName (TID $taskId, $host, executor ${info.executorId}, " +
           s"partition ${task.partitionId}, $taskLocality, ${serializedTask.limit()} bytes)")
 
-        val availableGpus = resources.get(ResourceInformation.GPU)
-        val taskResourceInfo = availableGpus.map(gpuResource => {
-          gpuResource.decCount(sched.GPUS_PER_TASK)
-          val taskGpus = gpuResource.takeAddresses(sched.GPUS_PER_TASK).toArray
+        val taskResourceInfo = if (sched.GPUS_PER_TASK > 0) {
+          val indices = hostGpuIndices.take(sched.GPUS_PER_TASK).toArray
+          val gpuResource = resources.get(ResourceInformation.GPU).get
           Map(ResourceInformation.GPU -> new ResourceInformation(gpuResource.getName(),
-            gpuResource.getUnits(), sched.GPUS_PER_TASK, taskGpus))
-        }).getOrElse(Map.empty[String, ResourceInformation])
+            gpuResource.getUnits(), sched.GPUS_PER_TASK, indices))
+
+           //  resources.get(ResourceInformation.GPU).map(gpuResource => {
+           //  val taskGpus = gpuResource.takeAddresses(sched.GPUS_PER_TASK).toArray
+           //  Map(ResourceInformation.GPU -> new ResourceInformation(gpuResource.getName(),
+            //  gpuResource.getUnits(), sched.GPUS_PER_TASK, taskGpus))
+          // }).getOrElse(Map.empty[String, ResourceInformation])
+        } else {
+          Map.empty[String, ResourceInformation]
+        }
 
         sched.dagScheduler.taskStarted(task, info)
 

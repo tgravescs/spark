@@ -587,23 +587,17 @@ class SparkConf(loadDefaults: Boolean) extends Cloneable with Logging with Seria
       }
     }
 
-    if (contains(EXECUTOR_GPUS) && contains(GPUS_PER_TASK)) {
+    if (contains(GPUS_PER_TASK)) {
       val executorGpus = get(EXECUTOR_GPUS)
       val taskGpus = get(GPUS_PER_TASK)
 
       if (executorGpus < taskGpus) {
         throw new SparkException(
-          s"${EXECUTOR_GPUS.key} must not be less than ${GPUS_PER_TASK.key}.")
+          s"${GPUS_PER_TASK.key} must not be less than or equal to ${EXECUTOR_GPUS.key}.")
       }
-    }
 
-    if (contains(EXECUTOR_CORES) && contains(CPUS_PER_TASK) && contains(EXECUTOR_GPUS)
-        && contains(GPUS_PER_TASK)) {
       val executorCores = get(EXECUTOR_CORES)
       val taskCpus = get(CPUS_PER_TASK)
-      val executorGpus = get(EXECUTOR_GPUS)
-      val taskGpus = get(GPUS_PER_TASK)
-
       if (executorCores > 0 && taskCpus > 0
           && executorGpus * taskCpus != executorCores * taskGpus) {
         throw new SparkException("Can't make full use of the resources allocated to each " +

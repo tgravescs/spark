@@ -21,9 +21,13 @@ import org.apache.spark.annotation.Evolving
 
 /**
  * Class to hold information about a type of Resource. A resource could be a gpu, fpga, numa, etc.
- * Currently we have a resource name, unit of the resource which could be empty for a simple count,
- * the count of that resource available, and then an optional Array of strings which describe the
- * address of the resource. For instance, for gpus the addresses would be the indexes of the gpus.
+ * The array of addresses are resource specific and describe how to access the resource.
+ * For instance, for gpus the addresses would be the indices of the gpus.
+ *
+ * @param name the name of the resource
+ * @param units the units of the resources, can be an empty string if units don't apply
+ * @param count the number of resources available
+ * @param addresses an optional array of strings describing the addresses of the resource
  */
 @Evolving
 class ResourceInformation(
@@ -41,6 +45,8 @@ class ResourceInformation(
 object ResourceInformation {
   // known types of resources
   final val GPU: String = "gpu"
+
+  // known resource type parameters
   final val GPU_COUNT: String = "gpu.count"
 
 
