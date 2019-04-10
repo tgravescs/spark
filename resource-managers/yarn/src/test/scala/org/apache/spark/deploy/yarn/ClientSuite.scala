@@ -411,7 +411,7 @@ class ClientSuite extends SparkFunSuite with Matchers {
     assert(error.contains("nly set the spark config spark.driver.resource.gpu.count " +
       " to specify gpus, do not use: spark.yarn.driver.resource.io.yarn/gpu"))
   }
-  
+
 
   private val matching = Seq(
     ("files URI match test1", "file:///file1", "file:///file2"),

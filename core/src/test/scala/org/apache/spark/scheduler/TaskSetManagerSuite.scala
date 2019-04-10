@@ -1744,17 +1744,18 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
     assert(FakeRackUtil.numBatchInvocation === 1)
     assert(FakeRackUtil.numSingleHostInvocation === 0)
     // with rack locality, reject an offer on a host with an unknown rack
-    assert(manager.resourceOffer("otherExec", "otherHost", TaskLocality.RACK_LOCAL).isEmpty)
+    assert(manager.resourceOffer("otherExec", "otherHost", TaskLocality.RACK_LOCAL,
+      ArrayBuffer.empty, SchedulerResourceInformation.empty).isEmpty)
     (0 until 20).foreach { rackIdx =>
       (0 until 5).foreach { offerIdx =>
         // if we offer hosts which are not in preferred locations,
         // we'll reject them at NODE_LOCAL level,
         // but accept them at RACK_LOCAL level if they're on OK racks
         val hostIdx = 100 + rackIdx
-        assert(manager.resourceOffer("exec" + hostIdx, "host" + hostIdx, TaskLocality.NODE_LOCAL)
-          .isEmpty)
-        assert(manager.resourceOffer("exec" + hostIdx, "host" + hostIdx, TaskLocality.RACK_LOCAL)
-          .isDefined)
+        assert(manager.resourceOffer("exec" + hostIdx, "host" + hostIdx, TaskLocality.NODE_LOCAL,
+          ArrayBuffer.empty, SchedulerResourceInformation.empty).isEmpty)
+        assert(manager.resourceOffer("exec" + hostIdx, "host" + hostIdx, TaskLocality.RACK_LOCAL,
+          ArrayBuffer.empty, SchedulerResourceInformation.empty).isDefined)
       }
     }
     // check no more expensive calls to the rack resolution.  manager.resourceOffer() will call

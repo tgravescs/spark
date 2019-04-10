@@ -751,6 +751,7 @@ class SparkContextSuite extends SparkFunSuite with LocalSparkContext with Eventu
     } finally {
       JavaFiles.deleteIfExists(tmpFile.toPath())
     }
+  }
 
   test(s"Avoid setting ${CPUS_PER_TASK.key} unreasonably (SPARK-27192)") {
     val FAIL_REASON = s"${CPUS_PER_TASK.key} must be <="
