@@ -150,7 +150,7 @@ private[yarn] class YarnAllocator(
 
     sparkExecutorResources.get(ResourceInformation.GPU_COUNT).map( count =>
       yarnResources = yarnResources ++ Map(YARN_GPU_RESOURCE_CONFIG -> count))
-    
+
     logWarning(" yarn executo resources: " + yarnResources)
     yarnResources
   }

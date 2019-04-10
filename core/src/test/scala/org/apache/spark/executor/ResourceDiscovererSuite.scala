@@ -26,7 +26,7 @@ import java.util.EnumSet
 import com.google.common.io.Files
 
 import org.apache.spark._
-import org.apache.spark.internal.config.GPU_DISCOVERY_SCRIPT
+import org.apache.spark.internal.config.EXECUTOR_GPU_DISCOVERY_SCRIPT
 
 
 class ResourceDiscovererSuite extends SparkFunSuite
@@ -49,7 +49,7 @@ class ResourceDiscovererSuite extends SparkFunSuite
       Files.write("echo 0,1", file1, StandardCharsets.UTF_8)
       JavaFiles.setPosixFilePermissions(file1.toPath(),
         EnumSet.of(OWNER_READ, OWNER_EXECUTE, OWNER_WRITE))
-      sparkconf.set(GPU_DISCOVERY_SCRIPT, file1.getPath())
+      sparkconf.set(EXECUTOR_GPU_DISCOVERY_SCRIPT, file1.getPath())
       val resources = discoverer.findResources()
       val gpuValue = resources.get(ResourceInformation.GPU)
       assert(gpuValue.nonEmpty, "Should have a gpu entry")
@@ -73,7 +73,7 @@ class ResourceDiscovererSuite extends SparkFunSuite
       Files.write("echo foo1", file1, StandardCharsets.UTF_8)
       JavaFiles.setPosixFilePermissions(file1.toPath(),
         EnumSet.of(OWNER_READ, OWNER_EXECUTE, OWNER_WRITE))
-      sparkconf.set(GPU_DISCOVERY_SCRIPT, file1.getPath())
+      sparkconf.set(EXECUTOR_GPU_DISCOVERY_SCRIPT, file1.getPath())
 
       val error = intercept[SparkException] {
         discoverer.findResources()
@@ -91,7 +91,7 @@ class ResourceDiscovererSuite extends SparkFunSuite
 
     val file1 = new File("/tmp/bogus")
     try {
-      sparkconf.set(GPU_DISCOVERY_SCRIPT, file1.getPath())
+      sparkconf.set(EXECUTOR_GPU_DISCOVERY_SCRIPT, file1.getPath())
 
       val error = intercept[SparkException] {
         discoverer.findResources()

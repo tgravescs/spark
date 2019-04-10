@@ -41,7 +41,7 @@ private[spark] class ResourceDiscoverer(sparkconf: SparkConf) extends Logging {
   }
 
   private def getGPUResources: Array[String] = {
-    val script = sparkconf.get(GPU_DISCOVERY_SCRIPT)
+    val script = sparkconf.get(EXECUTOR_GPU_DISCOVERY_SCRIPT)
     val result = if (script.nonEmpty) {
       val scriptFile = new File(script.get)
       // check that script exists and try to execute

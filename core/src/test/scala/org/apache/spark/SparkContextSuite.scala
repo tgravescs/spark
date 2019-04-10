@@ -719,7 +719,7 @@ class SparkContextSuite extends SparkFunSuite with LocalSparkContext with Eventu
     withGpus(0 to 2) { scriptPath =>
       val conf = new SparkConf()
         .set(GPUS_PER_TASK.key, "1")
-        .set(GPU_DISCOVERY_SCRIPT.key, scriptPath)
+        .set(EXECUTOR_GPU_DISCOVERY_SCRIPT.key, scriptPath)
         .setMaster("local-cluster[3, 3, 1024]")
         .setAppName("test-cluster")
       sc = new SparkContext(conf)

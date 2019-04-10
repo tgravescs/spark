@@ -197,7 +197,7 @@ class CoarseGrainedSchedulerBackendSuite extends SparkFunSuite with LocalSparkCo
     val baseUrl = s"http://newhost:9999/logs/clusters/${attributes("CLUSTER_ID")}" +
       s"/users/${attributes("USER")}/containers/${attributes("CONTAINER_ID")}"
     val resources = Map(ResourceInformation.GPU ->
-      new ResourceInformation(ResourceInformation.GPU, "", 1, Array("0")))
+      new ResourceInformation(ResourceInformation.GPU, "", 3, Array("0", "1", "3")))
 
     var executorAddedCount: Int = 0
     val listener = new SparkListener() {
@@ -206,8 +206,8 @@ class CoarseGrainedSchedulerBackendSuite extends SparkFunSuite with LocalSparkCo
         assert(executorAdded.executorInfo.totalResources.get(ResourceInformation.GPU).nonEmpty)
         val totalResources = executorAdded.executorInfo.totalResources.
           get(ResourceInformation.GPU).get
-        assert(totalResources.getAddresses() === Array("0"))
-        assert(totalResources.getCount() == 1)
+        assert(totalResources.getAddresses() === Array("0", "1", "3"))
+        assert(totalResources.getCount() == 3)
         assert(totalResources.getName() == ResourceInformation.GPU)
         assert(totalResources.getUnits() == "")
       }

@@ -185,11 +185,11 @@ package object config {
       .checkValue(_ >= 0, "The number of GPUs for each executor must be non-negative.")
       .createWithDefault(0)
 
-  // Script that outputs comma separate list of gpu indexes available on that executor
-  private[spark] val GPU_DISCOVERY_SCRIPT =
-    ConfigBuilder(s"${SPARK_EXECUTOR_RESOURCE_PREFIX}gpu.discoveryScript").
-      stringConf.
-      createOptional
+  private[spark] val EXECUTOR_GPU_DISCOVERY_SCRIPT =
+    ConfigBuilder(s"${SPARK_EXECUTOR_RESOURCE_PREFIX}gpu.discoveryScript")
+      .doc("Script that outputs comma separate list of gpu indexes available on that executor")
+      .stringConf
+      .createOptional
 
   private[spark] val DRIVER_GPUS =
     ConfigBuilder(s"${SPARK_DRIVER_RESOURCE_PREFIX}gpu.count")
