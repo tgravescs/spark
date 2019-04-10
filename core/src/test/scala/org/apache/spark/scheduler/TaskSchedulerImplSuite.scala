@@ -203,36 +203,6 @@ class TaskSchedulerImplSuite extends SparkFunSuite with LocalSparkContext with B
     assert(2 === taskDescriptions.length)
     assert(!failedTaskSet)
     assert(1 === taskDescriptions(0).resources.get("gpu").get.getCount())
-    assert(ArrayBuffer("2", "3") === gpuresources.get("gpu").get.getAddresses())
-    assert(2 === gpuresources.get("gpu").get.getCount())
-    assert(ArrayBuffer("0") === taskDescriptions(0).resources.get("gpu").get.getAddresses())
-    assert(ArrayBuffer("1") === taskDescriptions(1).resources.get("gpu").get.getAddresses())
-  }
-
-  test("Scheduler correctly accounts for GPUs per task 2") {
-    val taskCpus = 1
-    val taskGpus = 1
-    val executorGpus = 4
-    val executorCpus = 4
-    val taskScheduler = setupScheduler(config.CPUS_PER_TASK.key -> taskCpus.toString,
-      config.GPUS_PER_TASK.key -> taskGpus.toString,
-      config.EXECUTOR_GPUS.key -> executorGpus.toString,
-      config.EXECUTOR_CORES.key -> executorCpus.toString)
-    // Give zero core offers. Should not generate any tasks
-    val taskSet = FakeTask.createTaskSet(3)
-
-    val numFreeCores = 2
-    val gpuresources = Map("gpu" ->
-      new SchedulerResourceInformation("gpu", "", 4, ArrayBuffer("0", "1", "2", "3")))
-    val singleCoreWorkerOffers =
-      IndexedSeq(new WorkerOffer("executor0", "host0", numFreeCores, None, gpuresources))
-    taskScheduler.submitTasks(taskSet)
-    var taskDescriptions = taskScheduler.resourceOffers(singleCoreWorkerOffers).flatten
-    assert(2 === taskDescriptions.length)
-    assert(!failedTaskSet)
-    assert(1 === taskDescriptions(0).resources.get("gpu").get.getCount())
-    assert(ArrayBuffer("2", "3") === gpuresources.get("gpu").get.getAddresses())
-    assert(2 === gpuresources.get("gpu").get.getCount())
     assert(ArrayBuffer("0") === taskDescriptions(0).resources.get("gpu").get.getAddresses())
     assert(ArrayBuffer("1") === taskDescriptions(1).resources.get("gpu").get.getAddresses())
   }

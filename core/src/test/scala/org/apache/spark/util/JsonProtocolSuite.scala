@@ -1882,8 +1882,13 @@ private[spark] object JsonProtocolSuite extends Assertions {
       |      "User" : "spark"
       |    },
       |    "Resources" : {
-      |     "gpu" : [ "0", "1" ]
-      |     }
+      |     "gpu" : {
+      |       "Name" : "gpu",
+      |       "Units" : "",
+      |       "Count" : 2,
+      |       "Addresses" : [ "0", "1" ]
+      |      }
+      |    }
       |  }
       |}
     """.stripMargin

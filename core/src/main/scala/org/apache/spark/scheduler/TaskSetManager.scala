@@ -449,8 +449,8 @@ private[spark] class TaskSetManager(
       host: String,
       maxLocality: TaskLocality.TaskLocality,
       hostGpuIndices: ArrayBuffer[String],
-      resources: Map[String, SchedulerResourceInformation] = Map.empty)
-    : Option[TaskDescription] =
+      gpuResources: SchedulerResourceInformation)
+        : Option[TaskDescription] =
   {
     val offerBlacklisted = taskSetBlacklistHelperOpt.exists { blacklist =>
       blacklist.isNodeBlacklistedForTaskSet(host) ||
@@ -514,17 +514,11 @@ private[spark] class TaskSetManager(
         logInfo(s"Starting $taskName (TID $taskId, $host, executor ${info.executorId}, " +
           s"partition ${task.partitionId}, $taskLocality, ${serializedTask.limit()} bytes)")
 
-        val taskResourceInfo = if (sched.GPUS_PER_TASK > 0) {
+        val extraResources = if (sched.GPUS_PER_TASK > 0) {
+          // doing minimal checking here to keep things fast
           val indices = hostGpuIndices.take(sched.GPUS_PER_TASK).toArray
-          val gpuResource = resources.get(ResourceInformation.GPU).get
-          Map(ResourceInformation.GPU -> new ResourceInformation(gpuResource.getName(),
-            gpuResource.getUnits(), sched.GPUS_PER_TASK, indices))
-
-           //  resources.get(ResourceInformation.GPU).map(gpuResource => {
-           //  val taskGpus = gpuResource.takeAddresses(sched.GPUS_PER_TASK).toArray
-           //  Map(ResourceInformation.GPU -> new ResourceInformation(gpuResource.getName(),
-            //  gpuResource.getUnits(), sched.GPUS_PER_TASK, taskGpus))
-          // }).getOrElse(Map.empty[String, ResourceInformation])
+          Map(ResourceInformation.GPU -> new ResourceInformation(gpuResources.getName(),
+            gpuResources.getUnits(), sched.GPUS_PER_TASK, indices))
         } else {
           Map.empty[String, ResourceInformation]
         }
@@ -541,7 +535,7 @@ private[spark] class TaskSetManager(
           addedFiles,
           addedJars,
           task.localProperties,
-          taskResourceInfo,
+          extraResources,
           serializedTask)
       }
     } else {

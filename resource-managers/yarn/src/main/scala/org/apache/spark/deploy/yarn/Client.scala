@@ -236,9 +236,6 @@ private[spark] class Client(
   def createApplicationSubmissionContext(
       newApp: YarnClientApplication,
       containerContext: ContainerLaunchContext): ApplicationSubmissionContext = {
-    // TODO - what about if set via spark.driver.resources
-    // we could map certain ones into the yarn ones like gpu's, but
-    // otherwise user would have to set both
     var amResources =
       if (isClusterMode) {
         sparkConf.getAllWithPrefix(config.YARN_DRIVER_RESOURCE_TYPES_PREFIX).toMap

@@ -342,7 +342,6 @@ private[spark] class TaskSchedulerImpl(
       maxLocality: TaskLocality,
       shuffledOffers: Seq[WorkerOffer],
       availableCpus: Array[Int],
-      availableGpus: Array[Int],
       availableGpuIndices: Array[ArrayBuffer[String]],
       tasks: IndexedSeq[ArrayBuffer[TaskDescription]],
       addressesWithDescs: ArrayBuffer[(String, TaskDescription)]) : Boolean = {
@@ -354,22 +353,17 @@ private[spark] class TaskSchedulerImpl(
       val host = shuffledOffers(i).host
       if (availableCpus(i) >= CPUS_PER_TASK && availableGpuIndices(i).size >= GPUS_PER_TASK) {
         try {
+          val gpuResources = shuffledOffers(i).resources.
+            getOrElse("gpu", SchedulerResourceInformation.empty)
           for (task <- taskSet.resourceOffer(execId, host, maxLocality,
-              availableGpuIndices(i), shuffledOffers(i).resources)) {
+              availableGpuIndices(i), gpuResources)) {
             tasks(i) += task
             val tid = task.taskId
             taskIdToTaskSetManager.put(tid, taskSet)
             taskIdToExecutorId(tid) = execId
             executorIdToRunningTaskIds(execId).add(tid)
             availableCpus(i) -= CPUS_PER_TASK
-            if (GPUS_PER_TASK > 0) {
-              availableGpus(i) -= GPUS_PER_TASK
-              availableGpuIndices(i) --= task.resources.get("gpu").get.getAddresses()
-              // shuffledOffers(i).resources.get("gpu").map( r => {
-              //   r.decCount(GPUS_PER_TASK)
-              //  r.removeAddresses(task.resources.get("gpu").get.getAddresses())
-              // })
-            }
+            task.resources.get("gpu").map(addrs => availableGpuIndices(i) --= addrs.getAddresses())
             assert(availableCpus(i) >= 0 && availableGpuIndices(i).size >= 0)
             // Only update hosts for a barrier task.
             if (taskSet.isBarrier) {
@@ -431,9 +425,8 @@ private[spark] class TaskSchedulerImpl(
     // Build a list of tasks to assign to each worker.
     val tasks = shuffledOffers.map(o => new ArrayBuffer[TaskDescription](o.cores / CPUS_PER_TASK))
     val availableResources = shuffledOffers.map(o => o.resources).toArray
-    val gpuResources = availableResources.map(_.get(ResourceInformation.GPU).getOrElse(
-      new SchedulerResourceInformation(ResourceInformation.GPU, "", 0, ArrayBuffer.empty[String])))
-    val availableGpus = gpuResources.map(_.getAddresses().size)
+    val gpuResources = availableResources.map(_.getOrElse(ResourceInformation.GPU,
+      SchedulerResourceInformation.empty))
     val availableGpuIndices = gpuResources.map(_.getAddresses())
     val availableCpus = shuffledOffers.map(o => o.cores).toArray
     val availableSlots = shuffledOffers.map(o => o.cores / CPUS_PER_TASK).sum
@@ -466,7 +459,7 @@ private[spark] class TaskSchedulerImpl(
           var launchedTaskAtCurrentMaxLocality = false
           do {
             launchedTaskAtCurrentMaxLocality = resourceOfferSingleTaskSet(taskSet,
-              currentMaxLocality, shuffledOffers, availableCpus, availableGpus,
+              currentMaxLocality, shuffledOffers, availableCpus,
               availableGpuIndices, tasks, addressesWithDescs)
             launchedAnyTask |= launchedTaskAtCurrentMaxLocality
           } while (launchedTaskAtCurrentMaxLocality)

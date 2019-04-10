@@ -19,6 +19,7 @@ package org.apache.spark.scheduler
 
 import scala.collection.mutable.ArrayBuffer
 
+import org.apache.spark.ResourceInformation
 import org.apache.spark.annotation.Evolving
 
 /**
@@ -59,4 +60,8 @@ private[spark] class SchedulerResourceInformation(
   def removeAddresses(addrs: Array[String]): Unit = {
     addresses --= addrs
   }
+}
+private[spark] object SchedulerResourceInformation {
+  def empty: SchedulerResourceInformation = new SchedulerResourceInformation(
+    ResourceInformation.GPU, "", 0, ArrayBuffer.empty[String])
 }
