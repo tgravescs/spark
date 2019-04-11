@@ -24,9 +24,8 @@ import java.nio.file.attribute.PosixFilePermission._
 import java.util.EnumSet
 
 import com.google.common.io.Files
-
 import org.apache.spark._
-import org.apache.spark.internal.config.EXECUTOR_GPU_DISCOVERY_SCRIPT
+import org.apache.spark.internal.config.{DRIVER_GPU_DISCOVERY_SCRIPT, EXECUTOR_GPU_DISCOVERY_SCRIPT}
 
 
 class ResourceDiscovererSuite extends SparkFunSuite
@@ -34,15 +33,13 @@ class ResourceDiscovererSuite extends SparkFunSuite
 
   test("Resource discoverer no gpus") {
     val sparkconf = new SparkConf
-    val discoverer = new ResourceDiscoverer(sparkconf)
-    val resources = discoverer.findResources()
+    val resources = ResourceDiscoverer.findResources(sparkconf, false)
     assert(resources.get("gpu").isEmpty,
       "Should have a gpus entry that is empty")
   }
 
   test("Resource discoverer multiple gpus") {
     val sparkconf = new SparkConf
-    val discoverer = new ResourceDiscoverer(sparkconf)
 
     val file1 = File.createTempFile("test", "resourceDiscoverScript1")
     try {
@@ -50,7 +47,7 @@ class ResourceDiscovererSuite extends SparkFunSuite
       JavaFiles.setPosixFilePermissions(file1.toPath(),
         EnumSet.of(OWNER_READ, OWNER_EXECUTE, OWNER_WRITE))
       sparkconf.set(EXECUTOR_GPU_DISCOVERY_SCRIPT, file1.getPath())
-      val resources = discoverer.findResources()
+      val resources = ResourceDiscoverer.findResources(sparkconf, false)
       val gpuValue = resources.get(ResourceInformation.GPU)
       assert(gpuValue.nonEmpty, "Should have a gpu entry")
       assert(gpuValue.get.getCount() == 2, "Should have 2")
@@ -64,9 +61,34 @@ class ResourceDiscovererSuite extends SparkFunSuite
     }
   }
 
+  test("Resource discoverer multiple gpus driver") {
+    val sparkconf = new SparkConf
+
+    val file1 = File.createTempFile("test", "resourceDiscoverScript1")
+    try {
+      Files.write("echo 0,1", file1, StandardCharsets.UTF_8)
+      JavaFiles.setPosixFilePermissions(file1.toPath(),
+        EnumSet.of(OWNER_READ, OWNER_EXECUTE, OWNER_WRITE))
+      sparkconf.set(DRIVER_GPU_DISCOVERY_SCRIPT, file1.getPath())
+      sparkconf.set(EXECUTOR_GPU_DISCOVERY_SCRIPT, "boguspath")
+      // make sure it reads from correct config, here it should use driver
+      val resources = ResourceDiscoverer.findResources(sparkconf, true)
+      val gpuValue = resources.get(ResourceInformation.GPU)
+      assert(gpuValue.nonEmpty, "Should have a gpu entry")
+      assert(gpuValue.get.getCount() == 2, "Should have 2")
+      assert(gpuValue.get.getName() == ResourceInformation.GPU, "name should be gpu")
+      assert(gpuValue.get.getUnits() == "", "units should be empty")
+      assert(gpuValue.get.getAddresses().size == 2, "Should have 2 indexes")
+      assert(gpuValue.get.getAddresses().deep == Array("0", "1").deep, "should have 0,1 entries")
+
+    } finally {
+      JavaFiles.deleteIfExists(file1.toPath())
+    }
+  }
+
+
   test("Resource discoverer script returns invalid number") {
     val sparkconf = new SparkConf
-    val discoverer = new ResourceDiscoverer(sparkconf)
 
     val file1 = File.createTempFile("test", "resourceDiscoverScript1")
     try {
@@ -76,7 +98,7 @@ class ResourceDiscovererSuite extends SparkFunSuite
       sparkconf.set(EXECUTOR_GPU_DISCOVERY_SCRIPT, file1.getPath())
 
       val error = intercept[SparkException] {
-        discoverer.findResources()
+        ResourceDiscoverer.findResources(sparkconf, false)
       }.getMessage()
 
       assert(error.contains("The gpu discover script threw exception"))
@@ -87,14 +109,13 @@ class ResourceDiscovererSuite extends SparkFunSuite
 
   test("Resource discoverer script doesn't exist") {
     val sparkconf = new SparkConf
-    val discoverer = new ResourceDiscoverer(sparkconf)
 
     val file1 = new File("/tmp/bogus")
     try {
       sparkconf.set(EXECUTOR_GPU_DISCOVERY_SCRIPT, file1.getPath())
 
       val error = intercept[SparkException] {
-        discoverer.findResources()
+        ResourceDiscoverer.findResources(sparkconf, false)
       }.getMessage()
 
       assert(error.contains("discover gpu's doesn't exist"))

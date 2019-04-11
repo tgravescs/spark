@@ -20,18 +20,17 @@ package org.apache.spark.scheduler
 import java.util.concurrent.atomic.AtomicBoolean
 
 import scala.concurrent.duration._
-
 import org.scalatest.concurrent.Eventually
 import org.scalatest.mockito.MockitoSugar._
-
-import org.apache.spark.{LocalSparkContext, ResourceInformation, SparkConf, SparkContext, SparkException, SparkFunSuite}
-import org.apache.spark.internal.config.{CPUS_PER_TASK, GPUS_PER_TASK, UI}
+import org.apache.spark.{LocalSparkContext, ResourceInformation, SparkConf, SparkContext, SparkException, SparkFunSuite, TaskState}
+import org.apache.spark.internal.config.{CPUS_PER_TASK, EXECUTOR_GPUS, GPUS_PER_TASK, UI}
 import org.apache.spark.internal.config.Network.RPC_MESSAGE_MAX_SIZE
 import org.apache.spark.rdd.RDD
 import org.apache.spark.rpc.{RpcAddress, RpcEndpointRef}
-import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages.RegisterExecutor
+import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages.{RegisterExecutor, StatusUpdate}
 import org.apache.spark.scheduler.cluster.CoarseGrainedSchedulerBackend
 import org.apache.spark.util.{RpcUtils, SerializableBuffer}
+import org.scalatest.concurrent.Eventually.{eventually, interval, timeout}
 
 class CoarseGrainedSchedulerBackendSuite extends SparkFunSuite with LocalSparkContext
     with Eventually {
@@ -177,7 +176,8 @@ class CoarseGrainedSchedulerBackendSuite extends SparkFunSuite with LocalSparkCo
   test("extra gpu resources from executor") {
 
     val conf = new SparkConf()
-      .set(GPUS_PER_TASK.key, "1")
+      .set(GPUS_PER_TASK.key, "3")
+      .set(EXECUTOR_GPUS.key, "3")
       .setMaster("local-cluster[0, 3, 1024]")
       .setAppName("test")
 
@@ -221,6 +221,30 @@ class CoarseGrainedSchedulerBackendSuite extends SparkFunSuite with LocalSparkCo
       RegisterExecutor("2", mockEndpointRef, mockAddress.host, 1, logUrls, attributes, resources))
     backend.driverEndpoint.askSync[Boolean](
       RegisterExecutor("3", mockEndpointRef, mockAddress.host, 1, logUrls, attributes, resources))
+
+    val frameSize = RpcUtils.maxMessageSizeBytes(sc.conf)
+    val buffer = new SerializableBuffer(java.nio.ByteBuffer.allocate(2 * frameSize))
+
+    var gpuExecResources = backend.getExecutorAvailableResources("1")
+
+    assert(gpuExecResources.get("gpu").get.getCount() === 3)
+    assert(gpuExecResources.get("gpu").get.getAddresses() === Array("0", "1", "3"))
+
+
+    // backend.driverEndpoint.send(launchTasks)
+
+    val finishedTaskResources = Map("gpu" -> new ResourceInformation("gpu", "", 1, Array("5")))
+    backend.driverEndpoint.send(
+      StatusUpdate("1", 1, TaskState.FINISHED, buffer, finishedTaskResources))
+
+
+
+    eventually(timeout(5 seconds), interval(10 millis)) {
+      gpuExecResources = backend.getExecutorAvailableResources("1")
+      assert(gpuExecResources.get("gpu").get.getCount() === 4)
+      assert(gpuExecResources.get("gpu").get.getAddresses() === Array("0", "1", "3", "5"))
+    }
+
 
     sc.listenerBus.waitUntilEmpty(executorUpTimeout.toMillis)
     assert(executorAddedCount === 3)

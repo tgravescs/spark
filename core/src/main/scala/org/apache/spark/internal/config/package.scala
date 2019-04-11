@@ -198,6 +198,18 @@ package object config {
       .checkValue(_ >= 0, "The number of GPUs for the driver must be non-negative.")
       .createWithDefault(0)
 
+  private[spark] val DRIVER_GPU_DISCOVERY_SCRIPT =
+    ConfigBuilder(s"${SPARK_DRIVER_RESOURCE_PREFIX}gpu.discoveryScript")
+      .doc("Script that outputs comma separate list of gpu indexes available on the driver")
+      .stringConf
+      .createOptional
+
+  private[spark] val DRIVER_GPU_ADDRESSES =
+    ConfigBuilder(s"${SPARK_DRIVER_RESOURCE_PREFIX}gpu.addresses")
+      .doc("A comma separate list of strings of gpu indexes available on the driver")
+      .stringConf
+      .createOptional
+
   private[spark] val EXECUTOR_MEMORY = ConfigBuilder(SparkLauncher.EXECUTOR_MEMORY)
     .doc("Amount of memory to use per executor process, in MiB unless otherwise specified.")
     .bytesConf(ByteUnit.MiB)

@@ -70,7 +70,7 @@ private[spark] class CoarseGrainedExecutorBackend(
         val gpuResources = gpuDevices.map(ids => {
           val gpuIds = ids.split(",").map(_.trim())
           Map("gpu" -> new ResourceInformation("gpu", "", gpuIds.size, gpuIds))
-        }).getOrElse(new ResourceDiscoverer(env.conf).findResources())
+        }).getOrElse(ResourceDiscoverer.findResources(env.conf, false))
 
         if (gpuResources.get("gpu").isEmpty) {
           throw new SparkException(s"Executor couldn't find any GPU resources available " +

@@ -575,16 +575,7 @@ class SparkConf(loadDefaults: Boolean) extends Cloneable with Logging with Seria
       }
     }
 
-    if (contains(EXECUTOR_CORES) && contains(CPUS_PER_TASK)) {
-      val executorCores = get(EXECUTOR_CORES)
-      val taskCpus = get(CPUS_PER_TASK)
-
-      if (executorCores < taskCpus) {
-        throw new SparkException(
-          s"${EXECUTOR_CORES.key} must not be less than ${CPUS_PER_TASK.key}.")
-      }
-    }
-
+    // Do we want to skip for local mode?
     if (contains(GPUS_PER_TASK)) {
       val executorGpus = get(EXECUTOR_GPUS)
       val taskGpus = get(GPUS_PER_TASK)

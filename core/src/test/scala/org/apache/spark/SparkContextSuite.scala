@@ -36,7 +36,6 @@ import org.apache.hadoop.mapreduce.lib.input.{TextInputFormat => NewTextInputFor
 import org.scalatest.Matchers._
 import org.scalatest.concurrent.Eventually
 
-import org.apache.spark.executor.ResourceDiscoverer
 import org.apache.spark.internal.config._
 import org.apache.spark.internal.config.UI._
 import org.apache.spark.scheduler.{SparkListener, SparkListenerExecutorMetricsUpdate, SparkListenerJobStart, SparkListenerTaskEnd, SparkListenerTaskStart}
@@ -719,7 +718,9 @@ class SparkContextSuite extends SparkFunSuite with LocalSparkContext with Eventu
     withGpus(0 to 2) { scriptPath =>
       val conf = new SparkConf()
         .set(GPUS_PER_TASK.key, "1")
+        .set(EXECUTOR_GPUS.key, "1")
         .set(EXECUTOR_GPU_DISCOVERY_SCRIPT.key, scriptPath)
+        .set(DRIVER_GPU_ADDRESSES.key, "0, 1, 8")
         .setMaster("local-cluster[3, 3, 1024]")
         .setAppName("test-cluster")
       sc = new SparkContext(conf)
@@ -728,6 +729,13 @@ class SparkContextSuite extends SparkFunSuite with LocalSparkContext with Eventu
       eventually(timeout(10.seconds)) {
         assert(sc.statusTracker.getExecutorInfos.size == 3)
       }
+
+      val resources = sc.getResources()
+      assert(resources.get("gpu").get.getAddresses() === Array("0", "1", "8"))
+      assert(resources.get("gpu").get.getCount() === 3)
+      assert(resources.get("gpu").get.getName() === "gpu")
+      assert(resources.get("gpu").get.getUnits() === "")
+
       val rdd = sc.makeRDD(1 to 10, 9).mapPartitions { it =>
         val context = TaskContext.get()
         context.getResources().get(ResourceInformation.GPU).get.getAddresses().iterator
@@ -738,6 +746,51 @@ class SparkContextSuite extends SparkFunSuite with LocalSparkContext with Eventu
       eventually(timeout(10.seconds)) {
         assert(sc.statusTracker.getExecutorInfos.map(_.numRunningTasks()).sum == 0)
       }
+    }
+  }
+
+  test("test gpu driver discovery under local-cluster mode") {
+    withGpus(4 to 6) { scriptPath =>
+      val conf = new SparkConf()
+        .set(GPUS_PER_TASK.key, "1")
+        .set(EXECUTOR_GPUS.key, "1")
+        .set(DRIVER_GPU_DISCOVERY_SCRIPT.key, scriptPath)
+        .setMaster("local-cluster[1, 1, 1024]")
+        .setAppName("test-cluster")
+      sc = new SparkContext(conf)
+
+      // Ensure all executors has started
+      eventually(timeout(10.seconds)) {
+        assert(sc.statusTracker.getExecutorInfos.size == 1)
+      }
+
+      assert(sc.getResources().get("gpu").get.getAddresses() === Array("4", "5", "6"))
+      assert(sc.getResources().get("gpu").get.getCount() === 3)
+      assert(sc.getResources().get("gpu").get.getName() === "gpu")
+      assert(sc.getResources().get("gpu").get.getUnits() === "")
+    }
+  }
+
+  test("test gpu driver gpu configs under local-cluster mode") {
+    withGpus(4 to 6) { scriptPath =>
+      val conf = new SparkConf()
+        .set(GPUS_PER_TASK.key, "1")
+        .set(EXECUTOR_GPUS.key, "1")
+        .set(DRIVER_GPU_ADDRESSES.key, "0, 1, 8")
+        .set(DRIVER_GPU_DISCOVERY_SCRIPT.key, scriptPath)
+        .setMaster("local-cluster[1, 1, 1024]")
+        .setAppName("test-cluster")
+      sc = new SparkContext(conf)
+
+      // Ensure all executors has started
+      eventually(timeout(10.seconds)) {
+        assert(sc.statusTracker.getExecutorInfos.size == 1)
+      }
+      // DRIVER_GPU_ADDRESSES should take precedence over the script
+      assert(sc.getResources().get("gpu").get.getAddresses() === Array("0", "1", "8"))
+      assert(sc.getResources().get("gpu").get.getCount() === 3)
+      assert(sc.getResources().get("gpu").get.getName() === "gpu")
+      assert(sc.getResources().get("gpu").get.getUnits() === "")
     }
   }
 

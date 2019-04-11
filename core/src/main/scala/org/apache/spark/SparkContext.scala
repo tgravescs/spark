@@ -213,6 +213,7 @@ class SparkContext(config: SparkConf) extends Logging {
   private var _shutdownHookRef: AnyRef = _
   private var _statusStore: AppStatusStore = _
   private var _heartbeater: Heartbeater = _
+  private var _resources: Map[String, ResourceInformation] = _
 
   /* ------------------------------------------------------------------------------------- *
    | Accessors and public fields. These provide access to the internal state of the        |
@@ -226,6 +227,8 @@ class SparkContext(config: SparkConf) extends Logging {
    * changed at runtime.
    */
   def getConf: SparkConf = conf.clone()
+
+  def getResources(): Map[String, ResourceInformation] = _resources
 
   def jars: Seq[String] = _jars
   def files: Seq[String] = _files
@@ -370,6 +373,11 @@ class SparkContext(config: SparkConf) extends Logging {
     if (!_conf.contains("spark.app.name")) {
       throw new SparkException("An application name must be set in your configuration")
     }
+
+    _resources = conf.get(DRIVER_GPU_ADDRESSES).map(ids => {
+      val gpuIds = ids.split(",").map(_.trim())
+      Map("gpu" -> new ResourceInformation("gpu", "", gpuIds.size, gpuIds))
+    }).getOrElse(ResourceDiscoverer.findResources(_conf, true))
 
     _driverLogger = DriverLogger(_conf)
 
@@ -2666,7 +2674,7 @@ object SparkContext extends Logging {
     val MAX_LOCAL_TASK_FAILURES = 1
 
     // SPARK-26340: Ensure that executor's core num meets at least one task requirement.
-    def checkCpusPerTask(
+    def checkCpuPerTask(
       clusterMode: Boolean,
       maxCoresPerExecutor: Option[Int]): Unit = {
       val cpusPerTask = sc.conf.get(CPUS_PER_TASK)
@@ -2685,7 +2693,7 @@ object SparkContext extends Logging {
 
     master match {
       case "local" =>
-        checkCpusPerTask(clusterMode = false, Some(1))
+        checkCpuPerTask(clusterMode = false, Some(1))
         val scheduler = new TaskSchedulerImpl(sc, MAX_LOCAL_TASK_FAILURES, isLocal = true)
         val backend = new LocalSchedulerBackend(sc.getConf, scheduler, 1)
         scheduler.initialize(backend)
@@ -2698,7 +2706,7 @@ object SparkContext extends Logging {
         if (threadCount <= 0) {
           throw new SparkException(s"Asked to run locally with $threadCount threads")
         }
-        checkCpusPerTask(clusterMode = false, Some(threadCount))
+        checkCpuPerTask(clusterMode = false, Some(threadCount))
         val scheduler = new TaskSchedulerImpl(sc, MAX_LOCAL_TASK_FAILURES, isLocal = true)
         val backend = new LocalSchedulerBackend(sc.getConf, scheduler, threadCount)
         scheduler.initialize(backend)
@@ -2709,14 +2717,14 @@ object SparkContext extends Logging {
         // local[*, M] means the number of cores on the computer with M failures
         // local[N, M] means exactly N threads with M failures
         val threadCount = if (threads == "*") localCpuCount else threads.toInt
-        checkCpusPerTask(clusterMode = false, Some(threadCount))
+        checkCpuPerTask(clusterMode = false, Some(threadCount))
         val scheduler = new TaskSchedulerImpl(sc, maxFailures.toInt, isLocal = true)
         val backend = new LocalSchedulerBackend(sc.getConf, scheduler, threadCount)
         scheduler.initialize(backend)
         (backend, scheduler)
 
       case SPARK_REGEX(sparkUrl) =>
-        checkCpusPerTask(clusterMode = true, None)
+        checkCpuPerTask(clusterMode = true, None)
         val scheduler = new TaskSchedulerImpl(sc)
         val masterUrls = sparkUrl.split(",").map("spark://" + _)
         val backend = new StandaloneSchedulerBackend(scheduler, sc, masterUrls)
@@ -2724,7 +2732,7 @@ object SparkContext extends Logging {
         (backend, scheduler)
 
       case LOCAL_CLUSTER_REGEX(numSlaves, coresPerSlave, memoryPerSlave) =>
-        checkCpusPerTask(clusterMode = true, Some(coresPerSlave.toInt))
+        checkCpuPerTask(clusterMode = true, Some(coresPerSlave.toInt))
         // Check to make sure memory requested <= memoryPerSlave. Otherwise Spark will just hang.
         val memoryPerSlaveInt = memoryPerSlave.toInt
         if (sc.executorMemory > memoryPerSlaveInt) {
@@ -2745,7 +2753,7 @@ object SparkContext extends Logging {
         (backend, scheduler)
 
       case masterUrl =>
-        checkCpusPerTask(clusterMode = true, None)
+        checkCpuPerTask(clusterMode = true, None)
         val cm = getClusterManager(masterUrl) match {
           case Some(clusterMgr) => clusterMgr
           case None => throw new SparkException("Could not parse Master URL: '" + master + "'")

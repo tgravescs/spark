@@ -387,7 +387,7 @@ class ClientSuite extends SparkFunSuite with Matchers {
     }
   }
 
-  test(s"custom resource request cluster mode with spark config fails") {
+  test(s"custom resource request yarn config and spark config fails") {
     assume(ResourceRequestHelper.isYarnResourceTypesAvailable())
     val resources = Map("fpga" -> 2, "gpu" -> 3)
     ResourceRequestTestHelper.initializeResourceTypes(resources.keys.toSeq)
@@ -408,7 +408,7 @@ class ClientSuite extends SparkFunSuite with Matchers {
         containerLaunchContext)
     }.getMessage()
 
-    assert(error.contains("nly set the spark config spark.driver.resource.gpu.count " +
+    assert(error.contains("only set the spark config spark.driver.resource.gpu.count " +
       " to specify gpus, do not use: spark.yarn.driver.resource.io.yarn/gpu"))
   }
 
