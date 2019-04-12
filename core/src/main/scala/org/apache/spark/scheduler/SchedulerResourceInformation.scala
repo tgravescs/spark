@@ -21,6 +21,7 @@ import scala.collection.mutable.ArrayBuffer
 
 import org.apache.spark.ResourceInformation
 import org.apache.spark.annotation.Evolving
+import org.apache.spark.internal.Logging
 
 /**
  * Class to hold information about a type of Resource used by the scheduler. This
@@ -33,7 +34,7 @@ private[spark] class SchedulerResourceInformation(
     private val name: String,
     private val units: String,
     private var count: Long,
-    private val addresses: ArrayBuffer[String] = ArrayBuffer.empty) {
+    private val addresses: ArrayBuffer[String] = ArrayBuffer.empty) extends Logging {
 
   def getName(): String = name
   def getUnits(): String = units
@@ -50,7 +51,9 @@ private[spark] class SchedulerResourceInformation(
   def getAddresses(): ArrayBuffer[String] = addresses
 
   def addAddresses(addrs: Array[String]): Unit = {
+    logInfo("in add addresses: " + addrs.deep.mkString(","))
     addresses ++= addrs
+    logInfo("after in add addresses: " + addresses)
   }
 
   def takeAddresses(count: Int): ArrayBuffer[String] = {

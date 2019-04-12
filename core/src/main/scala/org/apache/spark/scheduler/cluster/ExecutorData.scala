@@ -43,5 +43,5 @@ private[cluster] class ExecutorData(
    override val logUrlMap: Map[String, String],
    override val attributes: Map[String, String],
    override val totalResources: Map[String, ResourceInformation],
-   val  availableResources: mutable.Map[String, SchedulerResourceInformation]
+   val availableResources: mutable.Map[String, SchedulerResourceInformation]
 ) extends ExecutorInfo(executorHost, totalCores, logUrlMap, attributes, totalResources)

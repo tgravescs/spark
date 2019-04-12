@@ -153,16 +153,37 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
               for ((k, v) <- resources) {
                 logWarning("in here 4: " + k)
 
-
+                val executorData = executorDataMap(executorId)
+                CoarseGrainedSchedulerBackend.this.synchronized  {
+                  logInfo("full ex hashcode: " +
+                    System.identityHashCode(executorData.availableResources))
+                  logInfo("full ex hashcode: " +
+                    System.identityHashCode(executorData.availableResources))
+                  logInfo("full ex hashcode: " +
+                    System.identityHashCode(executorInfo.availableResources))
+                }
+                executorInfo.availableResources.get("gpu") match {
+                  case Some(ar) => logInfo("full ex hashcode: " +
+                    System.identityHashCode(ar))
+                    logInfo("full ex hashcode: " +
+                      System.identityHashCode(executorInfo.availableResources("gpu")))
+                    logInfo("full ex hashcode: " +
+                      System.identityHashCode(executorInfo.availableResources("gpu")))
+                  case None => logInfo("tom shouldn't be here")
+                }
                 executorInfo.availableResources.get(k).foreach( r => {
                   r.incCount(v.getCount())
-                  logInfo("addresses before: " + r.getAddresses())
+                  logInfo("incrementing count by after: " + r.getCount())
+
                   logInfo("addresses before to add: " + v.getAddresses().deep.mkString(","))
+                  logInfo("addresses after 1: " +
+                    executorDataMap.get(executorId).
+                      get.availableResources.get(k).get.getAddresses())
 
                   r.addAddresses(v.getAddresses())
-                  logInfo("addresses after: " + r.getAddresses())
-                  logInfo("addresses after: " +
-                    executorDataMap.get(executorId).get.availableResources.get(k).get.getAddresses())
+                  logInfo("full hashcode: " +
+                    System.identityHashCode(executorDataMap.get(executorId).get.
+                      availableResources.get(k).get.getAddresses()))
 
                 }
                 )
@@ -234,9 +255,9 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
           totalRegisteredExecutors.addAndGet(1)
           val data = new ExecutorData(executorRef, executorAddress, hostname,
             cores, cores, logUrlHandler.applyPattern(logUrls, attributes), attributes, resources,
-             mutable.Map.empty[String, SchedulerResourceInformation] ++=
-               resources.mapValues(v => new SchedulerResourceInformation(v.getName(), v.getUnits(),
-              v.getCount(), v.getAddresses().to[ArrayBuffer])))
+               mutable.Map.empty[String, SchedulerResourceInformation] ++= resources.mapValues(
+                 v => new SchedulerResourceInformation(v.getName(), v.getUnits(), v.getCount(),
+                   v.getAddresses().to[ArrayBuffer])))
           // This must be synchronized because variables mutated
           // in this block are read when requesting executors
           CoarseGrainedSchedulerBackend.this.synchronized {
@@ -286,14 +307,17 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
       val taskDescs = withLock {
         // Filter out executors under killing
         val activeExecutors = executorDataMap.filterKeys(executorIsAlive)
+        logInfo("active execs: " + activeExecutors.size)
         val workOffers = activeExecutors.map {
           case (id, executorData) =>
+            logInfo("creating work offer: " + executorData.executorHost)
             new WorkerOffer(id, executorData.executorHost, executorData.freeCores,
               Some(executorData.executorAddress.hostPort), executorData.availableResources.toMap)
         }.toIndexedSeq
         scheduler.resourceOffers(workOffers)
       }
       if (taskDescs.nonEmpty) {
+        logInfo("launching tasks: " + taskDescs)
         launchTasks(taskDescs)
       }
     }
@@ -354,7 +378,10 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
           for ((k, v) <- task.resources) {
             executorData.availableResources.get(k).map( r => {
               r.decCount(v.getCount())
-              r.removeAddresses(v.getAddresses())}
+              r.removeAddresses(v.getAddresses())
+              logInfo("removed addresses: " + v.getAddresses().deep.mkString(","))
+              logInfo("address are: " +
+                executorDataMap(task.executorId).availableResources.get("gpu").get.getAddresses())}
             )
           }
 
