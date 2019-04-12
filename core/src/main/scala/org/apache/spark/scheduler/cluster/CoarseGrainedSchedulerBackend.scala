@@ -141,52 +141,16 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
     override def receive: PartialFunction[Any, Unit] = {
       case StatusUpdate(executorId, taskId, state, data, resources) =>
         scheduler.statusUpdate(taskId, state, data.value)
-        logWarning("in here 1, exec: " + executorId)
         if (TaskState.isFinished(state)) {
-          logWarning("in here 2")
-
           executorDataMap.get(executorId) match {
             case Some(executorInfo) =>
-              logWarning("in here 3")
-
               executorInfo.freeCores += scheduler.CPUS_PER_TASK
               for ((k, v) <- resources) {
-                logWarning("in here 4: " + k)
-
-                val executorData = executorDataMap(executorId)
-                CoarseGrainedSchedulerBackend.this.synchronized  {
-                  logInfo("full ex hashcode: " +
-                    System.identityHashCode(executorData.availableResources))
-                  logInfo("full ex hashcode: " +
-                    System.identityHashCode(executorData.availableResources))
-                  logInfo("full ex hashcode: " +
-                    System.identityHashCode(executorInfo.availableResources))
-                }
-                executorInfo.availableResources.get("gpu") match {
-                  case Some(ar) => logInfo("full ex hashcode: " +
-                    System.identityHashCode(ar))
-                    logInfo("full ex hashcode: " +
-                      System.identityHashCode(executorInfo.availableResources("gpu")))
-                    logInfo("full ex hashcode: " +
-                      System.identityHashCode(executorInfo.availableResources("gpu")))
-                  case None => logInfo("tom shouldn't be here")
-                }
                 executorInfo.availableResources.get(k).foreach( r => {
                   r.incCount(v.getCount())
-                  logInfo("incrementing count by after: " + r.getCount())
-
-                  logInfo("addresses before to add: " + v.getAddresses().deep.mkString(","))
-                  logInfo("addresses after 1: " +
-                    executorDataMap.get(executorId).
-                      get.availableResources.get(k).get.getAddresses())
-
                   r.addAddresses(v.getAddresses())
-                  logInfo("full hashcode: " +
-                    System.identityHashCode(executorDataMap.get(executorId).get.
-                      availableResources.get(k).get.getAddresses()))
 
-                }
-                )
+                })
               }
 
               makeOffers(executorId)
@@ -307,17 +271,14 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
       val taskDescs = withLock {
         // Filter out executors under killing
         val activeExecutors = executorDataMap.filterKeys(executorIsAlive)
-        logInfo("active execs: " + activeExecutors.size)
         val workOffers = activeExecutors.map {
           case (id, executorData) =>
-            logInfo("creating work offer: " + executorData.executorHost)
             new WorkerOffer(id, executorData.executorHost, executorData.freeCores,
               Some(executorData.executorAddress.hostPort), executorData.availableResources.toMap)
         }.toIndexedSeq
         scheduler.resourceOffers(workOffers)
       }
       if (taskDescs.nonEmpty) {
-        logInfo("launching tasks: " + taskDescs)
         launchTasks(taskDescs)
       }
     }
@@ -358,6 +319,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
     // Launch tasks returned by a set of resource offers
     private def launchTasks(tasks: Seq[Seq[TaskDescription]]) {
       for (task <- tasks.flatten) {
+        logInfo("in here 1")
         val serializedTask = TaskDescription.encode(task)
         if (serializedTask.limit() >= maxRpcMessageSize) {
           Option(scheduler.taskIdToTaskSetManager.get(task.taskId)).foreach { taskSetMgr =>
@@ -375,13 +337,15 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
         else {
           val executorData = executorDataMap(task.executorId)
           executorData.freeCores -= scheduler.CPUS_PER_TASK
+          logInfo("in here 2")
+
           for ((k, v) <- task.resources) {
             executorData.availableResources.get(k).map( r => {
+              logInfo("in here4, coutn: " + v.getCount())
+              logInfo("in here4, coutn: " + r.getCount())
+
               r.decCount(v.getCount())
-              r.removeAddresses(v.getAddresses())
-              logInfo("removed addresses: " + v.getAddresses().deep.mkString(","))
-              logInfo("address are: " +
-                executorDataMap(task.executorId).availableResources.get("gpu").get.getAddresses())}
+              r.removeAddresses(v.getAddresses())}
             )
           }
 

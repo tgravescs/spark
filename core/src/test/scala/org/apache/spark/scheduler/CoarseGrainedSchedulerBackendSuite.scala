@@ -25,6 +25,7 @@ import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.when
 import org.scalatest.concurrent.Eventually
 import org.scalatest.mockito.MockitoSugar._
+import scala.language.postfixOps
 
 import scala.collection.immutable
 import scala.collection.mutable
@@ -192,12 +193,6 @@ class CoarseGrainedSchedulerBackendSuite extends SparkFunSuite with LocalSparkCo
       .setAppName("test")
 
     sc = new SparkContext(conf)
-    /* val rpcEnv: RpcEnv = mock[RpcEnv]
-    val scheduler = mock[TaskSchedulerImpl]
-    when(scheduler.sc).thenReturn(sc)
-    val csbackend = new CoarseGrainedSchedulerBackend(scheduler, sc.env.rpcEnv)
-    scheduler.initialize(csbackend) */
-
     val backend = sc.schedulerBackend.asInstanceOf[TestCoarseGrainedSchedulerBackend]
     val mockEndpointRef = mock[RpcEndpointRef]
     val mockAddress = mock[RpcAddress]
@@ -247,25 +242,23 @@ class CoarseGrainedSchedulerBackendSuite extends SparkFunSuite with LocalSparkCo
     assert(gpuExecResources.get("gpu").get.getCount() === 3)
     assert(gpuExecResources.get("gpu").get.getAddresses() === Array("0", "1", "3"))
 
-    val taskDescs: Seq[Seq[TaskDescription]] = Seq(Seq(new TaskDescription(1, 0, "1",
+    var taskDescs: Seq[Seq[TaskDescription]] = Seq(Seq(new TaskDescription(1, 0, "1",
       "t1", 0, 1, mutable.Map.empty[String, Long], mutable.Map.empty[String, Long],
       new Properties(), immutable.Map("gpu" -> new ResourceInformation("gpu", "", 1, Array("0"))),
       bytebuffer)))
     val ts = backend.getTaskSchedulerImpl()
+    // resource offer such that gpu 0 gets removed
     when(ts.resourceOffers(any[IndexedSeq[WorkerOffer]])).thenReturn(taskDescs)
 
     backend.driverEndpoint.send(ReviveOffers)
-
-    logInfo("after reviveoffers")
 
     eventually(timeout(5 seconds), interval(10 millis)) {
       gpuExecResources = backend.getExecutorAvailableResources("1")
       assert(gpuExecResources.get("gpu").get.getCount() === 2)
       assert(gpuExecResources.get("gpu").get.getAddresses() === Array("1", "3"))
     }
-    logInfo("after reviveoffers done")
 
-    val finishedTaskResources = Map("gpu" -> new ResourceInformation("gpu", "", 1, Array("0")))
+    var finishedTaskResources = Map("gpu" -> new ResourceInformation("gpu", "", 1, Array("0")))
     backend.driverEndpoint.send(
       StatusUpdate("1", 1, TaskState.FINISHED, buffer, finishedTaskResources))
 
@@ -290,7 +283,7 @@ class CoarseGrainedSchedulerBackendSuite extends SparkFunSuite with LocalSparkCo
   }
 }
 
-/** Simple cluster manager that wires up our mock backend. */
+/** Simple cluster manager that wires up our mock backend for the gpu resource tests. */
 private class CSMockExternalClusterManager extends ExternalClusterManager {
 
   var ts: TaskSchedulerImpl = _
@@ -309,14 +302,6 @@ private class CSMockExternalClusterManager extends ExternalClusterManager {
     when(ts.nodeBlacklist()).thenReturn(Set.empty[String])
     val frameSize = RpcUtils.maxMessageSizeBytes(sc.conf)
     val buffer = java.nio.ByteBuffer.allocate(frameSize/2)
-   /*  val taskDescs: Seq[Seq[TaskDescription]] = Seq(Seq(new TaskDescription(1, 0, "1",
-      "t1", 0, 1, mutable.Map.empty[String, Long], mutable.Map.empty[String, Long],
-      new Properties(), immutable.Map("gpu" -> new ResourceInformation("gpu", "", 1, Array("0"))),
-      buffer)))
-
-    when(ts.resourceOffers(any[IndexedSeq[WorkerOffer]])).thenReturn(taskDescs)
-    */
-
     ts
   }
 
