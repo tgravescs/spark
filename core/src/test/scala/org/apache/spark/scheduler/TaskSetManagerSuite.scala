@@ -211,7 +211,8 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
     // Offer a host with NO_PREF as the constraint,
     // we should get a nopref task immediately since that's what we only have
     val taskOption = manager.resourceOffer("exec1", "host1", NO_PREF,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty)
+      Map.empty[
+String, SchedulerResourceInformation])
     assert(taskOption.isDefined)
 
     clock.advance(1)
@@ -233,7 +234,7 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
     // First three offers should all find tasks
     for (i <- 0 until 3) {
       val taskOption = manager.resourceOffer("exec1", "host1", NO_PREF,
-        ArrayBuffer.empty, SchedulerResourceInformation.empty)
+        Map.empty[String, SchedulerResourceInformation])
       assert(taskOption.isDefined)
       val task = taskOption.get
       assert(task.executorId === "exec1")
@@ -242,7 +243,7 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
 
     // Re-offer the host -- now we should get no more tasks
     assert(manager.resourceOffer("exec1", "host1", NO_PREF,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty) === None)
+      Map.empty[String, SchedulerResourceInformation]) === None)
 
     // Finish the first two tasks
     manager.handleSuccessfulTask(0, createTaskResult(0, accumUpdatesByTask(0)))
@@ -266,13 +267,13 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
 
     // An executor that is not NODE_LOCAL should be rejected.
     assert(manager.resourceOffer("execC", "host2", ANY,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty) === None)
+      Map.empty[String, SchedulerResourceInformation]) === None)
 
     // Because there are no alive PROCESS_LOCAL executors, the base locality level should be
     // NODE_LOCAL. So, we should schedule the task on this offered NODE_LOCAL executor before
     // any of the locality wait timers expire.
     assert(manager.resourceOffer("execA", "host1", ANY,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty).get.index === 0)
+      Map.empty[String, SchedulerResourceInformation]).get.index === 0)
   }
 
   test("basic delay scheduling") {
@@ -288,27 +289,27 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
     val manager = new TaskSetManager(sched, taskSet, MAX_TASK_FAILURES, clock = clock)
     // First offer host1, exec1: first task should be chosen
     assert(manager.resourceOffer("exec1", "host1", ANY,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty).get.index === 0)
+      Map.empty[String, SchedulerResourceInformation]).get.index === 0)
     assert(manager.resourceOffer("exec1", "host1", PROCESS_LOCAL,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty) == None)
+      Map.empty[String, SchedulerResourceInformation]) == None)
 
     clock.advance(LOCALITY_WAIT_MS)
     // Offer host1, exec1 again, at NODE_LOCAL level: the node local (task 3) should
     // get chosen before the noPref task
     assert(manager.resourceOffer("exec1", "host1", NODE_LOCAL,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty).get.index == 2)
+      Map.empty[String, SchedulerResourceInformation]).get.index == 2)
 
     // Offer host2, exec2, at NODE_LOCAL level: we should choose task 2
     assert(manager.resourceOffer("exec2", "host2", NODE_LOCAL,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty).get.index == 1)
+      Map.empty[String, SchedulerResourceInformation]).get.index == 1)
 
     // Offer host2, exec2 again, at NODE_LOCAL level: we should get noPref task
     // after failing to find a node_Local task
     assert(manager.resourceOffer("exec2", "host2", NODE_LOCAL,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty) == None)
+      Map.empty[String, SchedulerResourceInformation]) == None)
     clock.advance(LOCALITY_WAIT_MS)
     assert(manager.resourceOffer("exec2", "host2", NO_PREF,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty).get.index == 3)
+      Map.empty[String, SchedulerResourceInformation]).get.index == 3)
   }
 
   test("we do not need to delay scheduling when we only have noPref tasks in the queue") {
@@ -323,13 +324,13 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
     val manager = new TaskSetManager(sched, taskSet, MAX_TASK_FAILURES, clock = clock)
     // First offer host1, exec1: first task should be chosen
     assert(manager.resourceOffer("exec1", "host1", PROCESS_LOCAL,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty).get.index === 0)
+      Map.empty[String, SchedulerResourceInformation]).get.index === 0)
     assert(manager.resourceOffer("exec3", "host2", PROCESS_LOCAL,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty).get.index === 1)
+      Map.empty[String, SchedulerResourceInformation]).get.index === 1)
     assert(manager.resourceOffer("exec3", "host2", NODE_LOCAL,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty) == None)
+      Map.empty[String, SchedulerResourceInformation]) == None)
     assert(manager.resourceOffer("exec3", "host2", NO_PREF,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty).get.index === 2)
+      Map.empty[String, SchedulerResourceInformation]).get.index === 2)
   }
 
   test("delay scheduling with fallback") {
@@ -348,35 +349,35 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
 
     // First offer host1: first task should be chosen
     assert(manager.resourceOffer("exec1", "host1", ANY,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty).get.index === 0)
+      Map.empty[String, SchedulerResourceInformation]).get.index === 0)
 
     // Offer host1 again: nothing should get chosen
     assert(manager.resourceOffer("exec1", "host1", ANY,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty) === None)
+      Map.empty[String, SchedulerResourceInformation]) === None)
 
     clock.advance(LOCALITY_WAIT_MS)
 
     // Offer host1 again: second task (on host2) should get chosen
     assert(manager.resourceOffer("exec1", "host1", ANY,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty).get.index === 1)
+      Map.empty[String, SchedulerResourceInformation]).get.index === 1)
 
     // Offer host1 again: third task (on host2) should get chosen
     assert(manager.resourceOffer("exec1", "host1", ANY,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty).get.index === 2)
+      Map.empty[String, SchedulerResourceInformation]).get.index === 2)
 
     // Offer host2: fifth task (also on host2) should get chosen
     assert(manager.resourceOffer("exec2", "host2", ANY,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty).get.index === 4)
+      Map.empty[String, SchedulerResourceInformation]).get.index === 4)
 
     // Now that we've launched a local task, we should no longer launch the task for host3
     assert(manager.resourceOffer("exec2", "host2", ANY,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty) === None)
+      Map.empty[String, SchedulerResourceInformation]) === None)
 
     clock.advance(LOCALITY_WAIT_MS)
 
     // After another delay, we can go ahead and launch that task non-locally
     assert(manager.resourceOffer("exec2", "host2", ANY,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty).get.index === 3)
+      Map.empty[String, SchedulerResourceInformation]).get.index === 3)
   }
 
   test("delay scheduling with failed hosts") {
@@ -393,12 +394,12 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
 
     // First offer host1: first task should be chosen
     assert(manager.resourceOffer("exec1", "host1", ANY,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty).get.index === 0)
+      Map.empty[String, SchedulerResourceInformation]).get.index === 0)
 
     // After this, nothing should get chosen, because we have separated tasks with unavailable
     // preference from the noPrefPendingTasks
     assert(manager.resourceOffer("exec1", "host1", ANY,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty) === None)
+      Map.empty[String, SchedulerResourceInformation]) === None)
 
     // Now mark host2 as dead
     sched.removeExecutor("exec2")
@@ -406,21 +407,21 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
 
     // nothing should be chosen
     assert(manager.resourceOffer("exec1", "host1", ANY,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty) === None)
+      Map.empty[String, SchedulerResourceInformation]) === None)
 
     clock.advance(LOCALITY_WAIT_MS * 2)
 
     // task 1 and 2 would be scheduled as nonLocal task
     assert(manager.resourceOffer("exec1", "host1", ANY,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty).get.index === 1)
+      Map.empty[String, SchedulerResourceInformation]).get.index === 1)
     assert(manager.resourceOffer("exec1", "host1", ANY,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty).get.index === 2)
+      Map.empty[String, SchedulerResourceInformation]).get.index === 2)
 
     // all finished
     assert(manager.resourceOffer("exec1", "host1", ANY,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty) === None)
+      Map.empty[String, SchedulerResourceInformation]) === None)
     assert(manager.resourceOffer("exec2", "host2", ANY,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty) === None)
+      Map.empty[String, SchedulerResourceInformation]) === None)
   }
 
   test("task result lost") {
@@ -432,7 +433,7 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
     val manager = new TaskSetManager(sched, taskSet, MAX_TASK_FAILURES, clock = clock)
 
     assert(manager.resourceOffer("exec1", "host1", ANY,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty).get.index === 0)
+      Map.empty[String, SchedulerResourceInformation]).get.index === 0)
 
     // Tell it the task has finished but the result was lost.
     manager.handleFailedTask(0, TaskState.FINISHED, TaskResultLost)
@@ -440,7 +441,7 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
 
     // Re-offer the host -- now we should get task 0 again.
     assert(manager.resourceOffer("exec1", "host1", ANY,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty).get.index === 0)
+      Map.empty[String, SchedulerResourceInformation]).get.index === 0)
   }
 
   test("repeated failures lead to task set abortion") {
@@ -455,7 +456,7 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
     // after the last failure.
     (1 to manager.maxTaskFailures).foreach { index =>
       val offerResult = manager.resourceOffer("exec1", "host1", ANY,
-        ArrayBuffer.empty, SchedulerResourceInformation.empty)
+        Map.empty[String, SchedulerResourceInformation])
       assert(offerResult.isDefined,
         "Expect resource offer on iteration %s to return a task".format(index))
       assert(offerResult.get.index === 0)
@@ -492,7 +493,7 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
 
     {
       val offerResult = manager.resourceOffer("exec1", "host1", PROCESS_LOCAL,
-        ArrayBuffer.empty, SchedulerResourceInformation.empty)
+        Map.empty[String, SchedulerResourceInformation])
       assert(offerResult.isDefined, "Expect resource offer to return a task")
 
       assert(offerResult.get.index === 0)
@@ -504,19 +505,19 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
 
       // Ensure scheduling on exec1 fails after failure 1 due to blacklist
       assert(manager.resourceOffer("exec1", "host1", PROCESS_LOCAL,
-        ArrayBuffer.empty, SchedulerResourceInformation.empty).isEmpty)
+        Map.empty[String, SchedulerResourceInformation]).isEmpty)
       assert(manager.resourceOffer("exec1", "host1", NODE_LOCAL,
-        ArrayBuffer.empty, SchedulerResourceInformation.empty).isEmpty)
+        Map.empty[String, SchedulerResourceInformation]).isEmpty)
       assert(manager.resourceOffer("exec1", "host1", RACK_LOCAL,
-        ArrayBuffer.empty, SchedulerResourceInformation.empty).isEmpty)
+        Map.empty[String, SchedulerResourceInformation]).isEmpty)
       assert(manager.resourceOffer("exec1", "host1", ANY,
-        ArrayBuffer.empty, SchedulerResourceInformation.empty).isEmpty)
+        Map.empty[String, SchedulerResourceInformation]).isEmpty)
     }
 
     // Run the task on exec1.1 - should work, and then fail it on exec1.1
     {
       val offerResult = manager.resourceOffer("exec1.1", "host1", NODE_LOCAL,
-        ArrayBuffer.empty, SchedulerResourceInformation.empty)
+        Map.empty[String, SchedulerResourceInformation])
       assert(offerResult.isDefined,
         "Expect resource offer to return a task for exec1.1, offerResult = " + offerResult)
 
@@ -529,13 +530,13 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
 
       // Ensure scheduling on exec1.1 fails after failure 2 due to blacklist
       assert(manager.resourceOffer("exec1.1", "host1", NODE_LOCAL,
-        ArrayBuffer.empty, SchedulerResourceInformation.empty).isEmpty)
+        Map.empty[String, SchedulerResourceInformation]).isEmpty)
     }
 
     // Run the task on exec2 - should work, and then fail it on exec2
     {
       val offerResult = manager.resourceOffer("exec2", "host2", ANY,
-        ArrayBuffer.empty, SchedulerResourceInformation.empty)
+        Map.empty[String, SchedulerResourceInformation])
       assert(offerResult.isDefined, "Expect resource offer to return a task")
 
       assert(offerResult.get.index === 0)
@@ -547,7 +548,7 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
 
       // Ensure scheduling on exec2 fails after failure 3 due to blacklist
       assert(manager.resourceOffer("exec2", "host2", ANY,
-        ArrayBuffer.empty, SchedulerResourceInformation.empty).isEmpty)
+        Map.empty[String, SchedulerResourceInformation]).isEmpty)
     }
 
     // Despite advancing beyond the time for expiring executors from within the blacklist,
@@ -556,19 +557,19 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
 
     {
       val offerResult = manager.resourceOffer("exec1", "host1", PROCESS_LOCAL,
-        ArrayBuffer.empty, SchedulerResourceInformation.empty)
+        Map.empty[String, SchedulerResourceInformation])
       assert(offerResult.isEmpty)
     }
 
     {
       val offerResult = manager.resourceOffer("exec3", "host3", ANY,
-        ArrayBuffer.empty, SchedulerResourceInformation.empty)
+        Map.empty[String, SchedulerResourceInformation])
       assert(offerResult.isDefined)
       assert(offerResult.get.index === 0)
       assert(offerResult.get.executorId === "exec3")
 
       assert(manager.resourceOffer("exec3", "host3", ANY,
-        ArrayBuffer.empty, SchedulerResourceInformation.empty).isEmpty)
+        Map.empty[String, SchedulerResourceInformation]).isEmpty)
 
       // Cause exec3 to fail : failure 4
       manager.handleFailedTask(offerResult.get.taskId, TaskState.FINISHED, TaskResultLost)
@@ -628,7 +629,7 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
     sched.addExecutor("execC", "host2")
     manager.executorAdded()
     assert(manager.resourceOffer("exec1", "host1", ANY,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty).isDefined)
+      Map.empty[String, SchedulerResourceInformation]).isDefined)
     sched.removeExecutor("execA")
     manager.executorLost(
       "execA",
@@ -636,7 +637,7 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
       ExecutorExited(143, false, "Terminated for reason unrelated to running tasks"))
     assert(!sched.taskSetsFailed.contains(taskSet.id))
     assert(manager.resourceOffer("execC", "host2", ANY,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty).isDefined)
+      Map.empty[String, SchedulerResourceInformation]).isDefined)
     sched.removeExecutor("execC")
     manager.executorLost(
       "execC", "host2", ExecutorExited(1, true, "Terminated due to issue with running tasks"))
@@ -665,14 +666,14 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
     // Offer host3
     // No task is scheduled if we restrict locality to RACK_LOCAL
     assert(manager.resourceOffer("execC", "host3", RACK_LOCAL,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty)=== None)
+      Map.empty[String, SchedulerResourceInformation])=== None)
     // Task 0 can be scheduled with ANY
     assert(manager.resourceOffer("execC", "host3", ANY,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty).get.index === 0)
+      Map.empty[String, SchedulerResourceInformation]).get.index === 0)
     // Offer host2
     // Task 1 can be scheduled with RACK_LOCAL
     assert(manager.resourceOffer("execB", "host2", RACK_LOCAL,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty).get.index === 1)
+      Map.empty[String, SchedulerResourceInformation]).get.index === 1)
   }
 
   test("do not emit warning when serialized task is small") {
@@ -684,7 +685,7 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
     assert(!manager.emittedTaskSizeWarning)
 
     assert(manager.resourceOffer("exec1", "host1", ANY,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty).get.index === 0)
+      Map.empty[String, SchedulerResourceInformation]).get.index === 0)
 
     assert(!manager.emittedTaskSizeWarning)
   }
@@ -699,7 +700,7 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
     assert(!manager.emittedTaskSizeWarning)
 
     assert(manager.resourceOffer("exec1", "host1", ANY,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty).get.index === 0)
+      Map.empty[String, SchedulerResourceInformation]).get.index === 0)
 
     assert(manager.emittedTaskSizeWarning)
   }
@@ -714,7 +715,7 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
 
     intercept[TaskNotSerializableException] {
       manager.resourceOffer("exec1", "host1", ANY,
-        ArrayBuffer.empty, SchedulerResourceInformation.empty)
+        Map.empty[String, SchedulerResourceInformation])
     }
     assert(manager.isZombie)
   }
@@ -786,13 +787,13 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
     // Offer host1, which should be accepted as a PROCESS_LOCAL location
     // by the one task in the task set
     val task1 = manager.resourceOffer("execA", "host1", TaskLocality.PROCESS_LOCAL,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty).get
+      Map.empty[String, SchedulerResourceInformation]).get
 
     // Mark the task as available for speculation, and then offer another resource,
     // which should be used to launch a speculative copy of the task.
     manager.speculatableTasks += singleTask.partitionId
     val task2 = manager.resourceOffer("execB", "host2", TaskLocality.ANY,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty).get
+      Map.empty[String, SchedulerResourceInformation]).get
 
     assert(manager.runningTasks === 2)
     assert(manager.isZombie === false)
@@ -878,7 +879,7 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
       "exec3" -> "host3",
       "exec2" -> "host2")) {
       val taskOption = manager.resourceOffer(exec, host, NO_PREF,
-        ArrayBuffer.empty, SchedulerResourceInformation.empty)
+        Map.empty[String, SchedulerResourceInformation])
       assert(taskOption.isDefined)
       val task = taskOption.get
       assert(task.executorId === exec)
@@ -905,7 +906,7 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
 
     // Offer resource to start the speculative attempt for the running task 2.0
     val taskOption = manager.resourceOffer("exec2", "host2", ANY,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty)
+      Map.empty[String, SchedulerResourceInformation])
     assert(taskOption.isDefined)
     val task4 = taskOption.get
     assert(task4.index === 2)
@@ -935,24 +936,24 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
     val manager = new TaskSetManager(sched, taskSet, MAX_TASK_FAILURES, clock = clock)
 
     assert(manager.resourceOffer("execA", "host1", PROCESS_LOCAL,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty).get.index === 0)
+      Map.empty[String, SchedulerResourceInformation]).get.index === 0)
     assert(manager.resourceOffer("execA", "host1", NODE_LOCAL,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty) == None)
+      Map.empty[String, SchedulerResourceInformation]) == None)
     assert(manager.resourceOffer("execA", "host1", NO_PREF,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty).get.index == 1)
+      Map.empty[String, SchedulerResourceInformation]).get.index == 1)
 
     manager.speculatableTasks += 1
     clock.advance(LOCALITY_WAIT_MS)
     // schedule the nonPref task
     assert(manager.resourceOffer("execA", "host1", NO_PREF,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty).get.index === 2)
+      Map.empty[String, SchedulerResourceInformation]).get.index === 2)
     // schedule the speculative task
     assert(manager.resourceOffer("execB", "host2", NO_PREF,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty).get.index === 1)
+      Map.empty[String, SchedulerResourceInformation]).get.index === 1)
     clock.advance(LOCALITY_WAIT_MS * 3)
     // schedule non-local tasks
     assert(manager.resourceOffer("execB", "host2", ANY,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty).get.index === 3)
+      Map.empty[String, SchedulerResourceInformation]).get.index === 3)
   }
 
   test("node-local tasks should be scheduled right away " +
@@ -970,17 +971,17 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
 
     // node-local tasks are scheduled without delay
     assert(manager.resourceOffer("execA", "host1", NODE_LOCAL,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty).get.index === 0)
+      Map.empty[String, SchedulerResourceInformation]).get.index === 0)
     assert(manager.resourceOffer("execA", "host2", NODE_LOCAL,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty).get.index === 1)
+      Map.empty[String, SchedulerResourceInformation]).get.index === 1)
     assert(manager.resourceOffer("execA", "host3", NODE_LOCAL,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty).get.index === 3)
+      Map.empty[String, SchedulerResourceInformation]).get.index === 3)
     assert(manager.resourceOffer("execA", "host3", NODE_LOCAL,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty) === None)
+      Map.empty[String, SchedulerResourceInformation]) === None)
 
     // schedule no-preference after node local ones
     assert(manager.resourceOffer("execA", "host3", NO_PREF,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty).get.index === 2)
+      Map.empty[String, SchedulerResourceInformation]).get.index === 2)
   }
 
   test("SPARK-4939: node-local tasks should be scheduled right after process-local tasks finished")
@@ -997,18 +998,18 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
 
     // process-local tasks are scheduled first
     assert(manager.resourceOffer("execA", "host1", NODE_LOCAL,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty).get.index === 2)
+      Map.empty[String, SchedulerResourceInformation]).get.index === 2)
     assert(manager.resourceOffer("execB", "host2", NODE_LOCAL,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty).get.index === 3)
+      Map.empty[String, SchedulerResourceInformation]).get.index === 3)
     // node-local tasks are scheduled without delay
     assert(manager.resourceOffer("execA", "host1", NODE_LOCAL,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty).get.index === 0)
+      Map.empty[String, SchedulerResourceInformation]).get.index === 0)
     assert(manager.resourceOffer("execB", "host2", NODE_LOCAL,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty).get.index === 1)
+      Map.empty[String, SchedulerResourceInformation]).get.index === 1)
     assert(manager.resourceOffer("execA", "host1", NODE_LOCAL,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty) == None)
+      Map.empty[String, SchedulerResourceInformation]) == None)
     assert(manager.resourceOffer("execB", "host2", NODE_LOCAL,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty) == None)
+      Map.empty[String, SchedulerResourceInformation]) == None)
   }
 
   test("SPARK-4939: no-pref tasks should be scheduled after process-local tasks finished") {
@@ -1023,18 +1024,18 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
 
     // process-local tasks are scheduled first
     assert(manager.resourceOffer("execA", "host1", PROCESS_LOCAL,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty).get.index === 1)
+      Map.empty[String, SchedulerResourceInformation]).get.index === 1)
     assert(manager.resourceOffer("execB", "host2", PROCESS_LOCAL,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty).get.index === 2)
+      Map.empty[String, SchedulerResourceInformation]).get.index === 2)
     // no-pref tasks are scheduled without delay
     assert(manager.resourceOffer("execA", "host1", PROCESS_LOCAL,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty) == None)
+      Map.empty[String, SchedulerResourceInformation]) == None)
     assert(manager.resourceOffer("execA", "host1", NODE_LOCAL,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty) == None)
+      Map.empty[String, SchedulerResourceInformation]) == None)
     assert(manager.resourceOffer("execA", "host1", NO_PREF,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty).get.index === 0)
+      Map.empty[String, SchedulerResourceInformation]).get.index === 0)
     assert(manager.resourceOffer("execA", "host1", ANY,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty)== None)
+      Map.empty[String, SchedulerResourceInformation])== None)
   }
 
   test("Ensure TaskSetManager is usable after addition of levels") {
@@ -1056,10 +1057,10 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
     // Valid locality should contain PROCESS_LOCAL, NODE_LOCAL and ANY
     assert(manager.myLocalityLevels.sameElements(Array(PROCESS_LOCAL, NODE_LOCAL, ANY)))
     assert(manager.resourceOffer("execA", "host1", ANY,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty) !== None)
+      Map.empty[String, SchedulerResourceInformation]) !== None)
     clock.advance(LOCALITY_WAIT_MS * 4)
     assert(manager.resourceOffer("execB.2", "host2", ANY,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty) !== None)
+      Map.empty[String, SchedulerResourceInformation]) !== None)
     sched.removeExecutor("execA")
     sched.removeExecutor("execB.2")
     manager.executorLost("execA", "host1", SlaveLost())
@@ -1069,7 +1070,7 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
     manager.executorAdded()
     // Prior to the fix, this line resulted in an ArrayIndexOutOfBoundsException:
     assert(manager.resourceOffer("execC", "host3", ANY,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty) !== None)
+      Map.empty[String, SchedulerResourceInformation]) !== None)
   }
 
   test("Test that locations with HDFSCacheTaskLocation are treated as PROCESS_LOCAL.") {
@@ -1122,7 +1123,7 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
         "exec2" -> "host2",
         "exec2" -> "host2")) {
       val taskOption = manager.resourceOffer(k, v, NO_PREF,
-        ArrayBuffer.empty, SchedulerResourceInformation.empty)
+        Map.empty[String, SchedulerResourceInformation])
       assert(taskOption.isDefined)
       val task = taskOption.get
       assert(task.executorId === k)
@@ -1144,7 +1145,7 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
 
     // Offer resource to start the speculative attempt for the running task
     val taskOption5 = manager.resourceOffer("exec1", "host1", NO_PREF,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty)
+      Map.empty[String, SchedulerResourceInformation])
     assert(taskOption5.isDefined)
     val task5 = taskOption5.get
     assert(task5.index === 3)
@@ -1184,7 +1185,7 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
       "exec2" -> "host2",
       "exec2" -> "host2")) {
       val taskOption = manager.resourceOffer(k, v, NO_PREF,
-        ArrayBuffer.empty, SchedulerResourceInformation.empty)
+        Map.empty[String, SchedulerResourceInformation])
       assert(taskOption.isDefined)
       val task = taskOption.get
       assert(task.executorId === k)
@@ -1218,7 +1219,7 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
         sched.endedTasks(task.taskId) = endReason
         assert(!manager.isZombie)
         val nextTask = manager.resourceOffer(s"exec2", s"host2", NO_PREF,
-          ArrayBuffer.empty, SchedulerResourceInformation.empty)
+          Map.empty[String, SchedulerResourceInformation])
         assert(nextTask.isDefined, s"no offer for attempt $attempt of $index")
         tasks += nextTask.get
       }
@@ -1235,7 +1236,7 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
     assert(sched.speculativeTasks.toSet === Set(3, 4))
     // Offer resource to start the speculative attempt for the running task
     val taskOption5 = manager.resourceOffer("exec1", "host1", NO_PREF,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty)
+      Map.empty[String, SchedulerResourceInformation])
     assert(taskOption5.isDefined)
     val speculativeTask = taskOption5.get
     assert(speculativeTask.index === 3 || speculativeTask.index === 4)
@@ -1261,7 +1262,7 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
 
     // now run another speculative task
     val taskOpt6 = manager.resourceOffer("exec1", "host1", NO_PREF,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty)
+      Map.empty[String, SchedulerResourceInformation])
     assert(taskOpt6.isDefined)
     val speculativeTask2 = taskOpt6.get
     assert(speculativeTask2.index === 3 || speculativeTask2.index === 4)
@@ -1293,7 +1294,7 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
     when(mockDAGScheduler.taskEnded(any(), any(), any(), any(), any())).thenAnswer(
       (invocationOnMock: InvocationOnMock) => assert(manager.isZombie))
     val taskOption = manager.resourceOffer("exec1", "host1", NO_PREF,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty)
+      Map.empty[String, SchedulerResourceInformation])
     assert(taskOption.isDefined)
     // this would fail, inside our mock dag scheduler, if it calls dagScheduler.taskEnded() too soon
     manager.handleSuccessfulTask(0, createTaskResult(0))
@@ -1339,7 +1340,7 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
     ).flatMap { case (exec, host) =>
       // offer each executor twice (simulating 2 cores per executor)
       (0 until 2).flatMap{ _ => tsmSpy.resourceOffer(exec, host, TaskLocality.ANY,
-        ArrayBuffer.empty, SchedulerResourceInformation.empty)}
+        Map.empty[String, SchedulerResourceInformation])}
     }
     assert(taskDescs.size === 4)
 
@@ -1377,7 +1378,7 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
     ).flatMap { case (exec, host) =>
       // offer each executor twice (simulating 2 cores per executor)
       (0 until 2).flatMap{ _ => tsm.resourceOffer(exec, host, TaskLocality.ANY,
-        ArrayBuffer.empty, SchedulerResourceInformation.empty)}
+        Map.empty[String, SchedulerResourceInformation])}
     }
     assert(taskDescs.size === 4)
 
@@ -1414,7 +1415,7 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
     val taskSetManagerSpy = spy(taskSetManager)
 
     val taskDesc = taskSetManagerSpy.resourceOffer(exec, host, TaskLocality.ANY,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty)
+      Map.empty[String, SchedulerResourceInformation])
 
     // Assert the task has been black listed on the executor it was last executed on.
     when(taskSetManagerSpy.addPendingTask(anyInt(), anyBoolean())).thenAnswer(
@@ -1443,11 +1444,11 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
 
     // all tasks from the first taskset have the same jars
     val taskOption1 = manager1.resourceOffer("exec1", "host1", NO_PREF,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty)
+      Map.empty[String, SchedulerResourceInformation])
 
     assert(taskOption1.get.addedJars === addedJarsPreTaskSet)
     val taskOption2 = manager1.resourceOffer("exec1", "host1", NO_PREF,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty)
+      Map.empty[String, SchedulerResourceInformation])
 
     assert(taskOption2.get.addedJars === addedJarsPreTaskSet)
 
@@ -1457,7 +1458,7 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
     val addedJarsMidTaskSet = Map[String, Long](sc.addedJars.toSeq: _*)
     assert(addedJarsPreTaskSet !== addedJarsMidTaskSet)
     val taskOption3 = manager1.resourceOffer("exec1", "host1", NO_PREF,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty)
+      Map.empty[String, SchedulerResourceInformation])
 
     // which should have the old version of the jars list
     assert(taskOption3.get.addedJars === addedJarsPreTaskSet)
@@ -1467,7 +1468,7 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
     val manager2 = new TaskSetManager(sched, taskSet2, MAX_TASK_FAILURES, clock = new ManualClock)
 
     val taskOption4 = manager2.resourceOffer("exec1", "host1", NO_PREF,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty)
+      Map.empty[String, SchedulerResourceInformation])
 
     assert(taskOption4.get.addedJars === addedJarsMidTaskSet)
   }
@@ -1588,7 +1589,7 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
         "exec3" -> "host3",
         "exec2" -> "host2")) {
       val taskOption = manager.resourceOffer(exec, host, NO_PREF,
-        ArrayBuffer.empty, SchedulerResourceInformation.empty)
+        Map.empty[String, SchedulerResourceInformation])
 
       assert(taskOption.isDefined)
       val task = taskOption.get
@@ -1616,7 +1617,7 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
 
     // Offer resource to start the speculative attempt for the running task 2.0
     val taskOption = manager.resourceOffer("exec2", "host2", ANY,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty)
+      Map.empty[String, SchedulerResourceInformation])
 
     assert(taskOption.isDefined)
     val task4 = taskOption.get
@@ -1663,7 +1664,7 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
         "exec2" -> "host2",
         "exec2" -> "host2")) {
       val taskOption = manager.resourceOffer(k, v, NO_PREF,
-        ArrayBuffer.empty, SchedulerResourceInformation.empty)
+        Map.empty[String, SchedulerResourceInformation])
 
       assert(taskOption.isDefined)
       val task = taskOption.get
@@ -1685,7 +1686,7 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
 
     // Offer resource to start the speculative attempt for the running task
     val taskOption5 = manager.resourceOffer("exec1", "host1", NO_PREF,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty)
+      Map.empty[String, SchedulerResourceInformation])
     assert(taskOption5.isDefined)
     val task5 = taskOption5.get
     assert(task5.index === 3)
@@ -1745,7 +1746,7 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
     assert(FakeRackUtil.numSingleHostInvocation === 0)
     // with rack locality, reject an offer on a host with an unknown rack
     assert(manager.resourceOffer("otherExec", "otherHost", TaskLocality.RACK_LOCAL,
-      ArrayBuffer.empty, SchedulerResourceInformation.empty).isEmpty)
+      Map.empty[String, SchedulerResourceInformation]).isEmpty)
     (0 until 20).foreach { rackIdx =>
       (0 until 5).foreach { offerIdx =>
         // if we offer hosts which are not in preferred locations,
@@ -1753,9 +1754,9 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
         // but accept them at RACK_LOCAL level if they're on OK racks
         val hostIdx = 100 + rackIdx
         assert(manager.resourceOffer("exec" + hostIdx, "host" + hostIdx, TaskLocality.NODE_LOCAL,
-          ArrayBuffer.empty, SchedulerResourceInformation.empty).isEmpty)
+          Map.empty[String, SchedulerResourceInformation]).isEmpty)
         assert(manager.resourceOffer("exec" + hostIdx, "host" + hostIdx, TaskLocality.RACK_LOCAL,
-          ArrayBuffer.empty, SchedulerResourceInformation.empty).isDefined)
+          Map.empty[String, SchedulerResourceInformation]).isDefined)
       }
     }
     // check no more expensive calls to the rack resolution.  manager.resourceOffer() will call

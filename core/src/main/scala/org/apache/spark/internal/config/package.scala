@@ -210,6 +210,16 @@ package object config {
       .stringConf
       .createOptional
 
+  private[spark] val SCHEDULER_RESOURCE_TYPES =
+    ConfigBuilder(s"spark.scheduler.resourceTypes")
+      .doc("The resource types for the scheduler to use to schedule on. This uses the settings " +
+        "from configs spark.task.resource.*.  Spark only schedules based on the configs with" +
+        " .count and only supports units of byte types. If a list of addresses are specified" +
+        " in the executor configs, the scheduler will assign them. By default it uses just" +
+        " cpu cores.")
+      .stringConf
+      .createWithDefault("")
+
   private[spark] val EXECUTOR_MEMORY = ConfigBuilder(SparkLauncher.EXECUTOR_MEMORY)
     .doc("Amount of memory to use per executor process, in MiB unless otherwise specified.")
     .bytesConf(ByteUnit.MiB)

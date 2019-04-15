@@ -469,8 +469,7 @@ private[spark] class TaskSetManager(
       execId: String,
       host: String,
       maxLocality: TaskLocality.TaskLocality,
-      hostGpuIndices: ArrayBuffer[String],
-      gpuResources: SchedulerResourceInformation)
+      schedulableResources: Map[String, SchedulerResourceInformation])
         : Option[TaskDescription] =
   {
     val offerBlacklisted = taskSetBlacklistHelperOpt.exists { blacklist =>
@@ -535,14 +534,10 @@ private[spark] class TaskSetManager(
         logInfo(s"Starting $taskName (TID $taskId, $host, executor ${info.executorId}, " +
           s"partition ${task.partitionId}, $taskLocality, ${serializedTask.limit()} bytes)")
 
-        val extraResources = if (sched.GPUS_PER_TASK > 0) {
-          // doing minimal checking here to keep things fast
-          val indices = hostGpuIndices.take(sched.GPUS_PER_TASK).toArray
-          Map(ResourceInformation.GPU -> new ResourceInformation(gpuResources.getName(),
-            gpuResources.getUnits(), sched.GPUS_PER_TASK, indices))
-        } else {
-          Map.empty[String, ResourceInformation]
-        }
+        // TODO - need another plugin point here to allow choosine which addresses
+        val extraSchedulableResources = schedulableResources.
+          mapValues(r => new ResourceInformation(r.getName(), r.getUnits(),
+            r.getCount(), r.takeAddresses(r.getCount().toInt).toArray))
 
         sched.dagScheduler.taskStarted(task, info)
 
@@ -556,7 +551,7 @@ private[spark] class TaskSetManager(
           addedFiles,
           addedJars,
           task.localProperties,
-          extraResources,
+          extraSchedulableResources,
           serializedTask)
       }
     } else {

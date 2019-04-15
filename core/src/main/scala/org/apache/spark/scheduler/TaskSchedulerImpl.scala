@@ -24,13 +24,13 @@ import java.util.concurrent.atomic.AtomicLong
 
 import scala.collection.mutable.{ArrayBuffer, BitSet, HashMap, HashSet}
 import scala.util.Random
-
 import org.apache.spark._
 import org.apache.spark.TaskState.TaskState
 import org.apache.spark.executor.ExecutorMetrics
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config
 import org.apache.spark.internal.config._
+import org.apache.spark.network.util.ByteUnit
 import org.apache.spark.rpc.RpcEndpoint
 import org.apache.spark.scheduler.SchedulingMode.SchedulingMode
 import org.apache.spark.scheduler.TaskLocality.TaskLocality
@@ -337,34 +337,140 @@ private[spark] class TaskSchedulerImpl(
       s" ${manager.parent.name}")
   }
 
+  private def checkResourcesSchedulable(taskSet: TaskSetManager, offer: WorkerOffer,
+      availableResources: Map[String, SchedulerResourceInformation]): Boolean = {
+    // get each resource type
+    val reqResourceTypes = conf.get(SCHEDULER_RESOURCE_TYPES).split(',')
+    // requiredGlobalResources.keySet.map(_.split('.')(0))
+    logInfo("required resource types include: " + reqResourceTypes)
+
+    // TODO - change to use availableResources???
+
+    // SPARK internal scheduler will only base it off the counts and known byte units, if
+    // user is trying to use something else they will have to write their own plugin\
+    // We could have a config that specifies which resources we want scheduled on.. TODO??
+    for (rType <- reqResourceTypes) {
+      val unitsConfig = SPARK_TASK_RESOURCE_PREFIX + rType + ".units"
+      val countValConfig = SPARK_TASK_RESOURCE_PREFIX + rType + ".count"
+      if (conf.getOption(countValConfig).nonEmpty) {
+        val countVal = conf.get(countValConfig)
+        val countToUse = if (conf.getOption(unitsConfig).nonEmpty) {
+          val units = conf.get(unitsConfig)
+          val resCount = if (!units.isEmpty) {
+            try {
+              Utils.byteStringAsBytes(countVal + units)
+            } catch {
+              case e: NumberFormatException =>
+                throw new SparkException(s"Illegal resource unit type, spark only" +
+                  s"supports conversion of byte types, config: $unitsConfig, units: $units")
+            }
+          } else {
+            countVal.toLong
+          }
+          resCount
+        } else {
+          countVal.toLong
+        }
+        logInfo(s"type is: $rType, count is: $countToUse")
+
+        val offerSatisfies = offer.resources.get(rType).count(_.getCount() >= countToUse)
+
+        if (offerSatisfies > 0) {
+          logInfo(s"good to go for $rType")
+        } else {
+          return false
+        }
+      } else {
+        throw new SparkException(s"Expected a count config for resource type: $rType")
+      }
+    }
+    true
+  }
+
+  private def canScheduleTask(taskSet: TaskSetManager, offer: WorkerOffer,
+      availableResources: Map[String, SchedulerResourceInformation]): Boolean = {
+
+    val availableCpus = offer.cores
+
+   /* for ((resource, setting) <- requiredGlobalResources) {
+      if (resource.contains("count")) {
+        val resourceType = resource.split(".")(0)
+        if (workerResources.get(resource).nonEmpty) {
+          // TODO how do we do units??? do we only support bytes, mb, etc??
+
+          if (requiredGlobalResources.contains(resourceType + ".units") &&
+            requiredGlobalResources(resourceType + ".units")) {
+            val requiredUnits = requiredGlobalResources.contains(resourceType + ".units"
+          }
+          if (workerResources.get(resource).get.getCount() >= setting.toLong) {
+            true
+          }
+        } else {
+          false
+        }
+      }
+    } */
+
+    // val tsResources = taskSet.taskSet.resources
+
+    // pluggableApi(conf: SparkConf, offer: WorkerOffer,
+    // taskSetReduiredResources: Map[String, ResourceInformation])
+
+    val resourcesSchedulable = checkResourcesSchedulable(taskSet, offer, availableResources)
+
+    if (availableCpus >= CPUS_PER_TASK && resourcesSchedulable) {
+      true
+    } else {
+      false
+    }
+  }
+
   private def resourceOfferSingleTaskSet(
       taskSet: TaskSetManager,
       maxLocality: TaskLocality,
       shuffledOffers: Seq[WorkerOffer],
-      availableCpus: Array[Int],
-      availableGpuIndices: Array[ArrayBuffer[String]],
+      dummyavailableCpus: Array[Int],
+      dummyavailableGpuIndices: Array[ArrayBuffer[String]],
       tasks: IndexedSeq[ArrayBuffer[TaskDescription]],
       addressesWithDescs: ArrayBuffer[(String, TaskDescription)]) : Boolean = {
+
+    val reqResourceTypes = conf.get(SCHEDULER_RESOURCE_TYPES).split(',')
+    val availableResources = shuffledOffers.map(o => {
+      o.resources.filterKeys(reqResourceTypes.contains(_))
+    }).toArray
+    val availableCpus = shuffledOffers.map(o => o.cores).toArray
+    val availableSlots = shuffledOffers.map(o => o.cores / CPUS_PER_TASK).sum
+
+
+    //  tsResources = taskSet.taskSet.resources
+
     var launchedTask = false
     // nodes and executors that are blacklisted for the entire application have already been
     // filtered out by this point
     for (i <- 0 until shuffledOffers.size) {
       val execId = shuffledOffers(i).executorId
       val host = shuffledOffers(i).host
-      if (availableCpus(i) >= CPUS_PER_TASK && availableGpuIndices(i).size >= GPUS_PER_TASK) {
+
+      // need to check all resources available against what the taskset wants
+
+      if (canScheduleTask(taskSet, shuffledOffers(i), availableResources(i))) {
         try {
-          val gpuResources = shuffledOffers(i).resources.
-            getOrElse("gpu", SchedulerResourceInformation.empty)
-          for (task <- taskSet.resourceOffer(execId, host, maxLocality,
-              availableGpuIndices(i), gpuResources)) {
+          for (task <- taskSet.resourceOffer(execId, host, maxLocality, availableResources(i))) {
             tasks(i) += task
             val tid = task.taskId
             taskIdToTaskSetManager.put(tid, taskSet)
             taskIdToExecutorId(tid) = execId
             executorIdToRunningTaskIds(execId).add(tid)
+            // instead of tracking in separate data structures just update the worker offers???
+            // either that or use the executor data but that is in different class.....
             availableCpus(i) -= CPUS_PER_TASK
-            task.resources.get("gpu").map(addrs => availableGpuIndices(i) --= addrs.getAddresses())
-            assert(availableCpus(i) >= 0 && availableGpuIndices(i).size >= 0)
+            // TODO - does this work with immutable map here???
+            task.resources.map(entry => {
+              val rinfo = availableResources(i).get(entry._1).get
+              rinfo.removeAddresses(entry._2.getAddresses())
+              rinfo.decCount(entry._2.getCount())
+            })
+            assert(availableCpus(i) >= 0)
             // Only update hosts for a barrier task.
             if (taskSet.isBarrier) {
               // The executor address is expected to be non empty.
@@ -428,6 +534,8 @@ private[spark] class TaskSchedulerImpl(
     val availableResources = shuffledOffers.map(o => o.resources).toArray
     val gpuResources = availableResources.map(_.getOrElse(ResourceInformation.GPU,
       SchedulerResourceInformation.empty))
+    // available gpu/cpus don't need to be done here, they are just passed
+    // into resourceOfferSingleTaskSet
     val availableGpuIndices = gpuResources.map(_.getAddresses())
     val availableCpus = shuffledOffers.map(o => o.cores).toArray
     val availableSlots = shuffledOffers.map(o => o.cores / CPUS_PER_TASK).sum
@@ -445,8 +553,11 @@ private[spark] class TaskSchedulerImpl(
     // NOTE: the preferredLocality order: PROCESS_LOCAL, NODE_LOCAL, NO_PREF, RACK_LOCAL, ANY
     for (taskSet <- sortedTaskSets) {
       // Skip the barrier taskSet if the available slots are less than the number of pending tasks.
+      // TODO - for generic this would need to handle more then just slots!!
       if (taskSet.isBarrier && availableSlots < taskSet.numTasks) {
-        // Skip the launch process.
+      // if (taskSet.isBarrier && taskSet.checkAvailResources(allresources(cpu, memory, other))) {
+
+          // Skip the launch process.
         // TODO SPARK-24819 If the job requires more slots than available (both busy and free
         // slots), fail the job on submit.
         logInfo(s"Skip current round of resource offers for barrier stage ${taskSet.stageId} " +
