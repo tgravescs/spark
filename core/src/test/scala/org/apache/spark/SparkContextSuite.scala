@@ -717,10 +717,11 @@ class SparkContextSuite extends SparkFunSuite with LocalSparkContext with Eventu
   test("test gpu support under local-cluster mode") {
     withGpus(0 to 2) { scriptPath =>
       val conf = new SparkConf()
-        .set(GPUS_PER_TASK.key, "1")
-        .set(EXECUTOR_GPUS.key, "1")
-        .set(EXECUTOR_GPU_DISCOVERY_SCRIPT.key, scriptPath)
-        .set(DRIVER_GPU_ADDRESSES.key, "0, 1, 8")
+        .set(SPARK_TASK_RESOURCE_PREFIX + "gpu" + SPARK_RESOURCE_COUNT_POSTFIX, "1")
+        .set(SPARK_EXECUTOR_RESOURCE_PREFIX + "gpu" + SPARK_RESOURCE_COUNT_POSTFIX, "1")
+        .set(SPARK_EXECUTOR_RESOURCE_PREFIX + "gpu" +
+          SPARK_RESOURCE_DISCOVERY_SCRIPT_POSTFIX, scriptPath)
+        .set(SPARK_DRIVER_RESOURCE_PREFIX + "gpu" + SPARK_RESOURCE_ADDRESSES_POSTFIX, "0, 1, 8")
         .setMaster("local-cluster[3, 3, 1024]")
         .setAppName("test-cluster")
       sc = new SparkContext(conf)
@@ -752,9 +753,10 @@ class SparkContextSuite extends SparkFunSuite with LocalSparkContext with Eventu
   test("test gpu driver discovery under local-cluster mode") {
     withGpus(4 to 6) { scriptPath =>
       val conf = new SparkConf()
-        .set(GPUS_PER_TASK.key, "1")
-        .set(EXECUTOR_GPUS.key, "1")
-        .set(DRIVER_GPU_DISCOVERY_SCRIPT.key, scriptPath)
+        .set(SPARK_TASK_RESOURCE_PREFIX + "gpu" + SPARK_RESOURCE_COUNT_POSTFIX, "1")
+        .set(SPARK_EXECUTOR_RESOURCE_PREFIX + "gpu" + SPARK_RESOURCE_COUNT_POSTFIX, "1")
+        .set(SPARK_DRIVER_RESOURCE_PREFIX + "gpu" +
+          SPARK_RESOURCE_DISCOVERY_SCRIPT_POSTFIX, scriptPath)
         .setMaster("local-cluster[1, 1, 1024]")
         .setAppName("test-cluster")
       sc = new SparkContext(conf)
@@ -774,10 +776,11 @@ class SparkContextSuite extends SparkFunSuite with LocalSparkContext with Eventu
   test("test gpu driver gpu configs under local-cluster mode") {
     withGpus(4 to 6) { scriptPath =>
       val conf = new SparkConf()
-        .set(GPUS_PER_TASK.key, "1")
-        .set(EXECUTOR_GPUS.key, "1")
-        .set(DRIVER_GPU_ADDRESSES.key, "0, 1, 8")
-        .set(DRIVER_GPU_DISCOVERY_SCRIPT.key, scriptPath)
+        .set(SPARK_TASK_RESOURCE_PREFIX + "gpu" + SPARK_RESOURCE_COUNT_POSTFIX, "1")
+        .set(SPARK_EXECUTOR_RESOURCE_PREFIX + "gpu" + SPARK_RESOURCE_COUNT_POSTFIX, "1")
+        .set(SPARK_DRIVER_RESOURCE_PREFIX + "gpu" + SPARK_RESOURCE_ADDRESSES_POSTFIX, "0, 1, 8")
+        .set(SPARK_DRIVER_RESOURCE_PREFIX + "gpu" +
+          SPARK_RESOURCE_DISCOVERY_SCRIPT_POSTFIX, scriptPath)
         .setMaster("local-cluster[1, 1, 1024]")
         .setAppName("test-cluster")
       sc = new SparkContext(conf)

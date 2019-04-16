@@ -374,7 +374,8 @@ class SparkContext(config: SparkConf) extends Logging {
       throw new SparkException("An application name must be set in your configuration")
     }
 
-    _resources = conf.get(DRIVER_GPU_ADDRESSES).map(ids => {
+    val gpuConfPrefix = SPARK_DRIVER_RESOURCE_PREFIX + "gpu" + SPARK_RESOURCE_ADDRESSES_POSTFIX
+    _resources = conf.getOption(gpuConfPrefix).map(ids => {
       val gpuIds = ids.split(",").map(_.trim())
       Map("gpu" -> new ResourceInformation("gpu", "", gpuIds.size, gpuIds))
     }).getOrElse(ResourceDiscoverer.findResources(_conf, true))

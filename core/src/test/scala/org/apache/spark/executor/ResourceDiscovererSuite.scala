@@ -24,8 +24,9 @@ import java.nio.file.attribute.PosixFilePermission._
 import java.util.EnumSet
 
 import com.google.common.io.Files
+
 import org.apache.spark._
-import org.apache.spark.internal.config.{DRIVER_GPU_DISCOVERY_SCRIPT, EXECUTOR_GPU_DISCOVERY_SCRIPT}
+import org.apache.spark.internal.config._
 import org.apache.spark.util.Utils
 
 
@@ -49,7 +50,8 @@ class ResourceDiscovererSuite extends SparkFunSuite
       Files.write("echo 0,1", file1, StandardCharsets.UTF_8)
       JavaFiles.setPosixFilePermissions(file1.toPath(),
         EnumSet.of(OWNER_READ, OWNER_EXECUTE, OWNER_WRITE))
-      sparkconf.set(EXECUTOR_GPU_DISCOVERY_SCRIPT, file1.getPath())
+      sparkconf.set(SPARK_EXECUTOR_RESOURCE_PREFIX + "gpu" +
+        SPARK_RESOURCE_DISCOVERY_SCRIPT_POSTFIX, file1.getPath())
       val resources = ResourceDiscoverer.findResources(sparkconf, false)
       val gpuValue = resources.get("gpu")
       assert(gpuValue.nonEmpty, "Should have a gpu entry")
@@ -70,8 +72,10 @@ class ResourceDiscovererSuite extends SparkFunSuite
       Files.write("echo 0,1", file1, StandardCharsets.UTF_8)
       JavaFiles.setPosixFilePermissions(file1.toPath(),
         EnumSet.of(OWNER_READ, OWNER_EXECUTE, OWNER_WRITE))
-      sparkconf.set(DRIVER_GPU_DISCOVERY_SCRIPT, file1.getPath())
-      sparkconf.set(EXECUTOR_GPU_DISCOVERY_SCRIPT, "boguspath")
+      sparkconf.set(SPARK_DRIVER_RESOURCE_PREFIX + "gpu" +
+        SPARK_RESOURCE_DISCOVERY_SCRIPT_POSTFIX, file1.getPath())
+      sparkconf.set(SPARK_EXECUTOR_RESOURCE_PREFIX + "gpu" +
+        SPARK_RESOURCE_DISCOVERY_SCRIPT_POSTFIX, "boguspath")
       // make sure it reads from correct config, here it should use driver
       val resources = ResourceDiscoverer.findResources(sparkconf, true)
       val gpuValue = resources.get("gpu")
@@ -93,7 +97,8 @@ class ResourceDiscovererSuite extends SparkFunSuite
       Files.write("echo foo1", file1, StandardCharsets.UTF_8)
       JavaFiles.setPosixFilePermissions(file1.toPath(),
         EnumSet.of(OWNER_READ, OWNER_EXECUTE, OWNER_WRITE))
-      sparkconf.set(EXECUTOR_GPU_DISCOVERY_SCRIPT, file1.getPath())
+      sparkconf.set(SPARK_EXECUTOR_RESOURCE_PREFIX + "gpu" +
+        SPARK_RESOURCE_DISCOVERY_SCRIPT_POSTFIX, file1.getPath())
 
       val error = intercept[SparkException] {
         ResourceDiscoverer.findResources(sparkconf, false)
@@ -108,7 +113,8 @@ class ResourceDiscovererSuite extends SparkFunSuite
 
     val file1 = new File("/tmp/bogus")
     try {
-      sparkconf.set(EXECUTOR_GPU_DISCOVERY_SCRIPT, file1.getPath())
+      sparkconf.set(SPARK_EXECUTOR_RESOURCE_PREFIX + "gpu" +
+        SPARK_RESOURCE_DISCOVERY_SCRIPT_POSTFIX, file1.getPath())
 
       val error = intercept[SparkException] {
         ResourceDiscoverer.findResources(sparkconf, false)

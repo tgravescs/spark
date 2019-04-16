@@ -26,6 +26,8 @@ import org.apache.spark.util.Utils.executeAndGetOutput
 /**
  * Discovers resources (GPUs/FPGAs/etc). Currently this just knows about gpus but
  * could easily be extended.
+ * It uses the spark.{driver/executor}.{resourceType}.discoveryScript config
+ * run a user specified script and parse the output into ResourceInformation.
  */
 private[spark] object ResourceDiscoverer extends Logging {
 
@@ -41,9 +43,22 @@ private[spark] object ResourceDiscoverer extends Logging {
     }
   }
 
+  private def getGPUConfig(isDriver: Boolean, postfix: String): String = {
+    if (isDriver) {
+      SPARK_DRIVER_RESOURCE_PREFIX + GPU + postfix
+    } else {
+      SPARK_EXECUTOR_RESOURCE_PREFIX + GPU + postfix
+    }
+  }
+
   private def getGPUResources(sparkconf: SparkConf, isDriver: Boolean): Array[String] = {
-    val discoveryConf = if (isDriver) DRIVER_GPU_DISCOVERY_SCRIPT else EXECUTOR_GPU_DISCOVERY_SCRIPT
-    val script = sparkconf.get(discoveryConf)
+    val prefix = if (isDriver) {
+      SPARK_DRIVER_RESOURCE_PREFIX
+    } else {
+      SPARK_EXECUTOR_RESOURCE_PREFIX
+    }
+    val discoveryConf = prefix + GPU + SPARK_RESOURCE_ADDRESSES_POSTFIX
+    val script = sparkconf.getOption(discoveryConf)
     val result = if (script.nonEmpty) {
       val scriptFile = new File(script.get)
       // check that script exists and try to execute
@@ -66,7 +81,7 @@ private[spark] object ResourceDiscoverer extends Logging {
       }
     } else {
       logWarning(s"User is expecting to use GPU resources but didn't specify a " +
-        s"script via conf: ${discoveryConf.key}, to find them!")
+        s"script via conf: ${discoveryConf}, to find them!")
       Array.empty[String]
     }
     result

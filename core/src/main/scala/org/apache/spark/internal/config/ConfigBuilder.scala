@@ -75,7 +75,6 @@ private object ConfigHelpers {
         throw new IllegalArgumentException(s"$key should be a regex, but was $str", e)
     }
   }
-
 }
 
 /**
