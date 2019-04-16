@@ -24,6 +24,7 @@ import java.util.Properties
 import scala.collection.JavaConverters._
 import scala.collection.mutable.{HashMap => MutableHashMap}
 import scala.util.control.NonFatal
+
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapreduce.MRJobConfig
@@ -36,7 +37,8 @@ import org.apache.hadoop.yarn.util.Records
 import org.mockito.ArgumentMatchers.{any, anyBoolean, anyShort, eq => meq}
 import org.mockito.Mockito.{spy, verify}
 import org.scalatest.Matchers
-import org.apache.spark.{SparkConf, SparkException, SparkFunSuite, TestUtils}
+
+import org.apache.spark.{SparkConf, SparkFunSuite, TestUtils}
 import org.apache.spark.deploy.yarn.config._
 import org.apache.spark.internal.config._
 import org.apache.spark.util.{SparkConfWithEnv, Utils}
@@ -386,32 +388,6 @@ class ClientSuite extends SparkFunSuite with Matchers {
       }
     }
   }
-
-  test(s"custom resource request yarn config and spark config fails") {
-    assume(ResourceRequestHelper.isYarnResourceTypesAvailable())
-    val resources = Map("fpga" -> 2, "gpu" -> 3)
-    ResourceRequestTestHelper.initializeResourceTypes(resources.keys.toSeq)
-
-    val conf = new SparkConf().set(SUBMIT_DEPLOY_MODE, "cluster").set(DRIVER_GPUS, 3)
-    resources.foreach { case (name, v) =>
-      conf.set(YARN_DRIVER_RESOURCE_TYPES_PREFIX + name, v.toString)
-    }
-
-    val appContext = Records.newRecord(classOf[ApplicationSubmissionContext])
-    val getNewApplicationResponse = Records.newRecord(classOf[GetNewApplicationResponse])
-    val containerLaunchContext = Records.newRecord(classOf[ContainerLaunchContext])
-
-    val client = new Client(new ClientArguments(Array()), conf, null)
-    val error = intercept[SparkException] {
-      client.createApplicationSubmissionContext(
-        new YarnClientApplication(getNewApplicationResponse, appContext),
-        containerLaunchContext)
-    }.getMessage()
-
-    assert(error.contains("only set the spark config spark.driver.resource.gpu.count " +
-      " to specify gpus, do not use: spark.yarn.driver.resource.io.yarn/gpu"))
-  }
-
 
   private val matching = Seq(
     ("files URI match test1", "file:///file1", "file:///file2"),

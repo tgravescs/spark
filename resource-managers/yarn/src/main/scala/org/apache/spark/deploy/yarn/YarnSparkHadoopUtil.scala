@@ -40,8 +40,6 @@ object YarnSparkHadoopUtil {
 
   val ANY_HOST = "*"
 
-  val YARN_GPU_RESOURCE_CONFIG = "yarn.io/gpu"
-
   // All RM requests are issued with same priority : we do not (yet) have any distinction between
   // request types (like map/reduce in hadoop for example)
   val RM_REQUEST_PRIORITY = Priority.newInstance(1)

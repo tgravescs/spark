@@ -34,6 +34,9 @@ package object config {
   private[spark] val SPARK_EXECUTOR_RESOURCE_PREFIX = "spark.executor.resource."
   private[spark] val SPARK_TASK_RESOURCE_PREFIX = "spark.task.resource."
 
+  private[spark] val SPARK_RESOURCE_COUNT_POSTFIX = ".count"
+  private[spark] val SPARK_RESOURCE_DISCOVERY_SCRIPT_POSTFIX = ".discoveryScript"
+
   private[spark] val DRIVER_CLASS_PATH =
     ConfigBuilder(SparkLauncher.DRIVER_EXTRA_CLASSPATH).stringConf.createOptional
 
@@ -176,39 +179,6 @@ package object config {
     .intConf
     .checkValue(_ > 0, "Each executor must contain at least 1 cpu core.")
     .createWithDefault(1)
-
-  private[spark] val EXECUTOR_GPUS =
-    ConfigBuilder(s"${SPARK_EXECUTOR_RESOURCE_PREFIX}gpu.count")
-      .doc("The number of GPUs assigned to each executor, each executor in the same application " +
-        "shall have the same number of GPUs.")
-      .intConf
-      .checkValue(_ >= 0, "The number of GPUs for each executor must be non-negative.")
-      .createWithDefault(0)
-
-  private[spark] val EXECUTOR_GPU_DISCOVERY_SCRIPT =
-    ConfigBuilder(s"${SPARK_EXECUTOR_RESOURCE_PREFIX}gpu.discoveryScript")
-      .doc("Script that outputs comma separate list of gpu indexes available on that executor")
-      .stringConf
-      .createOptional
-
-  private[spark] val DRIVER_GPUS =
-    ConfigBuilder(s"${SPARK_DRIVER_RESOURCE_PREFIX}gpu.count")
-      .doc("The number of GPUs assigned to the driver.")
-      .intConf
-      .checkValue(_ >= 0, "The number of GPUs for the driver must be non-negative.")
-      .createWithDefault(0)
-
-  private[spark] val DRIVER_GPU_DISCOVERY_SCRIPT =
-    ConfigBuilder(s"${SPARK_DRIVER_RESOURCE_PREFIX}gpu.discoveryScript")
-      .doc("Script that outputs comma separate list of gpu indexes available on the driver")
-      .stringConf
-      .createOptional
-
-  private[spark] val DRIVER_GPU_ADDRESSES =
-    ConfigBuilder(s"${SPARK_DRIVER_RESOURCE_PREFIX}gpu.addresses")
-      .doc("A comma separate list of strings of gpu indexes available on the driver")
-      .stringConf
-      .createOptional
 
   private[spark] val EXECUTOR_MEMORY = ConfigBuilder(SparkLauncher.EXECUTOR_MEMORY)
     .doc("Amount of memory to use per executor process, in MiB unless otherwise specified.")
@@ -357,18 +327,6 @@ package object config {
       .intConf
       .checkValue(_ > 0, "Each task must require at least 1 cpu core.")
       .createWithDefault(1)
-
-  // this is formatted this way to allow grabbing a bunch of sub pieces of the config,
-  // for instance every type of resources, then for each resource various configs like
-  // count, could add a type, etc.
-  private[spark] val GPUS_PER_TASK =
-    ConfigBuilder(s"${SPARK_TASK_RESOURCE_PREFIX}gpu.count")
-      .doc("The number of GPUs required per task. This config is global, so each task in the " +
-        "same Spark application share the same config value. The default value is 0 so if user " +
-        "doesn't specify then task shall not require GPUs.")
-      .intConf
-      .checkValue(_ >= 0, "The number of GPUs required by each task must be non-negative.")
-      .createWithDefault(0)
 
   private[spark] val DYN_ALLOCATION_ENABLED =
     ConfigBuilder("spark.dynamicAllocation.enabled").booleanConf.createWithDefault(false)

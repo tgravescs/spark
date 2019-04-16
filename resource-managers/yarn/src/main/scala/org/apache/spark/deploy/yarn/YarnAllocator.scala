@@ -25,11 +25,13 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, HashMap, HashSet}
 import scala.util.control.NonFatal
+
 import org.apache.hadoop.yarn.api.records._
 import org.apache.hadoop.yarn.client.api.AMRMClient
 import org.apache.hadoop.yarn.client.api.AMRMClient.ContainerRequest
 import org.apache.hadoop.yarn.conf.YarnConfiguration
-import org.apache.spark.{ResourceInformation, SecurityManager, SparkConf, SparkException}
+
+import org.apache.spark.{SecurityManager, SparkConf, SparkException}
 import org.apache.spark.deploy.yarn.YarnSparkHadoopUtil._
 import org.apache.spark.deploy.yarn.config._
 import org.apache.spark.internal.Logging
@@ -139,19 +141,8 @@ private[yarn] class YarnAllocator(
   // Number of cores per executor.
   protected val executorCores = sparkConf.get(EXECUTOR_CORES)
 
-  private val executorResourceRequests = getExecutorResources
-
-  def getExecutorResources: Map[String, String] = {
-    var yarnResources =
-      sparkConf.getAllWithPrefix(config.YARN_EXECUTOR_RESOURCE_TYPES_PREFIX).toMap
-
-    val executorGpus = sparkConf.get(EXECUTOR_GPUS)
-    if (executorGpus > 0) {
-      yarnResources = yarnResources ++
-        Map(YARN_GPU_RESOURCE_CONFIG -> executorGpus.toString)
-    }
-    yarnResources
-  }
+  private val executorResourceRequests =
+    sparkConf.getAllWithPrefix(config.YARN_EXECUTOR_RESOURCE_TYPES_PREFIX).toMap
 
   // Resource capability requested for each executor
   private[yarn] val resource: Resource = {
@@ -517,7 +508,6 @@ private[yarn] class YarnAllocator(
         s"location: $location, resource: $matchingResource")
     val matchingRequests = amClient.getMatchingRequests(allocatedContainer.getPriority, location,
       matchingResource)
-
 
     // Match the allocation to a request
     if (!matchingRequests.isEmpty) {

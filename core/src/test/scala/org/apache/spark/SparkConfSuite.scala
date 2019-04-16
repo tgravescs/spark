@@ -345,33 +345,6 @@ class SparkConfSuite extends SparkFunSuite with LocalSparkContext with ResetSyst
     }
   }
 
-  test("spark.task.resource.gpu.count should be multiple of spark.task.cpus") {
-    val conf = new SparkConf()
-    conf.validateSettings()
-
-    // no executor gpus
-    conf.set(GPUS_PER_TASK.key, "2")
-    intercept[SparkException] {
-      conf.validateSettings()
-    }
-
-    // gpus need to be multiple of executor
-    conf.set(GPUS_PER_TASK.key, "3")
-    conf.set(EXECUTOR_GPUS.key, "3")
-    conf.set(EXECUTOR_CORES.key, "4")
-    conf.set(CPUS_PER_TASK.key, "1")
-    intercept[SparkException] {
-      conf.validateSettings()
-    }
-
-    // make sure # of tasks running use all the resources for cpu and gpu
-    conf.set(GPUS_PER_TASK.key, "2")
-    conf.set(EXECUTOR_GPUS.key, "8")
-    conf.set(EXECUTOR_CORES.key, "4")
-    conf.set(CPUS_PER_TASK.key, "1")
-    conf.validateSettings()
-  }
-
   test("SPARK-26998: SSL configuration not needed on executors") {
     val conf = new SparkConf(false)
     conf.set("spark.ssl.enabled", "true")

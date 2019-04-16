@@ -42,7 +42,7 @@ private[spark] class YarnClusterManager extends ExternalClusterManager {
       scheduler: TaskScheduler): SchedulerBackend = {
     sc.deployMode match {
       case "cluster" =>
-        new  YarnClusterSchedulerBackend(scheduler.asInstanceOf[TaskSchedulerImpl], sc)
+        new YarnClusterSchedulerBackend(scheduler.asInstanceOf[TaskSchedulerImpl], sc)
       case "client" =>
         new YarnClientSchedulerBackend(scheduler.asInstanceOf[TaskSchedulerImpl], sc)
       case  _ =>

@@ -51,14 +51,9 @@ private[spark] class TaskContextImpl(
     localProperties: Properties,
     @transient private val metricsSystem: MetricsSystem,
     // The default value is only used in tests.
-    override val taskMetrics: TaskMetrics = TaskMetrics.empty,
-    val resources: Map[String, ResourceInformation] = Map.empty)
+    override val taskMetrics: TaskMetrics = TaskMetrics.empty)
   extends TaskContext
   with Logging {
-
-  override def getResources(): Map[String, ResourceInformation] = {
-    resources
-  }
 
   /** List of callback functions to execute when the task completes. */
   @transient private val onCompleteCallbacks = new ArrayBuffer[TaskCompletionListener]

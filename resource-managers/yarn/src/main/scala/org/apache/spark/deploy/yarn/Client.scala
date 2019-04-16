@@ -18,7 +18,7 @@
 package org.apache.spark.deploy.yarn
 
 import java.io.{FileSystem => _, _}
-import java.net.{InetAddress, URI, UnknownHostException}
+import java.net.{InetAddress, UnknownHostException, URI}
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import java.util.{Locale, Properties, UUID}
@@ -27,6 +27,7 @@ import java.util.zip.{ZipEntry, ZipOutputStream}
 import scala.collection.JavaConverters._
 import scala.collection.mutable.{ArrayBuffer, HashMap, HashSet, ListBuffer, Map}
 import scala.util.control.NonFatal
+
 import com.google.common.base.Objects
 import com.google.common.io.Files
 import org.apache.hadoop.conf.Configuration
@@ -45,7 +46,8 @@ import org.apache.hadoop.yarn.conf.YarnConfiguration
 import org.apache.hadoop.yarn.exceptions.ApplicationNotFoundException
 import org.apache.hadoop.yarn.security.AMRMTokenIdentifier
 import org.apache.hadoop.yarn.util.Records
-import org.apache.spark.{ResourceInformation, SecurityManager, SparkConf, SparkException}
+
+import org.apache.spark.{SecurityManager, SparkConf, SparkException}
 import org.apache.spark.deploy.{SparkApplication, SparkHadoopUtil}
 import org.apache.spark.deploy.security.HadoopDelegationTokenManager
 import org.apache.spark.deploy.yarn.config._
@@ -236,22 +238,13 @@ private[spark] class Client(
   def createApplicationSubmissionContext(
       newApp: YarnClientApplication,
       containerContext: ContainerLaunchContext): ApplicationSubmissionContext = {
-    var amResources =
+    val amResources =
       if (isClusterMode) {
         sparkConf.getAllWithPrefix(config.YARN_DRIVER_RESOURCE_TYPES_PREFIX).toMap
       } else {
         sparkConf.getAllWithPrefix(config.YARN_AM_RESOURCE_TYPES_PREFIX).toMap
       }
-
-    // map spark gpu config into yarn gpu config
-    val driverGpus = sparkConf.get(DRIVER_GPUS)
-    if (driverGpus > 0) {
-      amResources = amResources ++
-        Map(YARN_GPU_RESOURCE_CONFIG -> driverGpus.toString)
-    }
-
     logDebug(s"AM resources: $amResources")
-
     val appContext = newApp.getApplicationSubmissionContext
     appContext.setApplicationName(sparkConf.get("spark.app.name", "Spark"))
     appContext.setQueue(sparkConf.get(QUEUE_NAME))
