@@ -195,7 +195,8 @@ class TaskSchedulerImplSuite extends SparkFunSuite with LocalSparkContext with B
     val taskScheduler = setupScheduler(config.CPUS_PER_TASK.key -> taskCpus.toString,
       config.GPUS_PER_TASK.key -> taskGpus.toString,
       config.EXECUTOR_GPUS.key -> executorGpus.toString,
-      config.EXECUTOR_CORES.key -> executorCpus.toString)
+      config.EXECUTOR_CORES.key -> executorCpus.toString,
+      config.SCHEDULER_RESOURCE_TYPES.key -> "gpu")
     // Give zero core offers. Should not generate any tasks
     val taskSet = FakeTask.createTaskSet(3)
 
@@ -211,6 +212,43 @@ class TaskSchedulerImplSuite extends SparkFunSuite with LocalSparkContext with B
     assert(1 === taskDescriptions(0).resources.get("gpu").get.getCount())
     assert(ArrayBuffer("0") === taskDescriptions(0).resources.get("gpu").get.getAddresses())
     assert(ArrayBuffer("1") === taskDescriptions(1).resources.get("gpu").get.getAddresses())
+  }
+
+  test("Scheduler correctly accounts for multiple resources per task") {
+    val taskCpus = 1
+    val taskGpus = 1
+    val taskFpgas = 1
+    val executorGpus = 4
+    val executorCpus = 4
+    val executorFpgas = 4
+    val taskScheduler = setupScheduler(config.CPUS_PER_TASK.key -> taskCpus.toString,
+      config.GPUS_PER_TASK.key -> taskGpus.toString,
+      config.SPARK_TASK_RESOURCE_PREFIX + "fpga.count" -> taskFpgas.toString,
+      config.EXECUTOR_GPUS.key -> executorGpus.toString,
+      config.EXECUTOR_CORES.key -> executorCpus.toString,
+      config.SPARK_EXECUTOR_RESOURCE_PREFIX + "fpga.count" -> executorFpgas.toString,
+      config.SCHEDULER_RESOURCE_TYPES.key -> "gpu, fpga")
+
+    // Give zero core offers. Should not generate any tasks
+    val taskSet = FakeTask.createTaskSet(3)
+
+    val numFreeCores = 2
+    val extraResources = Map("gpu" ->
+      new SchedulerResourceInformation("gpu", "", 4, ArrayBuffer("0", "1", "2", "3")),
+      "fpga" -> new SchedulerResourceInformation("fpga", "",
+        4, ArrayBuffer("f0", "f1", "f2", "f3")))
+    val singleCoreWorkerOffers =
+      IndexedSeq(new WorkerOffer("executor0", "host0", numFreeCores, None, extraResources))
+    taskScheduler.submitTasks(taskSet)
+    var taskDescriptions = taskScheduler.resourceOffers(singleCoreWorkerOffers).flatten
+    assert(2 === taskDescriptions.length)
+    assert(!failedTaskSet)
+    assert(1 === taskDescriptions(0).resources.get("gpu").get.getCount())
+    assert(ArrayBuffer("0") === taskDescriptions(0).resources.get("gpu").get.getAddresses())
+    assert(ArrayBuffer("1") === taskDescriptions(1).resources.get("gpu").get.getAddresses())
+    assert(1 === taskDescriptions(0).resources.get("fpga").get.getCount())
+    assert(ArrayBuffer("f0") === taskDescriptions(0).resources.get("fpga").get.getAddresses())
+    assert(ArrayBuffer("f1") === taskDescriptions(1).resources.get("fpga").get.getAddresses())
   }
 
   test("Scheduler does not crash when tasks are not serializable") {

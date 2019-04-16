@@ -534,10 +534,18 @@ private[spark] class TaskSetManager(
         logInfo(s"Starting $taskName (TID $taskId, $host, executor ${info.executorId}, " +
           s"partition ${task.partitionId}, $taskLocality, ${serializedTask.limit()} bytes)")
 
+
+
         // TODO - need another plugin point here to allow choosine which addresses
         val extraSchedulableResources = schedulableResources.
-          mapValues(r => new ResourceInformation(r.getName(), r.getUnits(),
-            r.getCount(), r.takeAddresses(r.getCount().toInt).toArray))
+          map(r => {
+            val unitsConfig = SPARK_TASK_RESOURCE_PREFIX + r._1 + ".units"
+            val countValConfig = SPARK_TASK_RESOURCE_PREFIX + r._1 + ".count"
+            val taskNumResourcesReq = conf.get(countValConfig).toLong
+            (r._1 -> new ResourceInformation(r._2.getName(), r._2.getUnits(),
+              taskNumResourcesReq, r._2.takeAddresses(taskNumResourcesReq.toInt).toArray))
+
+          })
 
         sched.dagScheduler.taskStarted(task, info)
 

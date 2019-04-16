@@ -337,24 +337,27 @@ private[spark] class TaskSchedulerImpl(
       s" ${manager.parent.name}")
   }
 
+  // pass offer in here if we need it for plugin???
   private def checkResourcesSchedulable(taskSet: TaskSetManager, offer: WorkerOffer,
-      availableResources: Map[String, SchedulerResourceInformation]): Boolean = {
+      availWorkerResources: Map[String, SchedulerResourceInformation]): Boolean = {
     // get each resource type
-    val reqResourceTypes = conf.get(SCHEDULER_RESOURCE_TYPES).split(',')
-    // requiredGlobalResources.keySet.map(_.split('.')(0))
-    logInfo("required resource types include: " + reqResourceTypes)
-
-    // TODO - change to use availableResources???
+    val reqResourceTypes = conf.get(SCHEDULER_RESOURCE_TYPES) match {
+      case Some(x) => x.split(',').map(_.trim)
+      case None => Array.empty[String]
+    }
+    logInfo("required resource types include: " + reqResourceTypes.deep.toString() +
+      " size is: " + reqResourceTypes.size)
 
     // SPARK internal scheduler will only base it off the counts and known byte units, if
     // user is trying to use something else they will have to write their own plugin\
     // We could have a config that specifies which resources we want scheduled on.. TODO??
     for (rType <- reqResourceTypes) {
+      logInfo("rtype is: " + rType)
       val unitsConfig = SPARK_TASK_RESOURCE_PREFIX + rType + ".units"
       val countValConfig = SPARK_TASK_RESOURCE_PREFIX + rType + ".count"
       if (conf.getOption(countValConfig).nonEmpty) {
         val countVal = conf.get(countValConfig)
-        val countToUse = if (conf.getOption(unitsConfig).nonEmpty) {
+        val countRequired = if (conf.getOption(unitsConfig).nonEmpty) {
           val units = conf.get(unitsConfig)
           val resCount = if (!units.isEmpty) {
             try {
@@ -371,9 +374,12 @@ private[spark] class TaskSchedulerImpl(
         } else {
           countVal.toLong
         }
-        logInfo(s"type is: $rType, count is: $countToUse")
+        logInfo(s"type is: $rType, count is: $countRequired")
+        val workerAv = availWorkerResources.get(rType).get.getCount()
+        logInfo(s"available type is: $rType, count is: $workerAv")
 
-        val offerSatisfies = offer.resources.get(rType).count(_.getCount() >= countToUse)
+
+        val offerSatisfies = availWorkerResources.get(rType).count(_.getCount() >= countRequired)
 
         if (offerSatisfies > 0) {
           logInfo(s"good to go for $rType")
@@ -387,60 +393,22 @@ private[spark] class TaskSchedulerImpl(
     true
   }
 
-  private def canScheduleTask(taskSet: TaskSetManager, offer: WorkerOffer,
+  private def canScheduleTaskToOffer(taskSet: TaskSetManager, availableCpus: Int,
+      offer: WorkerOffer,
       availableResources: Map[String, SchedulerResourceInformation]): Boolean = {
 
-    val availableCpus = offer.cores
-
-   /* for ((resource, setting) <- requiredGlobalResources) {
-      if (resource.contains("count")) {
-        val resourceType = resource.split(".")(0)
-        if (workerResources.get(resource).nonEmpty) {
-          // TODO how do we do units??? do we only support bytes, mb, etc??
-
-          if (requiredGlobalResources.contains(resourceType + ".units") &&
-            requiredGlobalResources(resourceType + ".units")) {
-            val requiredUnits = requiredGlobalResources.contains(resourceType + ".units"
-          }
-          if (workerResources.get(resource).get.getCount() >= setting.toLong) {
-            true
-          }
-        } else {
-          false
-        }
-      }
-    } */
-
-    // val tsResources = taskSet.taskSet.resources
-
-    // pluggableApi(conf: SparkConf, offer: WorkerOffer,
-    // taskSetReduiredResources: Map[String, ResourceInformation])
-
     val resourcesSchedulable = checkResourcesSchedulable(taskSet, offer, availableResources)
-
-    if (availableCpus >= CPUS_PER_TASK && resourcesSchedulable) {
-      true
-    } else {
-      false
-    }
+    availableCpus >= CPUS_PER_TASK && resourcesSchedulable
   }
 
   private def resourceOfferSingleTaskSet(
       taskSet: TaskSetManager,
       maxLocality: TaskLocality,
       shuffledOffers: Seq[WorkerOffer],
-      dummyavailableCpus: Array[Int],
-      dummyavailableGpuIndices: Array[ArrayBuffer[String]],
+      availableCpus: Array[Int],
+      availableResources: Array[Map[String, SchedulerResourceInformation]],
       tasks: IndexedSeq[ArrayBuffer[TaskDescription]],
       addressesWithDescs: ArrayBuffer[(String, TaskDescription)]) : Boolean = {
-
-    val reqResourceTypes = conf.get(SCHEDULER_RESOURCE_TYPES).split(',')
-    val availableResources = shuffledOffers.map(o => {
-      o.resources.filterKeys(reqResourceTypes.contains(_))
-    }).toArray
-    val availableCpus = shuffledOffers.map(o => o.cores).toArray
-    val availableSlots = shuffledOffers.map(o => o.cores / CPUS_PER_TASK).sum
-
 
     //  tsResources = taskSet.taskSet.resources
 
@@ -453,7 +421,8 @@ private[spark] class TaskSchedulerImpl(
 
       // need to check all resources available against what the taskset wants
 
-      if (canScheduleTask(taskSet, shuffledOffers(i), availableResources(i))) {
+      if (canScheduleTaskToOffer(taskSet, availableCpus(i),
+          shuffledOffers(i), availableResources(i))) {
         try {
           for (task <- taskSet.resourceOffer(execId, host, maxLocality, availableResources(i))) {
             tasks(i) += task
@@ -467,6 +436,7 @@ private[spark] class TaskSchedulerImpl(
             // TODO - does this work with immutable map here???
             task.resources.map(entry => {
               val rinfo = availableResources(i).get(entry._1).get
+              logInfo(" decrementing by " + entry._2.getCount())
               rinfo.removeAddresses(entry._2.getAddresses())
               rinfo.decCount(entry._2.getCount())
             })
@@ -531,12 +501,21 @@ private[spark] class TaskSchedulerImpl(
     val shuffledOffers = shuffleOffers(filteredOffers)
     // Build a list of tasks to assign to each worker.
     val tasks = shuffledOffers.map(o => new ArrayBuffer[TaskDescription](o.cores / CPUS_PER_TASK))
-    val availableResources = shuffledOffers.map(o => o.resources).toArray
-    val gpuResources = availableResources.map(_.getOrElse(ResourceInformation.GPU,
-      SchedulerResourceInformation.empty))
+    // val availableResources = shuffledOffers.map(o => o.resources).toArray
+    // val gpuResources = availableResources.map(_.getOrElse(ResourceInformation.GPU,
+    //   SchedulerResourceInformation.empty))
     // available gpu/cpus don't need to be done here, they are just passed
     // into resourceOfferSingleTaskSet
-    val availableGpuIndices = gpuResources.map(_.getAddresses())
+    // val availableGpuIndices = gpuResources.map(_.getAddresses())
+
+    val reqResourceTypes = conf.get(SCHEDULER_RESOURCE_TYPES) match {
+      case Some(x) => x.split(',').map(_.trim)
+      case None => Array.empty[String]
+    }
+    val availableResources = shuffledOffers.map(o => {
+      o.resources.filterKeys(reqResourceTypes.contains(_))
+    }).toArray
+
     val availableCpus = shuffledOffers.map(o => o.cores).toArray
     val availableSlots = shuffledOffers.map(o => o.cores / CPUS_PER_TASK).sum
     val sortedTaskSets = rootPool.getSortedTaskSetQueue
@@ -572,7 +551,7 @@ private[spark] class TaskSchedulerImpl(
           do {
             launchedTaskAtCurrentMaxLocality = resourceOfferSingleTaskSet(taskSet,
               currentMaxLocality, shuffledOffers, availableCpus,
-              availableGpuIndices, tasks, addressesWithDescs)
+              availableResources, tasks, addressesWithDescs)
             launchedAnyTask |= launchedTaskAtCurrentMaxLocality
           } while (launchedTaskAtCurrentMaxLocality)
         }
