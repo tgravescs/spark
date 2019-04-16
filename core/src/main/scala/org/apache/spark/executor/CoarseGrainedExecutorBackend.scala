@@ -57,8 +57,6 @@ private[spark] class CoarseGrainedExecutorBackend(
   // to be changed so that we don't share the serializer instance across threads
   private[this] val ser: SerializerInstance = env.closureSerializer.newInstance()
 
-  private[this] val taskResources = new HashMap[Long, Map[String, ResourceInformation]]
-
   override def onStart() {
     logInfo("Connecting to driver: " + driverUrl)
     rpcEnv.asyncSetupEndpointRefByURI(driverUrl).flatMap { ref =>
@@ -76,7 +74,7 @@ private[spark] class CoarseGrainedExecutorBackend(
             s" but can't find any GPU resources available on the executor.")
         }
         logInfo(s"Executor ${executorId} using GPU resources: " +
-          s"${(gpuResources.get("gpu").get.getAddresses().mkString(", ")}")
+          s"${gpuResources.get("gpu").get.getAddresses().mkString(", ")}")
         gpuResources
       } else {
         Map.empty[String, ResourceInformation]
@@ -169,11 +167,7 @@ private[spark] class CoarseGrainedExecutorBackend(
   }
 
   override def statusUpdate(taskId: Long, state: TaskState, data: ByteBuffer) {
-    val resources = taskResources.getOrElse(taskId, Map.empty[String, ResourceInformation])
-    val msg = StatusUpdate(executorId, taskId, state, data, resources)
-    if (TaskState.isFinished(state)) {
-      taskResources.remove(taskId)
-    }
+    val msg = StatusUpdate(executorId, taskId, state, data)
     driver match {
       case Some(driverRef) => driverRef.send(msg)
       case None => logWarning(s"Drop $msg because has not yet connected to driver")

@@ -24,9 +24,9 @@ import java.nio.file.attribute.PosixFilePermission._
 import java.util.EnumSet
 
 import com.google.common.io.Files
-
 import org.apache.spark._
 import org.apache.spark.internal.config.{DRIVER_GPU_DISCOVERY_SCRIPT, EXECUTOR_GPU_DISCOVERY_SCRIPT}
+import org.apache.spark.util.Utils
 
 
 class ResourceDiscovererSuite extends SparkFunSuite
@@ -41,6 +41,8 @@ class ResourceDiscovererSuite extends SparkFunSuite
 
   test("Resource discoverer multiple gpus") {
     val sparkconf = new SparkConf
+
+    assume(!(Utils.isWindows))
 
     withTempDir { dir =>
       val file1 = new File(dir, "resourceDiscoverScript1")

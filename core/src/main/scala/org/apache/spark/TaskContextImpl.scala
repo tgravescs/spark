@@ -56,10 +56,6 @@ private[spark] class TaskContextImpl(
   extends TaskContext
   with Logging {
 
-  override def getResources(): Map[String, ResourceInformation] = {
-    resources
-  }
-
   /** List of callback functions to execute when the task completes. */
   @transient private val onCompleteCallbacks = new ArrayBuffer[TaskCompletionListener]
 
@@ -81,6 +77,8 @@ private[spark] class TaskContextImpl(
   // If there was a fetch failure in the task, we store it here, to make sure user-code doesn't
   // hide the exception.  See SPARK-19276
   @volatile private var _fetchFailedException: Option[FetchFailedException] = None
+
+  override def getResources(): Map[String, ResourceInformation] = resources
 
   @GuardedBy("this")
   override def addTaskCompletionListener(listener: TaskCompletionListener)

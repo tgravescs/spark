@@ -20,8 +20,8 @@ package org.apache.spark
 import org.apache.spark.annotation.Evolving
 
 /**
- * Class to hold information about a type of Resource. A resource could be a GPU, FPGa, NUMA, etc.
- * The array of addresses are resource specific and describe how to access the resource.
+ * Class to hold information about a type of Resource. A resource could be a GPU, FPGA, etc.
+ * The array of addresses are resource specific and its up to the user to interpret the address.
  * For instance, for GPUs the addresses would be the indices of the GPUs, the count would be the
  * number of GPUs and the units would be an empty string.
  *

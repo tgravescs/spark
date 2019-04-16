@@ -177,8 +177,9 @@ abstract class TaskContext extends Serializable {
   def getLocalProperty(key: String): String
 
   /**
-   * Get other Resources allocated to the task. The keys are the name of the resource.
-   * Currently GPUs are the only resource supported.
+   * Get other Resources allocated to the task. The keys are the name of the resource and
+   * will match what the user specified in the resource configs
+   * spark.task.resource.{resource type}.*
    */
   @Evolving
   def getResources(): Map[String, ResourceInformation]
