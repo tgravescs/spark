@@ -51,8 +51,7 @@ private[spark] class TaskContextImpl(
     localProperties: Properties,
     @transient private val metricsSystem: MetricsSystem,
     // The default value is only used in tests.
-    override val taskMetrics: TaskMetrics = TaskMetrics.empty,
-    val resources: Map[String, ResourceInformation] = Map.empty)
+    override val taskMetrics: TaskMetrics = TaskMetrics.empty)
   extends TaskContext
   with Logging {
 
@@ -77,8 +76,6 @@ private[spark] class TaskContextImpl(
   // If there was a fetch failure in the task, we store it here, to make sure user-code doesn't
   // hide the exception.  See SPARK-19276
   @volatile private var _fetchFailedException: Option[FetchFailedException] = None
-
-  override def getResources(): Map[String, ResourceInformation] = resources
 
   @GuardedBy("this")
   override def addTaskCompletionListener(listener: TaskCompletionListener)

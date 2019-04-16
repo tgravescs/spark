@@ -27,7 +27,7 @@ import org.apache.spark.util.Utils.executeAndGetOutput
  * Discovers resources (GPUs/FPGAs/etc). Currently this just knows about gpus but
  * could easily be extended.
  * It uses the spark.{driver/executor}.{resourceType}.discoveryScript config
- * run a user specified script and parse the output into ResourceInformation.
+ * to run a user specified script and parse the output into ResourceInformation.
  */
 private[spark] object ResourceDiscoverer extends Logging {
 
@@ -40,14 +40,6 @@ private[spark] object ResourceDiscoverer extends Logging {
     } else {
       Map(GPU ->
         new ResourceInformation(GPU, "", gpus.size, gpus))
-    }
-  }
-
-  private def getGPUConfig(isDriver: Boolean, postfix: String): String = {
-    if (isDriver) {
-      SPARK_DRIVER_RESOURCE_PREFIX + GPU + postfix
-    } else {
-      SPARK_EXECUTOR_RESOURCE_PREFIX + GPU + postfix
     }
   }
 

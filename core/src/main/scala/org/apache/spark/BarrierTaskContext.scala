@@ -185,8 +185,6 @@ class BarrierTaskContext private[spark] (
     taskContext.getMetricsSources(sourceName)
   }
 
-  override def getResources(): Map[String, ResourceInformation] = taskContext.getResources()
-
   override private[spark] def killTaskIfInterrupted(): Unit = taskContext.killTaskIfInterrupted()
 
   override private[spark] def getKillReason(): Option[String] = taskContext.getKillReason()

@@ -63,15 +63,15 @@ private[spark] class CoarseGrainedExecutorBackend(
       // This is a very fast action so we can use "ThreadUtils.sameThread"
       driver = Some(ref)
 
-      val gpuConfPrefix = SPARK_TASK_RESOURCE_PREFIX + "gpu"
-      val resourceInfo = if (env.conf.getAllWithPrefix(gpuConfPrefix).size > 0) {
+      val gpuTaskConfPrefix = SPARK_TASK_RESOURCE_PREFIX + "gpu"
+      val resourceInfo = if (env.conf.getAllWithPrefix(gpuTaskConfPrefix).size > 0) {
         val gpuResources = gpuDevices.map(ids => {
           val gpuIds = ids.split(",").map(_.trim())
           Map("gpu" -> new ResourceInformation("gpu", "", gpuIds.size, gpuIds))
         }).getOrElse(ResourceDiscoverer.findResources(env.conf, false))
 
         if (gpuResources.get("gpu").isEmpty) {
-          throw new SparkException(s"User specified GPU resources per task: $gpuConfPrefix," +
+          throw new SparkException(s"User specified GPU resources per task: $gpuTaskConfPrefix," +
             s" but can't find any GPU resources available on the executor.")
         }
         logInfo(s"Executor ${executorId} using GPU resources: " +

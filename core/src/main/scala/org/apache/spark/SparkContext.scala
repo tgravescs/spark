@@ -213,7 +213,6 @@ class SparkContext(config: SparkConf) extends Logging {
   private var _shutdownHookRef: AnyRef = _
   private var _statusStore: AppStatusStore = _
   private var _heartbeater: Heartbeater = _
-  private var _resources: Map[String, ResourceInformation] = _
 
   /* ------------------------------------------------------------------------------------- *
    | Accessors and public fields. These provide access to the internal state of the        |
@@ -227,8 +226,6 @@ class SparkContext(config: SparkConf) extends Logging {
    * changed at runtime.
    */
   def getConf: SparkConf = conf.clone()
-
-  def getResources(): Map[String, ResourceInformation] = _resources
 
   def jars: Seq[String] = _jars
   def files: Seq[String] = _files
@@ -373,13 +370,7 @@ class SparkContext(config: SparkConf) extends Logging {
     if (!_conf.contains("spark.app.name")) {
       throw new SparkException("An application name must be set in your configuration")
     }
-
-    val gpuConfPrefix = SPARK_DRIVER_RESOURCE_PREFIX + "gpu" + SPARK_RESOURCE_ADDRESSES_POSTFIX
-    _resources = conf.getOption(gpuConfPrefix).map(ids => {
-      val gpuIds = ids.split(",").map(_.trim())
-      Map("gpu" -> new ResourceInformation("gpu", "", gpuIds.size, gpuIds))
-    }).getOrElse(ResourceDiscoverer.findResources(_conf, true))
-
+    
     _driverLogger = DriverLogger(_conf)
 
     // log out spark.app.name in the Spark driver logs

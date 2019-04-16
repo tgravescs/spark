@@ -70,17 +70,13 @@ private[spark] object CoarseGrainedClusterMessages {
       resources: Map[String, ResourceInformation])
     extends CoarseGrainedClusterMessage
 
-  case class StatusUpdate(
-      executorId: String,
-      taskId: Long,
-      state: TaskState,
-      data: SerializableBuffer)
-    extends CoarseGrainedClusterMessage
+  case class StatusUpdate(executorId: String, taskId: Long, state: TaskState,
+      data: SerializableBuffer) extends CoarseGrainedClusterMessage
 
   object StatusUpdate {
     /** Alternate factory method that takes a ByteBuffer directly for the data field */
-    def apply(executorId: String, taskId: Long, state: TaskState, data: ByteBuffer):
-        StatusUpdate = {
+    def apply(executorId: String, taskId: Long, state: TaskState, data: ByteBuffer)
+        : StatusUpdate = {
       StatusUpdate(executorId, taskId, state, new SerializableBuffer(data))
     }
   }
