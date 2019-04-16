@@ -77,15 +77,13 @@ class JsonProtocolSuite extends SparkFunSuite {
     val unpersistRdd = SparkListenerUnpersistRDD(12345)
     val logUrlMap = Map("stderr" -> "mystderr", "stdout" -> "mystdout").toMap
     val attributes = Map("ContainerId" -> "ct1", "User" -> "spark").toMap
-    val resources = Map(ResourceInformation.GPU ->
-      new ResourceInformation(ResourceInformation.GPU, "", 2, Array("0", "1")))
     val applicationStart = SparkListenerApplicationStart("The winner of all", Some("appId"),
       42L, "Garfield", Some("appAttempt"))
     val applicationStartWithLogs = SparkListenerApplicationStart("The winner of all", Some("appId"),
       42L, "Garfield", Some("appAttempt"), Some(logUrlMap))
     val applicationEnd = SparkListenerApplicationEnd(42L)
     val executorAdded = SparkListenerExecutorAdded(executorAddedTime, "exec1",
-      new ExecutorInfo("Hostee.awesome.com", 11, logUrlMap, attributes, resources.toMap))
+      new ExecutorInfo("Hostee.awesome.com", 11, logUrlMap, attributes))
     val executorRemoved = SparkListenerExecutorRemoved(executorRemovedTime, "exec2", "test reason")
     val executorBlacklisted = SparkListenerExecutorBlacklisted(executorBlacklistedTime, "exec1", 22)
     val executorUnblacklisted =
@@ -142,7 +140,6 @@ class JsonProtocolSuite extends SparkFunSuite {
   test("Dependent Classes") {
     val logUrlMap = Map("stderr" -> "mystderr", "stdout" -> "mystdout").toMap
     val attributes = Map("ContainerId" -> "ct1", "User" -> "spark").toMap
-    val resources = Map(ResourceInformation.GPU -> Array[String]("0")).toMap
     testRDDInfo(makeRddInfo(2, 3, 4, 5L, 6L))
     testStageInfo(makeStageInfo(10, 20, 30, 40L, 50L))
     testTaskInfo(makeTaskInfo(999L, 888, 55, 777L, false))
@@ -665,19 +662,6 @@ private[spark] object JsonProtocolSuite extends Assertions {
   private def assertEquals(info1: ExecutorInfo, info2: ExecutorInfo) {
     assert(info1.executorHost == info2.executorHost)
     assert(info1.totalCores == info2.totalCores)
-    assert(info1.totalResources.size == info2.totalResources.size)
-
-    info1.totalResources.zip(info2.totalResources).foreach {
-      case ((key1, values1: ResourceInformation), (key2, values2: ResourceInformation)) =>
-        assert(key1 === key2)
-        assert(values1.getCount() == values2.getCount())
-        assert(values1.getName() == values2.getName())
-        assert(values1.getUnits() == values2.getUnits())
-        values1.getAddresses().zip(values2.getAddresses()).foreach {
-          case (v1, v2) => assert(v1 === v2)
-        }
-    }
-
   }
 
   private def assertEquals(metrics1: TaskMetrics, metrics2: TaskMetrics) {
@@ -1880,14 +1864,6 @@ private[spark] object JsonProtocolSuite extends Assertions {
       |    "Attributes" : {
       |      "ContainerId" : "ct1",
       |      "User" : "spark"
-      |    },
-      |    "Resources" : {
-      |     "gpu" : {
-      |       "Name" : "gpu",
-      |       "Units" : "",
-      |       "Count" : 2,
-      |       "Addresses" : [ "0", "1" ]
-      |      }
       |    }
       |  }
       |}

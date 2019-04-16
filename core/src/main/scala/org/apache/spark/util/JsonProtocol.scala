@@ -488,19 +488,7 @@ private[spark] object JsonProtocol {
     ("Host" -> executorInfo.executorHost) ~
     ("Total Cores" -> executorInfo.totalCores) ~
     ("Log Urls" -> mapToJson(executorInfo.logUrlMap)) ~
-    ("Attributes" -> mapToJson(executorInfo.attributes)) ~
-    ("Resources" -> resourcesMapToJson(executorInfo.totalResources))
-  }
-
-  def resourcesMapToJson(m: Map[String, ResourceInformation]): JValue = {
-    val jsonFields = m.map {
-      case (k, v) => JField(k,
-        ("Name" -> v.getName()) ~
-        ("Units" -> v.getUnits()) ~
-        ("Count" -> v.getCount()) ~
-        ("Addresses" -> JArray(v.getAddresses().map(JString(_)).toList)))
-    }
-    JObject(jsonFields.toList)
+    ("Attributes" -> mapToJson(executorInfo.attributes))
   }
 
   def blockUpdatedInfoToJson(blockUpdatedInfo: BlockUpdatedInfo): JValue = {
@@ -1081,8 +1069,7 @@ private[spark] object JsonProtocol {
       case Some(attr) => mapFromJson(attr).toMap
       case None => Map.empty[String, String]
     }
-    val resources = resourcesMapFromJson(json \ "Resources").toMap
-    new ExecutorInfo(executorHost, totalCores, logUrls, attributes, resources)
+    new ExecutorInfo(executorHost, totalCores, logUrls, attributes)
   }
 
   def blockUpdatedInfoFromJson(json: JValue): BlockUpdatedInfo = {
@@ -1097,22 +1084,6 @@ private[spark] object JsonProtocol {
   /** -------------------------------- *
    * Util JSON deserialization methods |
    * --------------------------------- */
-
-  def resourceInfoFromJson(json: JValue): ResourceInformation = {
-    val name = (json \ "Name").extract[String]
-    val units = (json \ "Units").extract[String]
-    val count = (json \ "Count").extract[Long]
-    val addresses = (json \ "Addresses").extract[Array[JValue]].map(_.extract[String])
-    new ResourceInformation(name, units, count, addresses)
-  }
-
-  def resourcesMapFromJson(json: JValue): Map[String, ResourceInformation] = {
-    val jsonFields = json.asInstanceOf[JObject].obj
-    jsonFields.map { case JField(k, v) =>
-      val resourceInfo = resourceInfoFromJson(v)
-      (k, resourceInfo)
-    }.toMap
-  }
 
   def mapFromJson(json: JValue): Map[String, String] = {
     val jsonFields = json.asInstanceOf[JObject].obj

@@ -22,8 +22,10 @@ import java.util.concurrent.atomic.AtomicInteger
 
 import scala.collection.immutable.{HashSet, TreeSet}
 import scala.collection.mutable.HashMap
+
 import com.google.common.collect.Interners
-import org.apache.spark.{JobExecutionStatus, ResourceInformation}
+
+import org.apache.spark.JobExecutionStatus
 import org.apache.spark.executor.{ExecutorMetrics, TaskMetrics}
 import org.apache.spark.scheduler.{AccumulableInfo, StageInfo, TaskInfo}
 import org.apache.spark.status.api.v1
@@ -257,7 +259,6 @@ private class LiveExecutor(val executorId: String, _addTime: Long) extends LiveE
 
   var executorLogs = Map[String, String]()
   var attributes = Map[String, String]()
-  var resources = Map[String, ResourceInformation]()
 
   // Memory metrics. They may not be recorded (e.g. old event logs) so if totalOnHeap is not
   // initialized, the store will not contain this information.
@@ -307,8 +308,7 @@ private class LiveExecutor(val executorId: String, _addTime: Long) extends LiveE
       memoryMetrics,
       blacklistedInStages,
       Some(peakExecutorMetrics).filter(_.isSet),
-      attributes,
-      resources)
+      attributes)
     new ExecutorSummaryWrapper(info)
   }
 }

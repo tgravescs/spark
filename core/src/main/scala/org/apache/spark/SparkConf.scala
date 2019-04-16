@@ -575,25 +575,6 @@ class SparkConf(loadDefaults: Boolean) extends Cloneable with Logging with Seria
       }
     }
 
-    // Do we want to skip for local mode?
-    if (contains(GPUS_PER_TASK)) {
-      val executorGpus = get(EXECUTOR_GPUS)
-      val taskGpus = get(GPUS_PER_TASK)
-
-      if (executorGpus < taskGpus) {
-        throw new SparkException(
-          s"${GPUS_PER_TASK.key} must not be less than or equal to ${EXECUTOR_GPUS.key}.")
-      }
-
-      val executorCores = get(EXECUTOR_CORES)
-      val taskCpus = get(CPUS_PER_TASK)
-      if (executorCores > 0 && taskCpus > 0
-          && executorGpus * taskCpus != executorCores * taskGpus) {
-        throw new SparkException("Can't make full use of the resources allocated to each " +
-          "executor with current task resource requirements")
-      }
-    }
-
     val encryptionEnabled = get(NETWORK_CRYPTO_ENABLED) || get(SASL_ENCRYPTION_ENABLED)
     require(!encryptionEnabled || get(NETWORK_AUTH_ENABLED),
       s"${NETWORK_AUTH_ENABLED.key} must be enabled when enabling encryption.")
