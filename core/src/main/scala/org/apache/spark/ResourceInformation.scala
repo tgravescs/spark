@@ -20,9 +20,10 @@ package org.apache.spark
 import org.apache.spark.annotation.Evolving
 
 /**
- * Class to hold information about a type of Resource. A resource could be a gpu, fpga, numa, etc.
+ * Class to hold information about a type of Resource. A resource could be a GPU, FPGa, NUMA, etc.
  * The array of addresses are resource specific and describe how to access the resource.
- * For instance, for gpus the addresses would be the indices of the gpus.
+ * For instance, for GPUs the addresses would be the indices of the GPUs, the count would be the
+ * number of GPUs and the units would be an empty string.
  *
  * @param name the name of the resource
  * @param units the units of the resources, can be an empty string if units don't apply
@@ -30,24 +31,14 @@ import org.apache.spark.annotation.Evolving
  * @param addresses an optional array of strings describing the addresses of the resource
  */
 @Evolving
-class ResourceInformation(
+case class ResourceInformation(
     private val name: String,
     private val units: String,
     private val count: Long,
-    private val addresses: Array[String] = Array.empty) extends Serializable {
+    private val addresses: Array[String] = Array.empty) {
 
   def getName(): String = name
   def getUnits(): String = units
   def getCount(): Long = count
   def getAddresses(): Array[String] = addresses
-}
-
-object ResourceInformation {
-  // known types of resources
-  final val GPU: String = "gpu"
-
-  // known resource type parameters
-  final val GPU_COUNT: String = "gpu.count"
-
-
 }

@@ -357,10 +357,7 @@ package object config {
       .intConf
       .checkValue(_ > 0, "Each task must require at least 1 cpu core.")
       .createWithDefault(1)
-
-  // this is formatted this way to allow grabbing a bunch of sub pieces of the config,
-  // for instance every type of resources, then for each resource various configs like
-  // count, could add a type, etc.
+  
   private[spark] val GPUS_PER_TASK =
     ConfigBuilder(s"${SPARK_TASK_RESOURCE_PREFIX}gpu.count")
       .doc("The number of GPUs required per task. This config is global, so each task in the " +

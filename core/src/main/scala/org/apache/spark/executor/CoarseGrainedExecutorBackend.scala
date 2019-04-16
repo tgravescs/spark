@@ -23,7 +23,6 @@ import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 
 import scala.collection.mutable.{HashMap, ListBuffer}
-import scala.runtime.ScalaRunTime._
 import scala.util.{Failure, Success}
 import scala.util.control.NonFatal
 
@@ -73,11 +72,11 @@ private[spark] class CoarseGrainedExecutorBackend(
         }).getOrElse(ResourceDiscoverer.findResources(env.conf, false))
 
         if (gpuResources.get("gpu").isEmpty) {
-          throw new SparkException(s"Executor couldn't find any GPU resources available " +
-            s"and user specified its required in: $GPUS_PER_TASK")
+          throw new SparkException(s"User specified GPU resource for task: $GPUS_PER_TASK," +
+            s" but can't find any GPU resources available on the executor.")
         }
         logInfo(s"Executor ${executorId} using GPU resources: " +
-          s"${stringOf(gpuResources.get("gpu").get.getAddresses())}")
+          s"${(gpuResources.get("gpu").get.getAddresses().mkString(", ")}")
         gpuResources
       } else {
         Map.empty[String, ResourceInformation]

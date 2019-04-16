@@ -24,6 +24,7 @@ import java.nio.file.attribute.PosixFilePermission._
 import java.util.EnumSet
 
 import com.google.common.io.Files
+
 import org.apache.spark._
 import org.apache.spark.internal.config.{DRIVER_GPU_DISCOVERY_SCRIPT, EXECUTOR_GPU_DISCOVERY_SCRIPT}
 
@@ -41,31 +42,29 @@ class ResourceDiscovererSuite extends SparkFunSuite
   test("Resource discoverer multiple gpus") {
     val sparkconf = new SparkConf
 
-    val file1 = File.createTempFile("test", "resourceDiscoverScript1")
-    try {
+    withTempDir { dir =>
+      val file1 = new File(dir, "resourceDiscoverScript1")
       Files.write("echo 0,1", file1, StandardCharsets.UTF_8)
       JavaFiles.setPosixFilePermissions(file1.toPath(),
         EnumSet.of(OWNER_READ, OWNER_EXECUTE, OWNER_WRITE))
       sparkconf.set(EXECUTOR_GPU_DISCOVERY_SCRIPT, file1.getPath())
       val resources = ResourceDiscoverer.findResources(sparkconf, false)
-      val gpuValue = resources.get(ResourceInformation.GPU)
+      val gpuValue = resources.get("gpu")
       assert(gpuValue.nonEmpty, "Should have a gpu entry")
       assert(gpuValue.get.getCount() == 2, "Should have 2")
-      assert(gpuValue.get.getName() == ResourceInformation.GPU, "name should be gpu")
+      assert(gpuValue.get.getName() == "gpu", "name should be gpu")
       assert(gpuValue.get.getUnits() == "", "units should be empty")
       assert(gpuValue.get.getAddresses().size == 2, "Should have 2 indexes")
       assert(gpuValue.get.getAddresses().deep == Array("0", "1").deep, "should have 0,1 entries")
 
-    } finally {
-      JavaFiles.deleteIfExists(file1.toPath())
     }
   }
 
   test("Resource discoverer multiple gpus driver") {
     val sparkconf = new SparkConf
 
-    val file1 = File.createTempFile("test", "resourceDiscoverScript1")
-    try {
+    withTempDir { dir =>
+      val file1 = new File(dir, "resourceDiscoverScript2")
       Files.write("echo 0,1", file1, StandardCharsets.UTF_8)
       JavaFiles.setPosixFilePermissions(file1.toPath(),
         EnumSet.of(OWNER_READ, OWNER_EXECUTE, OWNER_WRITE))
@@ -73,25 +72,22 @@ class ResourceDiscovererSuite extends SparkFunSuite
       sparkconf.set(EXECUTOR_GPU_DISCOVERY_SCRIPT, "boguspath")
       // make sure it reads from correct config, here it should use driver
       val resources = ResourceDiscoverer.findResources(sparkconf, true)
-      val gpuValue = resources.get(ResourceInformation.GPU)
+      val gpuValue = resources.get("gpu")
       assert(gpuValue.nonEmpty, "Should have a gpu entry")
       assert(gpuValue.get.getCount() == 2, "Should have 2")
-      assert(gpuValue.get.getName() == ResourceInformation.GPU, "name should be gpu")
+      assert(gpuValue.get.getName() == "gpu", "name should be gpu")
       assert(gpuValue.get.getUnits() == "", "units should be empty")
       assert(gpuValue.get.getAddresses().size == 2, "Should have 2 indexes")
       assert(gpuValue.get.getAddresses().deep == Array("0", "1").deep, "should have 0,1 entries")
 
-    } finally {
-      JavaFiles.deleteIfExists(file1.toPath())
     }
   }
-
 
   test("Resource discoverer script returns invalid number") {
     val sparkconf = new SparkConf
 
-    val file1 = File.createTempFile("test", "resourceDiscoverScript1")
-    try {
+    withTempDir { dir =>
+      val file1 = new File(dir, "resourceDiscoverScript3")
       Files.write("echo foo1", file1, StandardCharsets.UTF_8)
       JavaFiles.setPosixFilePermissions(file1.toPath(),
         EnumSet.of(OWNER_READ, OWNER_EXECUTE, OWNER_WRITE))
@@ -102,8 +98,6 @@ class ResourceDiscovererSuite extends SparkFunSuite
       }.getMessage()
 
       assert(error.contains("The gpu discover script threw exception"))
-    } finally {
-      JavaFiles.deleteIfExists(file1.toPath())
     }
   }
 

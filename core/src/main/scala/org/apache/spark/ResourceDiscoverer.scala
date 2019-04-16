@@ -19,24 +19,25 @@ package org.apache.spark
 
 import java.io.File
 
-import org.apache.spark.{ResourceInformation, SparkConf, SparkException}
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config._
 import org.apache.spark.util.Utils.executeAndGetOutput
 
 /**
- * Discovers resources (gpu/fpgas/etc) available to an executor. Currently this just
- * knows about gpus but could easily be extended.
+ * Discovers resources (GPUs/FPGAs/etc). Currently this just knows about gpus but
+ * could easily be extended.
  */
 private[spark] object ResourceDiscoverer extends Logging {
+
+  private val GPU = "gpu"
 
   def findResources(sparkconf: SparkConf, isDriver: Boolean): Map[String, ResourceInformation] = {
     val gpus = getGPUResources(sparkconf, isDriver)
     if (gpus.isEmpty) {
       Map()
     } else {
-      Map(ResourceInformation.GPU ->
-        new ResourceInformation(ResourceInformation.GPU, "", gpus.size, gpus))
+      Map(GPU ->
+        new ResourceInformation(GPU, "", gpus.size, gpus))
     }
   }
 
@@ -57,14 +58,15 @@ private[spark] object ResourceDiscoverer extends Logging {
           gpu_ids
         } catch {
           case e @ (_: SparkException | _: NumberFormatException) =>
-            throw new SparkException("The gpu discover script threw exception, assuming no gpu's",
+            throw new SparkException(s"Error running the GPU discovery script: $scriptFile",
               e)
         }
       } else {
-        throw new SparkException(s"Gpu script: $scriptFile to discover gpu's doesn't exist!")
+        throw new SparkException(s"GPU script: $scriptFile to discover GPUs doesn't exist!")
       }
     } else {
-      logWarning("User is expecting to use gpu resources but didn't specify a script to find them!")
+      logWarning(s"User is expecting to use GPU resources but didn't specify a " +
+        s"script via conf: ${discoveryConf.key}, to find them!")
       Array.empty[String]
     }
     result
