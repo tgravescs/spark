@@ -79,8 +79,7 @@ private[spark] abstract class Task[T](
   final def run(
       taskAttemptId: Long,
       attemptNumber: Int,
-      metricsSystem: MetricsSystem,
-      resources: Map[String, ResourceInformation]): T = {
+      metricsSystem: MetricsSystem): T = {
     SparkEnv.get.blockManager.registerTask(taskAttemptId)
     // TODO SPARK-24874 Allow create BarrierTaskContext based on partitions, instead of whether
     // the stage is barrier.
@@ -93,8 +92,7 @@ private[spark] abstract class Task[T](
       taskMemoryManager,
       localProperties,
       metricsSystem,
-      metrics,
-      resources)
+      metrics)
 
     context = if (isBarrier) {
       new BarrierTaskContext(taskContext)
