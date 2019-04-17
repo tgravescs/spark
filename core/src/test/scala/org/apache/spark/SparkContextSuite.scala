@@ -20,9 +20,6 @@ package org.apache.spark
 import java.io.File
 import java.net.{MalformedURLException, URI}
 import java.nio.charset.StandardCharsets
-import java.nio.file.{Files => JavaFiles}
-import java.nio.file.attribute.PosixFilePermission._
-import java.util.EnumSet
 import java.util.concurrent.{CountDownLatch, Semaphore, TimeUnit}
 
 import scala.concurrent.duration._

@@ -24,9 +24,12 @@
 #
 # It can be passed into Spark via the configs spark.executor.resource.gpu.discoveryScript and/or
 # spark.driver.resource.gpu.discoveryScript.
-# The script will return a comma-separated string of the GPU indices available where it was executed.
+# The script will return the format count:unit:comma-separated string of the GPU indices available where it was executed.
 # If used with the executors, Spark will assigned out the indices to tasks based on the config to
 # control the number of GPUs per task. The driver
 #
 #
-nvidia-smi --query-gpu=index --format=csv,noheader | sed 'N;s/\n/,/'
+ADDRS=`nvidia-smi --query-gpu=index --format=csv,noheader | sed 'N;s/\n/,/'`
+COUNT=`echo $ADDRS | tr -cd , | wc -c`
+ALLCOUNT=`expr $COUNT + 1`
+echo $ALLCOUNT::$ADDRS

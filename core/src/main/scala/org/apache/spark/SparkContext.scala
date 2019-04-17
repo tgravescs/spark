@@ -370,7 +370,7 @@ class SparkContext(config: SparkConf) extends Logging {
     if (!_conf.contains("spark.app.name")) {
       throw new SparkException("An application name must be set in your configuration")
     }
-    
+
     _driverLogger = DriverLogger(_conf)
 
     // log out spark.app.name in the Spark driver logs

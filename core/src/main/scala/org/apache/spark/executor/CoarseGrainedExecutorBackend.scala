@@ -22,7 +22,7 @@ import java.nio.ByteBuffer
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 
-import scala.collection.mutable.{HashMap, ListBuffer}
+import scala.collection.mutable.ListBuffer
 import scala.util.{Failure, Success}
 import scala.util.control.NonFatal
 
@@ -46,7 +46,7 @@ private[spark] class CoarseGrainedExecutorBackend(
     cores: Int,
     userClassPath: Seq[URL],
     env: SparkEnv,
-    gpuDevices: Option[String])
+    resourceAddrs: Option[String])
   extends ThreadSafeRpcEndpoint with ExecutorBackend with Logging {
 
   private[this] val stopping = new AtomicBoolean(false)
@@ -63,20 +63,33 @@ private[spark] class CoarseGrainedExecutorBackend(
       // This is a very fast action so we can use "ThreadUtils.sameThread"
       driver = Some(ref)
 
-      val gpuTaskConfPrefix = SPARK_TASK_RESOURCE_PREFIX + "gpu"
-      val resourceInfo = if (env.conf.getAllWithPrefix(gpuTaskConfPrefix).size > 0) {
-        val gpuResources = gpuDevices.map(ids => {
-          val gpuIds = ids.split(",").map(_.trim())
-          Map("gpu" -> new ResourceInformation("gpu", "", gpuIds.size, gpuIds))
+      val taskConfPrefix = SPARK_TASK_RESOURCE_PREFIX
+      val resourceInfo = if (env.conf.getAllWithPrefix(taskConfPrefix).size > 0) {
+        val resources = resourceAddrs.map(resources => {
+          val allResourceTypes = resources.split(';').map(_.trim()).map( resource => {
+            // format here should be: resourceType=count:unit:addr1,addr2,addr3
+            val typeAndValue = resource.split('=').map(_.trim)
+            if (typeAndValue.size < 2) {
+              throw new SparkException("Format of the resourceAddrs parameter is invalid," +
+                " please specify both resource type and the count:unit:addresses: " +
+                "--resourceAddrs <resourceType=count:unit:addr1,addr2,addr3;" +
+                "resourceType2=count:unit:r2addr1,r2addr2,...>")
+            }
+            val resType = typeAndValue(0)
+            // format should be: count:unit:addr1,addr2,addr3
+            val singleResourceInfo = ResourceDiscoverer.parseResourceTypeString(resType, typeAndValue(1))
+            (resType, singleResourceInfo)
+          }).toMap
+          allResourceTypes
         }).getOrElse(ResourceDiscoverer.findResources(env.conf, false))
 
-        if (gpuResources.get("gpu").isEmpty) {
-          throw new SparkException(s"User specified GPU resources per task: $gpuTaskConfPrefix," +
-            s" but can't find any GPU resources available on the executor.")
+        if (resources.size == 0) {
+          throw new SparkException(s"User specified resources per task via: $taskConfPrefix," +
+            s" but can't find any resources available on the executor.")
         }
-        logInfo(s"Executor ${executorId} using GPU resources: " +
-          s"${gpuResources.get("gpu").get.getAddresses().mkString(", ")}")
-        gpuResources
+        logInfo(s"Executor ${executorId} using resources: ${resources.values}")
+        // todo - add logDebug with full output?
+        resources
       } else {
         Map.empty[String, ResourceInformation]
       }
@@ -209,13 +222,13 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
       appId: String,
       workerUrl: Option[String],
       userClassPath: ListBuffer[URL],
-      gpuDevices: Option[String])
+      resourceAddrs: Option[String])
 
   def main(args: Array[String]): Unit = {
     val createFn: (RpcEnv, Arguments, SparkEnv) =>
       CoarseGrainedExecutorBackend = { case (rpcEnv, arguments, env) =>
       new CoarseGrainedExecutorBackend(rpcEnv, arguments.driverUrl, arguments.executorId,
-        arguments.hostname, arguments.cores, arguments.userClassPath, env, arguments.gpuDevices)
+        arguments.hostname, arguments.cores, arguments.userClassPath, env, arguments.resourceAddrs)
     }
     run(parseArguments(args, this.getClass.getCanonicalName.stripSuffix("$")), createFn)
     System.exit(0)
@@ -276,12 +289,7 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
     var executorId: String = null
     var hostname: String = null
     var cores: Int = 0
-    // Specify GPU devices which can be managed by Spark (split by comma).
-    // This is optional, if users specifies a script to auto discover this doesn't need
-    // to be specified.
-    // Number of GPU devices will be reported to the driver to make scheduling decisions.
-    // This is a comma separated list of minor device ids.
-    var gpuDevices: Option[String] = None
+    var resourceAddrs: Option[String] = None
     var appId: String = null
     var workerUrl: Option[String] = None
     val userClassPath = new ListBuffer[URL]()
@@ -301,8 +309,8 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
         case ("--cores") :: value :: tail =>
           cores = value.toInt
           argv = tail
-        case ("--gpu-devices") :: value :: tail =>
-          gpuDevices = Some(value)
+        case ("--resourceAddrs") :: value :: tail =>
+          resourceAddrs = Some(value)
           argv = tail
         case ("--app-id") :: value :: tail =>
           appId = value
@@ -329,7 +337,7 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
     }
 
     Arguments(driverUrl, executorId, hostname, cores, appId, workerUrl,
-      userClassPath, gpuDevices)
+      userClassPath, resourceAddrs)
   }
 
   private def printUsageAndExit(classNameForEntry: String): Unit = {
@@ -343,7 +351,7 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
       |   --executor-id <executorId>
       |   --hostname <hostname>
       |   --cores <cores>
-      |   --gpu-devices <gpuDeviceIds>
+      |   --resourceAddrs <resourceType=count:unit:addr1,addr2,addr3;resourceType2=count:unit:r2addr1,r2addr2,...>
       |   --app-id <appid>
       |   --worker-url <workerUrl>
       |   --user-class-path <url>

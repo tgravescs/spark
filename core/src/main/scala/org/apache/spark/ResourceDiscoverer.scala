@@ -24,32 +24,33 @@ import org.apache.spark.internal.config._
 import org.apache.spark.util.Utils.executeAndGetOutput
 
 /**
- * Discovers resources (GPUs/FPGAs/etc). Currently this just knows about gpus but
- * could easily be extended.
+ * Discovers resources (GPUs/FPGAs/etc).
  * It uses the spark.{driver/executor}.{resourceType}.discoveryScript config
  * to run a user specified script and parse the output into ResourceInformation.
+ * The output of the script is expected to be a String that is in the format of
+ * count:unit:comma-separated list of addresses, where the list of addresses is
+ * specific for that resource type that can be assigned to
+ * either the driver or tasks depending on config it applies to. The user is
+ * responsible for interpreting the address.
  */
 private[spark] object ResourceDiscoverer extends Logging {
 
-  private val GPU = "gpu"
-
   def findResources(sparkconf: SparkConf, isDriver: Boolean): Map[String, ResourceInformation] = {
-    val gpus = getGPUResources(sparkconf, isDriver)
-    if (gpus.isEmpty) {
-      Map()
-    } else {
-      Map(GPU ->
-        new ResourceInformation(GPU, "", gpus.size, gpus))
-    }
-  }
-
-  private def getGPUResources(sparkconf: SparkConf, isDriver: Boolean): Array[String] = {
     val prefix = if (isDriver) {
       SPARK_DRIVER_RESOURCE_PREFIX
     } else {
       SPARK_EXECUTOR_RESOURCE_PREFIX
     }
-    val discoveryConf = prefix + GPU + SPARK_RESOURCE_ADDRESSES_POSTFIX
+    val resourceTypes = sparkconf.getAllWithPrefix(prefix).map(x => x._1.split('.')(0)).toSet
+    resourceTypes.map{ rtype => {
+      val rInfo = getResourceAddrsForType(sparkconf, prefix, rtype)
+      (rtype -> rInfo)
+    }}.toMap
+  }
+
+  private def getResourceAddrsForType(sparkconf: SparkConf,
+        prefix: String, resourceType: String): ResourceInformation = {
+    val discoveryConf = prefix + resourceType + SPARK_RESOURCE_DISCOVERY_SCRIPT_POSTFIX
     val script = sparkconf.getOption(discoveryConf)
     val result = if (script.nonEmpty) {
       val scriptFile = new File(script.get)
@@ -57,25 +58,42 @@ private[spark] object ResourceDiscoverer extends Logging {
       if (scriptFile.exists()) {
         try {
           val output = executeAndGetOutput(Seq(script.get), new File("."))
-          // sanity check output is a comma separate list of ints
-          val gpu_ids = output.split(",").map(_.trim())
-          for (gpu <- gpu_ids) {
-            Integer.parseInt(gpu)
-          }
-          gpu_ids
+          parseResourceTypeString(resourceType, output)
         } catch {
           case e @ (_: SparkException | _: NumberFormatException) =>
-            throw new SparkException(s"Error running the GPU discovery script: $scriptFile",
-              e)
+            throw new SparkException(s"Error running the resource discovery script: $scriptFile" +
+              s" for $resourceType", e)
         }
       } else {
-        throw new SparkException(s"GPU script: $scriptFile to discover GPUs doesn't exist!")
+        throw new SparkException(s"Resource script: $scriptFile to discover $resourceType" +
+          s" doesn't exist!")
       }
     } else {
-      logWarning(s"User is expecting to use GPU resources but didn't specify a " +
-        s"script via conf: ${discoveryConf}, to find them!")
-      Array.empty[String]
+      throw new SparkException(s"User is expecting to use $resourceType resources but " +
+        s"didn't specify a script via conf: $discoveryConf, to find them!")
     }
     result
+  }
+
+  // this parses a resource information string in the format:
+  // count:unit:comma-separated list of addresses
+  // The units and addresses are optional. The idea being if the user has something like
+  // memory you don't have addresses to assign out.
+  def parseResourceTypeString(rtype: String, rInfoStr: String): ResourceInformation = {
+    // format should be: count:unit:addr1,addr2,addr3
+    val singleResourceType = rInfoStr.split(':')
+    if (singleResourceType.size < 3) {
+      throw new SparkException("Format of the resourceAddrs parameter is invalid," +
+        " please specify all of count, unit, and addresses in the format:" +
+        " count:unit:addr1,addr2,addr3")
+    }
+    // format should be: addr1,addr2,addr3
+    val splitAddrs = singleResourceType(2).split(',').map(_.trim())
+    val retAddrs = if (splitAddrs.size == 1 && splitAddrs(0).isEmpty()) {
+      Array.empty[String]
+    } else {
+      splitAddrs
+    }
+    new ResourceInformation(rtype, singleResourceType(1), singleResourceType(0).toLong, retAddrs)
   }
 }
