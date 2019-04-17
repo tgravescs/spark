@@ -338,6 +338,7 @@ private[spark] class TaskSchedulerImpl(
   }
 
   // pass offer in here if we need it for plugin???
+  // taskSet not currently used
   private def checkResourcesSchedulable(taskSet: TaskSetManager, offer: WorkerOffer,
       availWorkerResources: Map[String, SchedulerResourceInformation]): Boolean = {
     // get each resource type
@@ -349,8 +350,7 @@ private[spark] class TaskSchedulerImpl(
       " size is: " + reqResourceTypes.size)
 
     // SPARK internal scheduler will only base it off the counts and known byte units, if
-    // user is trying to use something else they will have to write their own plugin\
-    // We could have a config that specifies which resources we want scheduled on.. TODO??
+    // user is trying to use something else they will have to write their own plugin
     for (rType <- reqResourceTypes) {
       logInfo("rtype is: " + rType)
       val unitsConfig = SPARK_TASK_RESOURCE_PREFIX + rType + ".units"
@@ -393,7 +393,7 @@ private[spark] class TaskSchedulerImpl(
     true
   }
 
-  private def canScheduleTaskToOffer(taskSet: TaskSetManager, availableCpus: Int,
+  private def canScheduleTaskSetToOffer(taskSet: TaskSetManager, availableCpus: Int,
       offer: WorkerOffer,
       availableResources: Map[String, SchedulerResourceInformation]): Boolean = {
 
@@ -421,7 +421,7 @@ private[spark] class TaskSchedulerImpl(
 
       // need to check all resources available against what the taskset wants
 
-      if (canScheduleTaskToOffer(taskSet, availableCpus(i),
+      if (canScheduleTaskSetToOffer(taskSet, availableCpus(i),
           shuffledOffers(i), availableResources(i))) {
         try {
           for (task <- taskSet.resourceOffer(execId, host, maxLocality, availableResources(i))) {
@@ -437,8 +437,11 @@ private[spark] class TaskSchedulerImpl(
             task.resources.map(entry => {
               val rinfo = availableResources(i).get(entry._1).get
               logInfo(" decrementing by " + entry._2.getCount())
-              rinfo.removeAddresses(entry._2.getAddresses())
-              rinfo.decCount(entry._2.getCount())
+              if (entry._2.getAddresses().size > 0) {
+                rinfo.removeAddresses(entry._2.getAddresses())
+              } else {
+                rinfo.decCount(entry._2.getCount())
+              }
             })
             assert(availableCpus(i) >= 0)
             // Only update hosts for a barrier task.

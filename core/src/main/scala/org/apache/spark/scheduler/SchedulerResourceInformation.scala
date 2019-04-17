@@ -62,6 +62,7 @@ private[spark] class SchedulerResourceInformation(
 
   def removeAddresses(addrs: Array[String]): Unit = {
     addresses --= addrs
+    count -= addrs.size
   }
 }
 private[spark] object SchedulerResourceInformation {

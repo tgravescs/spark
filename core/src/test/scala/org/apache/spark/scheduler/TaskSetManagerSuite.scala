@@ -21,14 +21,13 @@ import java.util.{Properties, Random}
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
-
 import org.mockito.ArgumentMatchers.{any, anyBoolean, anyInt, anyString}
 import org.mockito.Mockito._
 import org.mockito.invocation.InvocationOnMock
-
 import org.apache.spark._
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config
+import org.apache.spark.internal.config.SPARK_TASK_RESOURCE_PREFIX
 import org.apache.spark.serializer.SerializerInstance
 import org.apache.spark.storage.BlockManagerId
 import org.apache.spark.util.{AccumulatorV2, ManualClock}
@@ -220,6 +219,65 @@ String, SchedulerResourceInformation])
     manager.handleSuccessfulTask(0, createTaskResult(0, accumUpdates))
     assert(sched.endedTasks(0) === Success)
     assert(sched.finishedManagers.contains(manager))
+  }
+
+  test("TaskSet with available resources") {
+    val conf = new SparkConf().
+      set(SPARK_TASK_RESOURCE_PREFIX + "gpu.count", "2")
+    sc = new SparkContext("local", "test", conf)
+    sched = new FakeTaskScheduler(sc, ("exec1", "host1"))
+    val taskSet = FakeTask.createTaskSet(1)
+    val clock = new ManualClock
+    val manager = new TaskSetManager(sched, taskSet, MAX_TASK_FAILURES, clock = clock)
+    val accumUpdates = taskSet.tasks.head.metrics.internalAccums
+
+    val resources = Map("gpu" ->
+      new SchedulerResourceInformation("gpu", "", 3, ArrayBuffer("1", "2", "3")))
+    val taskOption = manager.resourceOffer("exec1", "host1", NO_PREF, resources)
+    assert(taskOption.isDefined)
+
+    assert(taskOption.get.resources.size === 1)
+    assert(taskOption.get.resources.contains("gpu"))
+    assert(taskOption.get.resources("gpu").getCount() === 2)
+    assert(taskOption.get.resources("gpu").getUnits() === "")
+    assert(taskOption.get.resources("gpu").getAddresses().deep === Array("1", "2"))
+  }
+
+  test("TaskSet with multiple available resources") {
+    val conf = new SparkConf().
+      set(SPARK_TASK_RESOURCE_PREFIX + "gpu.count", "3").
+      set(SPARK_TASK_RESOURCE_PREFIX + "fpga.count", "1").
+      set(SPARK_TASK_RESOURCE_PREFIX + "fizbit.count", "512").
+      set(SPARK_TASK_RESOURCE_PREFIX + "fizbit.unit", "mb")
+    sc = new SparkContext("local", "test", conf)
+    sched = new FakeTaskScheduler(sc, ("exec1", "host1"))
+    val taskSet = FakeTask.createTaskSet(1)
+    val clock = new ManualClock
+    val manager = new TaskSetManager(sched, taskSet, MAX_TASK_FAILURES, clock = clock)
+    val accumUpdates = taskSet.tasks.head.metrics.internalAccums
+
+    val resources = Map(
+      "gpu" ->
+        new SchedulerResourceInformation("gpu", "", 3, ArrayBuffer("1", "2", "3")),
+      "fpga" -> new SchedulerResourceInformation("fpga", "", 1, ArrayBuffer("f1")),
+      "fizbit" ->
+        new SchedulerResourceInformation("fizbit", "mb", 1024, ArrayBuffer.empty[String]))
+    val taskOption = manager.resourceOffer("exec1", "host1", NO_PREF, resources)
+    assert(taskOption.isDefined)
+
+    assert(taskOption.get.resources.size === 3)
+    assert(taskOption.get.resources.contains("gpu"))
+    assert(taskOption.get.resources("gpu").getCount() === 3)
+    assert(taskOption.get.resources("gpu").getUnits() === "")
+    assert(taskOption.get.resources("gpu").getAddresses().deep === Array("1", "2", "3"))
+    assert(taskOption.get.resources.contains("fpga"))
+    assert(taskOption.get.resources("fpga").getCount() === 1)
+    assert(taskOption.get.resources("fpga").getUnits() === "")
+    assert(taskOption.get.resources("fpga").getAddresses().deep === Array("f1"))
+    assert(taskOption.get.resources.contains("fizbit"))
+    assert(taskOption.get.resources("fizbit").getCount() === 512)
+    assert(taskOption.get.resources("fizbit").getUnits() === "mb")
+    assert(taskOption.get.resources("fizbit").getAddresses().size === 0)
   }
 
   test("multiple offers with no preferences") {

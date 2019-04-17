@@ -535,14 +535,15 @@ private[spark] class TaskSetManager(
           s"partition ${task.partitionId}, $taskLocality, ${serializedTask.limit()} bytes)")
 
 
-
-        // TODO - need another plugin point here to allow choosine which addresses
+        // TODO - need another plugin point here to allow choosing which addresses
         val extraSchedulableResources = schedulableResources.
           map(r => {
             val unitsConfig = SPARK_TASK_RESOURCE_PREFIX + r._1 + ".units"
             val countValConfig = SPARK_TASK_RESOURCE_PREFIX + r._1 + ".count"
             val taskNumResourcesReq = conf.get(countValConfig).toLong
-            (r._1 -> new ResourceInformation(r._2.getName(), r._2.getUnits(),
+            val unitsReq = conf.get(unitsConfig, "")
+            // intentionally allow for now addresses as it may not apply to some resources
+            (r._1 -> new ResourceInformation(r._2.getName(), unitsReq,
               taskNumResourcesReq, r._2.takeAddresses(taskNumResourcesReq.toInt).toArray))
 
           })
