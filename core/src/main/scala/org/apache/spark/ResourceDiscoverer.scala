@@ -25,13 +25,11 @@ import org.apache.spark.util.Utils.executeAndGetOutput
 
 /**
  * Discovers resources (GPUs/FPGAs/etc).
- * It uses the spark.{driver/executor}.{resourceType}.discoveryScript config
- * to run a user specified script and parse the output into ResourceInformation.
- * The output of the script is expected to be a String that is in the format of
+ * This class find resources by running and parses the output of the user specified script
+ * from the config spark.{driver/executor}.{resourceType}.discoveryScript.
+ * The output of the script it runs is expected to be a String that is in the format of
  * count:unit:comma-separated list of addresses, where the list of addresses is
- * specific for that resource type that can be assigned to
- * either the driver or tasks depending on config it applies to. The user is
- * responsible for interpreting the address.
+ * specific for that resource type. The user is responsible for interpreting the address.
  */
 private[spark] object ResourceDiscoverer extends Logging {
 
@@ -41,6 +39,7 @@ private[spark] object ResourceDiscoverer extends Logging {
     } else {
       SPARK_EXECUTOR_RESOURCE_PREFIX
     }
+    // get unique resource types
     val resourceTypes = sparkconf.getAllWithPrefix(prefix).map(x => x._1.split('.')(0)).toSet
     resourceTypes.map{ rtype => {
       val rInfo = getResourceAddrsForType(sparkconf, prefix, rtype)

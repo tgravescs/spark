@@ -34,7 +34,6 @@ package object config {
   private[spark] val SPARK_EXECUTOR_RESOURCE_PREFIX = "spark.executor.resource."
   private[spark] val SPARK_TASK_RESOURCE_PREFIX = "spark.task.resource."
 
-  private[spark] val SPARK_RESOURCE_ADDRESSES_POSTFIX = ".addresses"
   private[spark] val SPARK_RESOURCE_COUNT_POSTFIX = ".count"
   private[spark] val SPARK_RESOURCE_DISCOVERY_SCRIPT_POSTFIX = ".discoveryScript"
 

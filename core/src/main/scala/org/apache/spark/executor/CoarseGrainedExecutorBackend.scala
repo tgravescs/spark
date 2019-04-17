@@ -22,7 +22,7 @@ import java.nio.ByteBuffer
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 
-import scala.collection.mutable.ListBuffer
+import scala.collection.mutable
 import scala.util.{Failure, Success}
 import scala.util.control.NonFatal
 
@@ -63,12 +63,16 @@ private[spark] class CoarseGrainedExecutorBackend(
       // This is a very fast action so we can use "ThreadUtils.sameThread"
       driver = Some(ref)
 
+      // only parse the resources if a task requires them
       val taskConfPrefix = SPARK_TASK_RESOURCE_PREFIX
       val resourceInfo = if (env.conf.getAllWithPrefix(taskConfPrefix).size > 0) {
-        val resources = resourceAddrs.map(resources => {
-          val allResourceTypes = resources.split(';').map(_.trim()).map( resource => {
+        val resources = resourceAddrs.map(resourceStr => {
+          // format here would be:
+          // resourceType=count:unit:addr1,addr2,addr3;resourceType2=count:unit:r2addr1,r2addr2,
+          // first separate out resource types
+          val allResourceTypes = resourceStr.split(';').map(_.trim()).map( eachResource => {
             // format here should be: resourceType=count:unit:addr1,addr2,addr3
-            val typeAndValue = resource.split('=').map(_.trim)
+            val typeAndValue = eachResource.split('=').map(_.trim)
             if (typeAndValue.size < 2) {
               throw new SparkException("Format of the resourceAddrs parameter is invalid," +
                 " please specify both resource type and the count:unit:addresses: " +
@@ -221,7 +225,7 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
       cores: Int,
       appId: String,
       workerUrl: Option[String],
-      userClassPath: ListBuffer[URL],
+      userClassPath: mutable.ListBuffer[URL],
       resourceAddrs: Option[String])
 
   def main(args: Array[String]): Unit = {
@@ -292,7 +296,7 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
     var resourceAddrs: Option[String] = None
     var appId: String = null
     var workerUrl: Option[String] = None
-    val userClassPath = new ListBuffer[URL]()
+    val userClassPath = new mutable.ListBuffer[URL]()
 
     var argv = args.toList
     while (!argv.isEmpty) {

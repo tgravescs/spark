@@ -22,7 +22,9 @@ import org.apache.spark.annotation.Evolving
 /**
  * Class to hold information about a type of Resource. A resource could be a GPU, FPGA, etc.
  * The array of addresses are resource specific and its up to the user to interpret the address.
- * For instance, for GPUs the addresses would be the indices of the GPUs, the count would be the
+ * The units and addresses could be empty if they doesn't apply to that resource.
+ *
+ * One example is GPUs, where the addresses would be the indices of the GPUs, the count would be the
  * number of GPUs and the units would be an empty string.
  *
  * @param name the name of the resource

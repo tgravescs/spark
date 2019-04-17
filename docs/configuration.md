@@ -152,13 +152,6 @@ of the most common options to set are:
   </td>
 </tr>
 <tr>
-  <td><code>spark.driver.resource.{resourceType}.count</code></td>
-  <td>0</td>
-  <td>
-    Number of a particular resource type to use for the driver process, only in cluster mode.
-  </td>
-</tr>
-<tr>
   <td><code>spark.driver.maxResultSize</code></td>
   <td>1g</td>
   <td>
@@ -232,7 +225,10 @@ of the most common options to set are:
  <td><code>spark.executor.resource.{resourceType}.count</code></td>
   <td>0</td>
   <td>
-        The number of a particular resource type to use on each executor.
+    The number of a particular resource type to use per executor process.
+    If this is used, you must also specify the
+    <code>spark.executor.resource.{resourceType}.discoveryScript</code>
+    for the executor to find the resource on startup.
   </td>
 </tr>
 <tr>
@@ -240,10 +236,10 @@ of the most common options to set are:
   <td>None</td>
   <td>
     The script the executor should run to discover a particular resource type. This should
-    return a comma-separated list of GPU index's for the task to use.
+    return a string in the format of: count:unit:comma-separated list of addresses.
+    unit and addresses can be empty if they don't apply to the resource type.
   </td>
 </tr>
-
 <tr>
   <td><code>spark.extraListeners</code></td>
   <td>(none)</td>
@@ -1820,7 +1816,9 @@ Apart from these, the following properties are also available, and may be useful
   <td><code>spark.task.resource.{resourceType}.count</code></td>
   <td>1</td>
   <td>
-    Number of a particular resource type to allocate for each task.
+    Number of a particular resource type to allocate for each task. If this is specified
+    you must also provide the executor config <code>spark.executor.resource.{resourceType}.count</code>
+    and any corresponding discovery configs so that your executors are created with that resource type.
   </td>
 </tr>
 <tr>
