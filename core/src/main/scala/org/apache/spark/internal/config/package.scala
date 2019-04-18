@@ -218,6 +218,7 @@ package object config {
         " in the executor configs, the scheduler will assign them. By default it uses just" +
         " cpu cores.")
       .stringConf
+      .toSequence
       .createOptional
 
   private[spark] val EXECUTOR_MEMORY = ConfigBuilder(SparkLauncher.EXECUTOR_MEMORY)

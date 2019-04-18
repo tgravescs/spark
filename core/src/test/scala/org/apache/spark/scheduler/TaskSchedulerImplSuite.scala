@@ -227,7 +227,7 @@ class TaskSchedulerImplSuite extends SparkFunSuite with LocalSparkContext with B
       config.EXECUTOR_GPUS.key -> executorGpus.toString,
       config.EXECUTOR_CORES.key -> executorCpus.toString,
       config.SPARK_EXECUTOR_RESOURCE_PREFIX + "fpga.count" -> executorFpgas.toString,
-      config.SCHEDULER_RESOURCE_TYPES.key -> "gpu, fpga")
+      config.SCHEDULER_RESOURCE_TYPES.key -> "gpu,fpga")
 
     // Give zero core offers. Should not generate any tasks
     val taskSet = FakeTask.createTaskSet(3)

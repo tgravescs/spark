@@ -469,7 +469,7 @@ private[spark] class TaskSetManager(
       execId: String,
       host: String,
       maxLocality: TaskLocality.TaskLocality,
-      schedulableResources: Map[String, SchedulerResourceInformation])
+      taskResourceAssignments: Map[String, ResourceInformation])
         : Option[TaskDescription] =
   {
     val offerBlacklisted = taskSetBlacklistHelperOpt.exists { blacklist =>
@@ -536,7 +536,7 @@ private[spark] class TaskSetManager(
 
 
         // TODO - need another plugin point here to allow choosing which addresses
-        val extraSchedulableResources = schedulableResources.
+       /* val extraSchedulableResources = schedulableResources.
           map(r => {
             val unitsConfig = SPARK_TASK_RESOURCE_PREFIX + r._1 + ".units"
             val countValConfig = SPARK_TASK_RESOURCE_PREFIX + r._1 + ".count"
@@ -544,9 +544,8 @@ private[spark] class TaskSetManager(
             val unitsReq = conf.get(unitsConfig, "")
             // intentionally allow for now addresses as it may not apply to some resources
             (r._1 -> new ResourceInformation(r._2.getName(), unitsReq,
-              taskNumResourcesReq, r._2.takeAddresses(taskNumResourcesReq.toInt).toArray))
-
-          })
+              taskNumResourcesReq, r._2.takeAddresses(taskNumResourcesReq.toInt).toArray))\
+          }) */
 
         sched.dagScheduler.taskStarted(task, info)
 
@@ -560,7 +559,7 @@ private[spark] class TaskSetManager(
           addedFiles,
           addedJars,
           task.localProperties,
-          extraSchedulableResources,
+          taskResourceAssignments,
           serializedTask)
       }
     } else {

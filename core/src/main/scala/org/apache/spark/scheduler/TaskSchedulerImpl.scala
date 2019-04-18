@@ -24,6 +24,7 @@ import java.util.concurrent.atomic.AtomicLong
 
 import scala.collection.mutable.{ArrayBuffer, BitSet, HashMap, HashSet}
 import scala.util.Random
+
 import org.apache.spark._
 import org.apache.spark.TaskState.TaskState
 import org.apache.spark.executor.ExecutorMetrics
@@ -340,13 +341,14 @@ private[spark] class TaskSchedulerImpl(
   // pass offer in here if we need it for plugin???
   // taskSet not currently used
   private def checkResourcesSchedulable(taskSet: TaskSetManager, offer: WorkerOffer,
-      availWorkerResources: Map[String, SchedulerResourceInformation]): Boolean = {
+      availWorkerResources: Map[String, SchedulerResourceInformation],
+      taskResourceAssignments: HashMap[String, ResourceInformation]): Boolean = {
     // get each resource type
     val reqResourceTypes = conf.get(SCHEDULER_RESOURCE_TYPES) match {
-      case Some(x) => x.split(',').map(_.trim)
-      case None => Array.empty[String]
+      case Some(x) => x
+      case None => Seq.empty[String]
     }
-    logInfo("required resource types include: " + reqResourceTypes.deep.toString() +
+    logInfo("required resource types include: " + reqResourceTypes.toString() +
       " size is: " + reqResourceTypes.size)
 
     // SPARK internal scheduler will only base it off the counts and known byte units, if
@@ -375,11 +377,16 @@ private[spark] class TaskSchedulerImpl(
           countVal.toLong
         }
         logInfo(s"type is: $rType, count is: $countRequired")
-        val workerAv = availWorkerResources.get(rType).get.getCount()
+        val rInfo = availWorkerResources.get(rType).get
+        val workerAv = rInfo.getCount()
         logInfo(s"available type is: $rType, count is: $workerAv")
 
 
         val offerSatisfies = availWorkerResources.get(rType).count(_.getCount() >= countRequired)
+        // choose specific resources to give to next task
+
+        taskResourceAssignments.put(rType, new ResourceInformation(rType, unitsConfig,
+          countValConfig.toLong, rInfo.takeAddresses(countRequired.toInt).toArray))
 
         if (offerSatisfies > 0) {
           logInfo(s"good to go for $rType")
@@ -395,9 +402,11 @@ private[spark] class TaskSchedulerImpl(
 
   private def canScheduleTaskSetToOffer(taskSet: TaskSetManager, availableCpus: Int,
       offer: WorkerOffer,
-      availableResources: Map[String, SchedulerResourceInformation]): Boolean = {
+      availableResources: Map[String, SchedulerResourceInformation],
+      taskResourceAssignments: HashMap[String, ResourceInformation]): Boolean = {
 
-    val resourcesSchedulable = checkResourcesSchedulable(taskSet, offer, availableResources)
+    val resourcesSchedulable = checkResourcesSchedulable(taskSet, offer,
+      availableResources, taskResourceAssignments)
     availableCpus >= CPUS_PER_TASK && resourcesSchedulable
   }
 
@@ -421,10 +430,12 @@ private[spark] class TaskSchedulerImpl(
 
       // need to check all resources available against what the taskset wants
 
+      val taskResourceAssignments = HashMap[String, ResourceInformation]()
       if (canScheduleTaskSetToOffer(taskSet, availableCpus(i),
-          shuffledOffers(i), availableResources(i))) {
+          shuffledOffers(i), availableResources(i), taskResourceAssignments)) {
         try {
-          for (task <- taskSet.resourceOffer(execId, host, maxLocality, availableResources(i))) {
+          for (task <- taskSet.resourceOffer(execId, host, maxLocality,
+              taskResourceAssignments.toMap)) {
             tasks(i) += task
             val tid = task.taskId
             taskIdToTaskSetManager.put(tid, taskSet)
@@ -512,8 +523,8 @@ private[spark] class TaskSchedulerImpl(
     // val availableGpuIndices = gpuResources.map(_.getAddresses())
 
     val reqResourceTypes = conf.get(SCHEDULER_RESOURCE_TYPES) match {
-      case Some(x) => x.split(',').map(_.trim)
-      case None => Array.empty[String]
+      case Some(x) => x
+      case None => Seq.empty[String]
     }
     val availableResources = shuffledOffers.map(o => {
       o.resources.filterKeys(reqResourceTypes.contains(_))
