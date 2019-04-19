@@ -17,15 +17,21 @@
 
 package org.apache.spark.executor
 
+import java.io.{BufferedInputStream, FileInputStream}
 import java.net.URL
 import java.nio.ByteBuffer
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 
-import scala.collection.mutable.{HashMap, ListBuffer}
-import scala.runtime.ScalaRunTime._
+import scala.collection.mutable
 import scala.util.{Failure, Success}
 import scala.util.control.NonFatal
+
+import com.fasterxml.jackson.databind.exc.MismatchedInputException
+import org.json4s.DefaultFormats
+import org.json4s.JsonAST.JArray
+import org.json4s.MappingException
+import org.json4s.jackson.JsonMethods._
 
 import org.apache.spark._
 import org.apache.spark.TaskState.TaskState
@@ -47,8 +53,12 @@ private[spark] class CoarseGrainedExecutorBackend(
     cores: Int,
     userClassPath: Seq[URL],
     env: SparkEnv,
-    gpuDevices: Option[String])
+    resourcesFile: Option[String])
   extends ThreadSafeRpcEndpoint with ExecutorBackend with Logging {
+
+  private implicit val formats = DefaultFormats
+
+  private[this] val taskResources = new mutable.HashMap[Long, Map[String, ResourceInformation]]
 
   private[this] val stopping = new AtomicBoolean(false)
   var executor: Executor = null
@@ -58,32 +68,13 @@ private[spark] class CoarseGrainedExecutorBackend(
   // to be changed so that we don't share the serializer instance across threads
   private[this] val ser: SerializerInstance = env.closureSerializer.newInstance()
 
-  private[this] val taskResources = new HashMap[Long, Map[String, ResourceInformation]]
-
   override def onStart() {
     logInfo("Connecting to driver: " + driverUrl)
     rpcEnv.asyncSetupEndpointRefByURI(driverUrl).flatMap { ref =>
       // This is a very fast action so we can use "ThreadUtils.sameThread"
       driver = Some(ref)
-
-      val resourceInfo = if (env.conf.get(GPUS_PER_TASK) > 0) {
-        val gpuResources = gpuDevices.map(ids => {
-          val gpuIds = ids.split(",").map(_.trim())
-          Map("gpu" -> new ResourceInformation("gpu", "", gpuIds.size, gpuIds))
-        }).getOrElse(ResourceDiscoverer.findResources(env.conf, false))
-
-        if (gpuResources.get("gpu").isEmpty) {
-          throw new SparkException(s"Executor couldn't find any GPU resources available " +
-            s"and user specified its required in: $GPUS_PER_TASK")
-        }
-        logInfo(s"Executor ${executorId} using GPU resources: " +
-          s"${stringOf(gpuResources.get("gpu").get.getAddresses())}")
-        gpuResources
-      } else {
-        Map.empty[String, ResourceInformation]
-      }
       ref.ask[Boolean](RegisterExecutor(executorId, self, hostname, cores, extractLogUrls,
-        extractAttributes, resourceInfo))
+        extractAttributes, parseResources(resourcesFile)))
     }(ThreadUtils.sameThread).onComplete {
       // This is a very fast action so we can use "ThreadUtils.sameThread"
       case Success(msg) =>
@@ -91,6 +82,46 @@ private[spark] class CoarseGrainedExecutorBackend(
       case Failure(e) =>
         exitExecutor(1, s"Cannot register with driver: $driverUrl", e, notifyDriver = false)
     }(ThreadUtils.sameThread)
+  }
+
+  // visible for testing
+  def parseResources(resourcesFile: Option[String]): Map[String, ResourceInformation] = {
+    // only parse the resources if a task requires them
+    val taskConfPrefix = SPARK_TASK_RESOURCE_PREFIX
+    val resourceInfo = if (env.conf.getAllWithPrefix(taskConfPrefix).size > 0) {
+      val resources = resourcesFile.map(resourceFileStr => {
+        val source = new BufferedInputStream(new FileInputStream(resourceFileStr))
+        val resourceMap = try {
+          val parsedJson = parse(source).asInstanceOf[JArray].arr
+          parsedJson.map(_.extract[ResourceInformation]).map(x => (x.getName() -> x)).toMap
+        } catch {
+          case e @ (_: MappingException | _: MismatchedInputException | _: ClassCastException) =>
+            throw new SparkException(
+              s"Exception parsing the resources passed in: $resourcesFile", e)
+        } finally {
+          source.close()
+        }
+        resourceMap
+      }).getOrElse(ResourceDiscoverer.findResources(env.conf, false))
+
+      if (resources.size == 0) {
+        throw new SparkException(s"User specified resources per task via: $taskConfPrefix," +
+          s" but can't find any resources available on the executor.")
+      }
+      logInfo(s"Executor ${executorId} using resources: ${resources.keys}")
+      if (log.isDebugEnabled) {
+        logDebug("===============================================================================")
+        logDebug("Executor Resources:")
+        resources.foreach{ case (k, v) =>
+          logDebug(s"$k -> [name: ${v.getName}, units: ${v.getUnits}, count: ${v.getCount}," +
+            s" addresses: ${v.getAddresses().deep}]")}
+        logDebug("===============================================================================")
+      }
+      resources
+    } else {
+      Map.empty[String, ResourceInformation]
+    }
+    resourceInfo
   }
 
   def extractLogUrls: Map[String, String] = {
@@ -176,6 +207,7 @@ private[spark] class CoarseGrainedExecutorBackend(
     if (TaskState.isFinished(state)) {
       taskResources.remove(taskId)
     }
+
     driver match {
       case Some(driverRef) => driverRef.send(msg)
       case None => logWarning(s"Drop $msg because has not yet connected to driver")
@@ -215,14 +247,14 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
       cores: Int,
       appId: String,
       workerUrl: Option[String],
-      userClassPath: ListBuffer[URL],
-      gpuDevices: Option[String])
+      userClassPath: mutable.ListBuffer[URL],
+      resourcesFile: Option[String])
 
   def main(args: Array[String]): Unit = {
     val createFn: (RpcEnv, Arguments, SparkEnv) =>
       CoarseGrainedExecutorBackend = { case (rpcEnv, arguments, env) =>
       new CoarseGrainedExecutorBackend(rpcEnv, arguments.driverUrl, arguments.executorId,
-        arguments.hostname, arguments.cores, arguments.userClassPath, env, arguments.gpuDevices)
+        arguments.hostname, arguments.cores, arguments.userClassPath, env, arguments.resourcesFile)
     }
     run(parseArguments(args, this.getClass.getCanonicalName.stripSuffix("$")), createFn)
     System.exit(0)
@@ -283,15 +315,10 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
     var executorId: String = null
     var hostname: String = null
     var cores: Int = 0
-    // Specify GPU devices which can be managed by Spark (split by comma).
-    // This is optional, if users specifies a script to auto discover this doesn't need
-    // to be specified.
-    // Number of GPU devices will be reported to the driver to make scheduling decisions.
-    // This is a comma separated list of minor device ids.
-    var gpuDevices: Option[String] = None
+    var resourcesFile: Option[String] = None
     var appId: String = null
     var workerUrl: Option[String] = None
-    val userClassPath = new ListBuffer[URL]()
+    val userClassPath = new mutable.ListBuffer[URL]()
 
     var argv = args.toList
     while (!argv.isEmpty) {
@@ -308,8 +335,8 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
         case ("--cores") :: value :: tail =>
           cores = value.toInt
           argv = tail
-        case ("--gpu-devices") :: value :: tail =>
-          gpuDevices = Some(value)
+        case ("--resourcesFile") :: value :: tail =>
+          resourcesFile = Some(value)
           argv = tail
         case ("--app-id") :: value :: tail =>
           appId = value
@@ -336,7 +363,7 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
     }
 
     Arguments(driverUrl, executorId, hostname, cores, appId, workerUrl,
-      userClassPath, gpuDevices)
+      userClassPath, resourcesFile)
   }
 
   private def printUsageAndExit(classNameForEntry: String): Unit = {
@@ -350,7 +377,7 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
       |   --executor-id <executorId>
       |   --hostname <hostname>
       |   --cores <cores>
-      |   --gpu-devices <gpuDeviceIds>
+      |   --resourcesFile <fileWithJSONResourceInformation>
       |   --app-id <appid>
       |   --worker-url <workerUrl>
       |   --user-class-path <url>

@@ -96,6 +96,37 @@ private[spark] class TaskSchedulerImpl(
   // GPUs to request per task
   val GPUS_PER_TASK = conf.get(config.GPUS_PER_TASK)
 
+  val reqResourceTypes = conf.get(SCHEDULER_RESOURCE_TYPES) match {
+    case Some(x) => x
+    case None => Seq.empty[String]
+  }
+
+  case class TaskResourceRequirements(count: Long, units: Option[String])
+
+  val taskResourceRequirements = reqResourceTypes.map { rType =>
+    val unitsConfig = SPARK_TASK_RESOURCE_PREFIX + rType + SPARK_RESOURCE_UNITS_POSTFIX
+    val countValConfig = SPARK_TASK_RESOURCE_PREFIX + rType + SPARK_RESOURCE_COUNT_POSTFIX
+    val countVal = conf.getOption(countValConfig).
+      getOrElse(throw new SparkException(s"Expected a count config for resource type: $rType"))
+    val taskR = conf.getOption(unitsConfig).map{ units =>
+      val unitReqs = try {
+        val bytes = Utils.byteStringAsBytes(countVal + units)
+        // do we really want to always make bytes?
+        TaskResourceRequirements(bytes, Some("b"))
+      } catch {
+        case e: NumberFormatException =>
+          // Ignore units not of byte types and just use count
+          logWarning(s"Illegal resource unit type, spark only" +
+            s" supports conversion of byte types, config: $unitsConfig, units: $units for" +
+            s" scheduling, ignoring the type and using the raw count.", e)
+          TaskResourceRequirements(countVal.toLong, None)
+      }
+      unitReqs
+    }.getOrElse(TaskResourceRequirements(countVal.toLong, None))
+    (rType -> taskR)
+  }.toMap
+
+
   // TaskSetManagers are not thread safe, so any access to one should be synchronized
   // on this class.  Protected by `this`
   private val taskSetsByStageIdAndAttempt = new HashMap[Int, HashMap[Int, TaskSetManager]]
@@ -340,63 +371,56 @@ private[spark] class TaskSchedulerImpl(
 
   // pass offer in here if we need it for plugin???
   // taskSet not currently used
-  private def checkResourcesSchedulable(taskSet: TaskSetManager, offer: WorkerOffer,
+  // visible for testing
+  def checkResourcesSchedulable(taskSet: TaskSetManager, offer: WorkerOffer,
       availWorkerResources: Map[String, SchedulerResourceInformation],
       taskResourceAssignments: HashMap[String, ResourceInformation]): Boolean = {
-    // get each resource type
-    val reqResourceTypes = conf.get(SCHEDULER_RESOURCE_TYPES) match {
-      case Some(x) => x
-      case None => Seq.empty[String]
-    }
-    logInfo("required resource types include: " + reqResourceTypes.toString() +
-      " size is: " + reqResourceTypes.size)
 
+    val localTaskReqAssign = HashMap[String, ResourceInformation]()
     // SPARK internal scheduler will only base it off the counts and known byte units, if
     // user is trying to use something else they will have to write their own plugin
     for (rType <- reqResourceTypes) {
-      logInfo("rtype is: " + rType)
-      val unitsConfig = SPARK_TASK_RESOURCE_PREFIX + rType + ".units"
-      val countValConfig = SPARK_TASK_RESOURCE_PREFIX + rType + ".count"
-      if (conf.getOption(countValConfig).nonEmpty) {
-        val countVal = conf.get(countValConfig)
-        val countRequired = if (conf.getOption(unitsConfig).nonEmpty) {
-          val units = conf.get(unitsConfig)
-          val resCount = if (!units.isEmpty) {
-            try {
-              Utils.byteStringAsBytes(countVal + units)
-            } catch {
-              case e: NumberFormatException =>
-                throw new SparkException(s"Illegal resource unit type, spark only" +
-                  s"supports conversion of byte types, config: $unitsConfig, units: $units")
-            }
-          } else {
-            countVal.toLong
+      // don't need to error check here as did when taskResourceRequirements built
+      val resourceReqs = taskResourceRequirements.get(rType).get
+      val actualCount = resourceReqs.count
+
+      val rInfo = availWorkerResources.get(rType).get
+      val workerAv = rInfo.getCount()
+      logInfo(s"available type is: $rType, count is: $workerAv")
+
+      val offerSatisfies = availWorkerResources.get(rType).map( r => {
+        val unit = r.getUnits()
+        val availCount = if (!unit.isEmpty) {
+          try {
+            logInfo(" units are: " + unit)
+            Utils.byteStringAsBytes(r.getCount().toString + unit)
+          } catch {
+            case e: NumberFormatException =>
+              // Ignore units not of byte types and just use count
+              logWarning(s"Illegal resource unit type, spark only" +
+                s" supports conversion of byte types, units: $resourceReqs.units for" +
+                s" scheduling, ignoring the type and using the raw count.", e)
+              r.getCount()
           }
-          resCount
         } else {
-          countVal.toLong
+          availWorkerResources.get(rType).get.getCount()
         }
-        logInfo(s"type is: $rType, count is: $countRequired")
-        val rInfo = availWorkerResources.get(rType).get
-        val workerAv = rInfo.getCount()
-        logInfo(s"available type is: $rType, count is: $workerAv")
 
+        availCount >= actualCount
+      }).reduceLeft(_ && _)
 
-        val offerSatisfies = availWorkerResources.get(rType).count(_.getCount() >= countRequired)
-        // choose specific resources to give to next task
-
-        taskResourceAssignments.put(rType, new ResourceInformation(rType, unitsConfig,
-          countValConfig.toLong, rInfo.takeAddresses(countRequired.toInt).toArray))
-
-        if (offerSatisfies > 0) {
-          logInfo(s"good to go for $rType")
-        } else {
-          return false
-        }
+      // choose specific resources to give to next task
+      if (offerSatisfies) {
+        logInfo(s"good to go for $rType")
+        // TODO - do we want to try to take addresses if have units??
+        localTaskReqAssign.put(rType, new ResourceInformation(rType,
+          resourceReqs.units.getOrElse(""), actualCount,
+          rInfo.takeAddresses(actualCount.toInt).toArray))
       } else {
-        throw new SparkException(s"Expected a count config for resource type: $rType")
+        return false
       }
     }
+    taskResourceAssignments ++= localTaskReqAssign
     true
   }
 

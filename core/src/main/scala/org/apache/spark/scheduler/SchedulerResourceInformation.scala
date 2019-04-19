@@ -67,5 +67,5 @@ private[spark] class SchedulerResourceInformation(
 }
 private[spark] object SchedulerResourceInformation {
   def empty: SchedulerResourceInformation = new SchedulerResourceInformation(
-    ResourceInformation.GPU, "", 0, ArrayBuffer.empty[String])
+    "", "", 0, ArrayBuffer.empty[String])
 }

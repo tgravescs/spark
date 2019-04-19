@@ -21,9 +21,11 @@ import java.util.{Properties, Random}
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
+
 import org.mockito.ArgumentMatchers.{any, anyBoolean, anyInt, anyString}
 import org.mockito.Mockito._
 import org.mockito.invocation.InvocationOnMock
+
 import org.apache.spark._
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config
@@ -211,7 +213,7 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg
     // we should get a nopref task immediately since that's what we only have
     val taskOption = manager.resourceOffer("exec1", "host1", NO_PREF,
       Map.empty[
-String, SchedulerResourceInformation])
+String, ResourceInformation])
     assert(taskOption.isDefined)
 
     clock.advance(1)
@@ -232,7 +234,7 @@ String, SchedulerResourceInformation])
     val accumUpdates = taskSet.tasks.head.metrics.internalAccums
 
     val resources = Map("gpu" ->
-      new SchedulerResourceInformation("gpu", "", 3, ArrayBuffer("1", "2", "3")))
+      new ResourceInformation("gpu", "", 3, Array("1", "2", "3")))
     val taskOption = manager.resourceOffer("exec1", "host1", NO_PREF, resources)
     assert(taskOption.isDefined)
 
@@ -258,10 +260,10 @@ String, SchedulerResourceInformation])
 
     val resources = Map(
       "gpu" ->
-        new SchedulerResourceInformation("gpu", "", 3, ArrayBuffer("1", "2", "3")),
-      "fpga" -> new SchedulerResourceInformation("fpga", "", 1, ArrayBuffer("f1")),
+        new ResourceInformation("gpu", "", 3, Array("1", "2", "3")),
+      "fpga" -> new ResourceInformation("fpga", "", 1, Array("f1")),
       "fizbit" ->
-        new SchedulerResourceInformation("fizbit", "mb", 1024, ArrayBuffer.empty[String]))
+        new ResourceInformation("fizbit", "mb", 1024, Array.empty[String]))
     val taskOption = manager.resourceOffer("exec1", "host1", NO_PREF, resources)
     assert(taskOption.isDefined)
 
@@ -292,7 +294,7 @@ String, SchedulerResourceInformation])
     // First three offers should all find tasks
     for (i <- 0 until 3) {
       val taskOption = manager.resourceOffer("exec1", "host1", NO_PREF,
-        Map.empty[String, SchedulerResourceInformation])
+        Map.empty[String, ResourceInformation])
       assert(taskOption.isDefined)
       val task = taskOption.get
       assert(task.executorId === "exec1")
@@ -301,7 +303,7 @@ String, SchedulerResourceInformation])
 
     // Re-offer the host -- now we should get no more tasks
     assert(manager.resourceOffer("exec1", "host1", NO_PREF,
-      Map.empty[String, SchedulerResourceInformation]) === None)
+      Map.empty[String, ResourceInformation]) === None)
 
     // Finish the first two tasks
     manager.handleSuccessfulTask(0, createTaskResult(0, accumUpdatesByTask(0)))
@@ -325,13 +327,13 @@ String, SchedulerResourceInformation])
 
     // An executor that is not NODE_LOCAL should be rejected.
     assert(manager.resourceOffer("execC", "host2", ANY,
-      Map.empty[String, SchedulerResourceInformation]) === None)
+      Map.empty[String, ResourceInformation]) === None)
 
     // Because there are no alive PROCESS_LOCAL executors, the base locality level should be
     // NODE_LOCAL. So, we should schedule the task on this offered NODE_LOCAL executor before
     // any of the locality wait timers expire.
     assert(manager.resourceOffer("execA", "host1", ANY,
-      Map.empty[String, SchedulerResourceInformation]).get.index === 0)
+      Map.empty[String, ResourceInformation]).get.index === 0)
   }
 
   test("basic delay scheduling") {
@@ -347,27 +349,27 @@ String, SchedulerResourceInformation])
     val manager = new TaskSetManager(sched, taskSet, MAX_TASK_FAILURES, clock = clock)
     // First offer host1, exec1: first task should be chosen
     assert(manager.resourceOffer("exec1", "host1", ANY,
-      Map.empty[String, SchedulerResourceInformation]).get.index === 0)
+      Map.empty[String, ResourceInformation]).get.index === 0)
     assert(manager.resourceOffer("exec1", "host1", PROCESS_LOCAL,
-      Map.empty[String, SchedulerResourceInformation]) == None)
+      Map.empty[String, ResourceInformation]) == None)
 
     clock.advance(LOCALITY_WAIT_MS)
     // Offer host1, exec1 again, at NODE_LOCAL level: the node local (task 3) should
     // get chosen before the noPref task
     assert(manager.resourceOffer("exec1", "host1", NODE_LOCAL,
-      Map.empty[String, SchedulerResourceInformation]).get.index == 2)
+      Map.empty[String, ResourceInformation]).get.index == 2)
 
     // Offer host2, exec2, at NODE_LOCAL level: we should choose task 2
     assert(manager.resourceOffer("exec2", "host2", NODE_LOCAL,
-      Map.empty[String, SchedulerResourceInformation]).get.index == 1)
+      Map.empty[String, ResourceInformation]).get.index == 1)
 
     // Offer host2, exec2 again, at NODE_LOCAL level: we should get noPref task
     // after failing to find a node_Local task
     assert(manager.resourceOffer("exec2", "host2", NODE_LOCAL,
-      Map.empty[String, SchedulerResourceInformation]) == None)
+      Map.empty[String, ResourceInformation]) == None)
     clock.advance(LOCALITY_WAIT_MS)
     assert(manager.resourceOffer("exec2", "host2", NO_PREF,
-      Map.empty[String, SchedulerResourceInformation]).get.index == 3)
+      Map.empty[String, ResourceInformation]).get.index == 3)
   }
 
   test("we do not need to delay scheduling when we only have noPref tasks in the queue") {
@@ -382,13 +384,13 @@ String, SchedulerResourceInformation])
     val manager = new TaskSetManager(sched, taskSet, MAX_TASK_FAILURES, clock = clock)
     // First offer host1, exec1: first task should be chosen
     assert(manager.resourceOffer("exec1", "host1", PROCESS_LOCAL,
-      Map.empty[String, SchedulerResourceInformation]).get.index === 0)
+      Map.empty[String, ResourceInformation]).get.index === 0)
     assert(manager.resourceOffer("exec3", "host2", PROCESS_LOCAL,
-      Map.empty[String, SchedulerResourceInformation]).get.index === 1)
+      Map.empty[String, ResourceInformation]).get.index === 1)
     assert(manager.resourceOffer("exec3", "host2", NODE_LOCAL,
-      Map.empty[String, SchedulerResourceInformation]) == None)
+      Map.empty[String, ResourceInformation]) == None)
     assert(manager.resourceOffer("exec3", "host2", NO_PREF,
-      Map.empty[String, SchedulerResourceInformation]).get.index === 2)
+      Map.empty[String, ResourceInformation]).get.index === 2)
   }
 
   test("delay scheduling with fallback") {
@@ -407,35 +409,35 @@ String, SchedulerResourceInformation])
 
     // First offer host1: first task should be chosen
     assert(manager.resourceOffer("exec1", "host1", ANY,
-      Map.empty[String, SchedulerResourceInformation]).get.index === 0)
+      Map.empty[String, ResourceInformation]).get.index === 0)
 
     // Offer host1 again: nothing should get chosen
     assert(manager.resourceOffer("exec1", "host1", ANY,
-      Map.empty[String, SchedulerResourceInformation]) === None)
+      Map.empty[String, ResourceInformation]) === None)
 
     clock.advance(LOCALITY_WAIT_MS)
 
     // Offer host1 again: second task (on host2) should get chosen
     assert(manager.resourceOffer("exec1", "host1", ANY,
-      Map.empty[String, SchedulerResourceInformation]).get.index === 1)
+      Map.empty[String, ResourceInformation]).get.index === 1)
 
     // Offer host1 again: third task (on host2) should get chosen
     assert(manager.resourceOffer("exec1", "host1", ANY,
-      Map.empty[String, SchedulerResourceInformation]).get.index === 2)
+      Map.empty[String, ResourceInformation]).get.index === 2)
 
     // Offer host2: fifth task (also on host2) should get chosen
     assert(manager.resourceOffer("exec2", "host2", ANY,
-      Map.empty[String, SchedulerResourceInformation]).get.index === 4)
+      Map.empty[String, ResourceInformation]).get.index === 4)
 
     // Now that we've launched a local task, we should no longer launch the task for host3
     assert(manager.resourceOffer("exec2", "host2", ANY,
-      Map.empty[String, SchedulerResourceInformation]) === None)
+      Map.empty[String, ResourceInformation]) === None)
 
     clock.advance(LOCALITY_WAIT_MS)
 
     // After another delay, we can go ahead and launch that task non-locally
     assert(manager.resourceOffer("exec2", "host2", ANY,
-      Map.empty[String, SchedulerResourceInformation]).get.index === 3)
+      Map.empty[String, ResourceInformation]).get.index === 3)
   }
 
   test("delay scheduling with failed hosts") {
@@ -452,12 +454,12 @@ String, SchedulerResourceInformation])
 
     // First offer host1: first task should be chosen
     assert(manager.resourceOffer("exec1", "host1", ANY,
-      Map.empty[String, SchedulerResourceInformation]).get.index === 0)
+      Map.empty[String, ResourceInformation]).get.index === 0)
 
     // After this, nothing should get chosen, because we have separated tasks with unavailable
     // preference from the noPrefPendingTasks
     assert(manager.resourceOffer("exec1", "host1", ANY,
-      Map.empty[String, SchedulerResourceInformation]) === None)
+      Map.empty[String, ResourceInformation]) === None)
 
     // Now mark host2 as dead
     sched.removeExecutor("exec2")
@@ -465,21 +467,21 @@ String, SchedulerResourceInformation])
 
     // nothing should be chosen
     assert(manager.resourceOffer("exec1", "host1", ANY,
-      Map.empty[String, SchedulerResourceInformation]) === None)
+      Map.empty[String, ResourceInformation]) === None)
 
     clock.advance(LOCALITY_WAIT_MS * 2)
 
     // task 1 and 2 would be scheduled as nonLocal task
     assert(manager.resourceOffer("exec1", "host1", ANY,
-      Map.empty[String, SchedulerResourceInformation]).get.index === 1)
+      Map.empty[String, ResourceInformation]).get.index === 1)
     assert(manager.resourceOffer("exec1", "host1", ANY,
-      Map.empty[String, SchedulerResourceInformation]).get.index === 2)
+      Map.empty[String, ResourceInformation]).get.index === 2)
 
     // all finished
     assert(manager.resourceOffer("exec1", "host1", ANY,
-      Map.empty[String, SchedulerResourceInformation]) === None)
+      Map.empty[String, ResourceInformation]) === None)
     assert(manager.resourceOffer("exec2", "host2", ANY,
-      Map.empty[String, SchedulerResourceInformation]) === None)
+      Map.empty[String, ResourceInformation]) === None)
   }
 
   test("task result lost") {
@@ -491,7 +493,7 @@ String, SchedulerResourceInformation])
     val manager = new TaskSetManager(sched, taskSet, MAX_TASK_FAILURES, clock = clock)
 
     assert(manager.resourceOffer("exec1", "host1", ANY,
-      Map.empty[String, SchedulerResourceInformation]).get.index === 0)
+      Map.empty[String, ResourceInformation]).get.index === 0)
 
     // Tell it the task has finished but the result was lost.
     manager.handleFailedTask(0, TaskState.FINISHED, TaskResultLost)
@@ -499,7 +501,7 @@ String, SchedulerResourceInformation])
 
     // Re-offer the host -- now we should get task 0 again.
     assert(manager.resourceOffer("exec1", "host1", ANY,
-      Map.empty[String, SchedulerResourceInformation]).get.index === 0)
+      Map.empty[String, ResourceInformation]).get.index === 0)
   }
 
   test("repeated failures lead to task set abortion") {
@@ -514,7 +516,7 @@ String, SchedulerResourceInformation])
     // after the last failure.
     (1 to manager.maxTaskFailures).foreach { index =>
       val offerResult = manager.resourceOffer("exec1", "host1", ANY,
-        Map.empty[String, SchedulerResourceInformation])
+        Map.empty[String, ResourceInformation])
       assert(offerResult.isDefined,
         "Expect resource offer on iteration %s to return a task".format(index))
       assert(offerResult.get.index === 0)
@@ -551,7 +553,7 @@ String, SchedulerResourceInformation])
 
     {
       val offerResult = manager.resourceOffer("exec1", "host1", PROCESS_LOCAL,
-        Map.empty[String, SchedulerResourceInformation])
+        Map.empty[String, ResourceInformation])
       assert(offerResult.isDefined, "Expect resource offer to return a task")
 
       assert(offerResult.get.index === 0)
@@ -563,19 +565,19 @@ String, SchedulerResourceInformation])
 
       // Ensure scheduling on exec1 fails after failure 1 due to blacklist
       assert(manager.resourceOffer("exec1", "host1", PROCESS_LOCAL,
-        Map.empty[String, SchedulerResourceInformation]).isEmpty)
+        Map.empty[String, ResourceInformation]).isEmpty)
       assert(manager.resourceOffer("exec1", "host1", NODE_LOCAL,
-        Map.empty[String, SchedulerResourceInformation]).isEmpty)
+        Map.empty[String, ResourceInformation]).isEmpty)
       assert(manager.resourceOffer("exec1", "host1", RACK_LOCAL,
-        Map.empty[String, SchedulerResourceInformation]).isEmpty)
+        Map.empty[String, ResourceInformation]).isEmpty)
       assert(manager.resourceOffer("exec1", "host1", ANY,
-        Map.empty[String, SchedulerResourceInformation]).isEmpty)
+        Map.empty[String, ResourceInformation]).isEmpty)
     }
 
     // Run the task on exec1.1 - should work, and then fail it on exec1.1
     {
       val offerResult = manager.resourceOffer("exec1.1", "host1", NODE_LOCAL,
-        Map.empty[String, SchedulerResourceInformation])
+        Map.empty[String, ResourceInformation])
       assert(offerResult.isDefined,
         "Expect resource offer to return a task for exec1.1, offerResult = " + offerResult)
 
@@ -588,13 +590,13 @@ String, SchedulerResourceInformation])
 
       // Ensure scheduling on exec1.1 fails after failure 2 due to blacklist
       assert(manager.resourceOffer("exec1.1", "host1", NODE_LOCAL,
-        Map.empty[String, SchedulerResourceInformation]).isEmpty)
+        Map.empty[String, ResourceInformation]).isEmpty)
     }
 
     // Run the task on exec2 - should work, and then fail it on exec2
     {
       val offerResult = manager.resourceOffer("exec2", "host2", ANY,
-        Map.empty[String, SchedulerResourceInformation])
+        Map.empty[String, ResourceInformation])
       assert(offerResult.isDefined, "Expect resource offer to return a task")
 
       assert(offerResult.get.index === 0)
@@ -606,7 +608,7 @@ String, SchedulerResourceInformation])
 
       // Ensure scheduling on exec2 fails after failure 3 due to blacklist
       assert(manager.resourceOffer("exec2", "host2", ANY,
-        Map.empty[String, SchedulerResourceInformation]).isEmpty)
+        Map.empty[String, ResourceInformation]).isEmpty)
     }
 
     // Despite advancing beyond the time for expiring executors from within the blacklist,
@@ -615,19 +617,19 @@ String, SchedulerResourceInformation])
 
     {
       val offerResult = manager.resourceOffer("exec1", "host1", PROCESS_LOCAL,
-        Map.empty[String, SchedulerResourceInformation])
+        Map.empty[String, ResourceInformation])
       assert(offerResult.isEmpty)
     }
 
     {
       val offerResult = manager.resourceOffer("exec3", "host3", ANY,
-        Map.empty[String, SchedulerResourceInformation])
+        Map.empty[String, ResourceInformation])
       assert(offerResult.isDefined)
       assert(offerResult.get.index === 0)
       assert(offerResult.get.executorId === "exec3")
 
       assert(manager.resourceOffer("exec3", "host3", ANY,
-        Map.empty[String, SchedulerResourceInformation]).isEmpty)
+        Map.empty[String, ResourceInformation]).isEmpty)
 
       // Cause exec3 to fail : failure 4
       manager.handleFailedTask(offerResult.get.taskId, TaskState.FINISHED, TaskResultLost)
@@ -687,7 +689,7 @@ String, SchedulerResourceInformation])
     sched.addExecutor("execC", "host2")
     manager.executorAdded()
     assert(manager.resourceOffer("exec1", "host1", ANY,
-      Map.empty[String, SchedulerResourceInformation]).isDefined)
+      Map.empty[String, ResourceInformation]).isDefined)
     sched.removeExecutor("execA")
     manager.executorLost(
       "execA",
@@ -695,7 +697,7 @@ String, SchedulerResourceInformation])
       ExecutorExited(143, false, "Terminated for reason unrelated to running tasks"))
     assert(!sched.taskSetsFailed.contains(taskSet.id))
     assert(manager.resourceOffer("execC", "host2", ANY,
-      Map.empty[String, SchedulerResourceInformation]).isDefined)
+      Map.empty[String, ResourceInformation]).isDefined)
     sched.removeExecutor("execC")
     manager.executorLost(
       "execC", "host2", ExecutorExited(1, true, "Terminated due to issue with running tasks"))
@@ -724,14 +726,14 @@ String, SchedulerResourceInformation])
     // Offer host3
     // No task is scheduled if we restrict locality to RACK_LOCAL
     assert(manager.resourceOffer("execC", "host3", RACK_LOCAL,
-      Map.empty[String, SchedulerResourceInformation])=== None)
+      Map.empty[String, ResourceInformation])=== None)
     // Task 0 can be scheduled with ANY
     assert(manager.resourceOffer("execC", "host3", ANY,
-      Map.empty[String, SchedulerResourceInformation]).get.index === 0)
+      Map.empty[String, ResourceInformation]).get.index === 0)
     // Offer host2
     // Task 1 can be scheduled with RACK_LOCAL
     assert(manager.resourceOffer("execB", "host2", RACK_LOCAL,
-      Map.empty[String, SchedulerResourceInformation]).get.index === 1)
+      Map.empty[String, ResourceInformation]).get.index === 1)
   }
 
   test("do not emit warning when serialized task is small") {
@@ -743,7 +745,7 @@ String, SchedulerResourceInformation])
     assert(!manager.emittedTaskSizeWarning)
 
     assert(manager.resourceOffer("exec1", "host1", ANY,
-      Map.empty[String, SchedulerResourceInformation]).get.index === 0)
+      Map.empty[String, ResourceInformation]).get.index === 0)
 
     assert(!manager.emittedTaskSizeWarning)
   }
@@ -758,7 +760,7 @@ String, SchedulerResourceInformation])
     assert(!manager.emittedTaskSizeWarning)
 
     assert(manager.resourceOffer("exec1", "host1", ANY,
-      Map.empty[String, SchedulerResourceInformation]).get.index === 0)
+      Map.empty[String, ResourceInformation]).get.index === 0)
 
     assert(manager.emittedTaskSizeWarning)
   }
@@ -773,7 +775,7 @@ String, SchedulerResourceInformation])
 
     intercept[TaskNotSerializableException] {
       manager.resourceOffer("exec1", "host1", ANY,
-        Map.empty[String, SchedulerResourceInformation])
+        Map.empty[String, ResourceInformation])
     }
     assert(manager.isZombie)
   }
@@ -845,13 +847,13 @@ String, SchedulerResourceInformation])
     // Offer host1, which should be accepted as a PROCESS_LOCAL location
     // by the one task in the task set
     val task1 = manager.resourceOffer("execA", "host1", TaskLocality.PROCESS_LOCAL,
-      Map.empty[String, SchedulerResourceInformation]).get
+      Map.empty[String, ResourceInformation]).get
 
     // Mark the task as available for speculation, and then offer another resource,
     // which should be used to launch a speculative copy of the task.
     manager.speculatableTasks += singleTask.partitionId
     val task2 = manager.resourceOffer("execB", "host2", TaskLocality.ANY,
-      Map.empty[String, SchedulerResourceInformation]).get
+      Map.empty[String, ResourceInformation]).get
 
     assert(manager.runningTasks === 2)
     assert(manager.isZombie === false)
@@ -937,7 +939,7 @@ String, SchedulerResourceInformation])
       "exec3" -> "host3",
       "exec2" -> "host2")) {
       val taskOption = manager.resourceOffer(exec, host, NO_PREF,
-        Map.empty[String, SchedulerResourceInformation])
+        Map.empty[String, ResourceInformation])
       assert(taskOption.isDefined)
       val task = taskOption.get
       assert(task.executorId === exec)
@@ -964,7 +966,7 @@ String, SchedulerResourceInformation])
 
     // Offer resource to start the speculative attempt for the running task 2.0
     val taskOption = manager.resourceOffer("exec2", "host2", ANY,
-      Map.empty[String, SchedulerResourceInformation])
+      Map.empty[String, ResourceInformation])
     assert(taskOption.isDefined)
     val task4 = taskOption.get
     assert(task4.index === 2)
@@ -994,24 +996,24 @@ String, SchedulerResourceInformation])
     val manager = new TaskSetManager(sched, taskSet, MAX_TASK_FAILURES, clock = clock)
 
     assert(manager.resourceOffer("execA", "host1", PROCESS_LOCAL,
-      Map.empty[String, SchedulerResourceInformation]).get.index === 0)
+      Map.empty[String, ResourceInformation]).get.index === 0)
     assert(manager.resourceOffer("execA", "host1", NODE_LOCAL,
-      Map.empty[String, SchedulerResourceInformation]) == None)
+      Map.empty[String, ResourceInformation]) == None)
     assert(manager.resourceOffer("execA", "host1", NO_PREF,
-      Map.empty[String, SchedulerResourceInformation]).get.index == 1)
+      Map.empty[String, ResourceInformation]).get.index == 1)
 
     manager.speculatableTasks += 1
     clock.advance(LOCALITY_WAIT_MS)
     // schedule the nonPref task
     assert(manager.resourceOffer("execA", "host1", NO_PREF,
-      Map.empty[String, SchedulerResourceInformation]).get.index === 2)
+      Map.empty[String, ResourceInformation]).get.index === 2)
     // schedule the speculative task
     assert(manager.resourceOffer("execB", "host2", NO_PREF,
-      Map.empty[String, SchedulerResourceInformation]).get.index === 1)
+      Map.empty[String, ResourceInformation]).get.index === 1)
     clock.advance(LOCALITY_WAIT_MS * 3)
     // schedule non-local tasks
     assert(manager.resourceOffer("execB", "host2", ANY,
-      Map.empty[String, SchedulerResourceInformation]).get.index === 3)
+      Map.empty[String, ResourceInformation]).get.index === 3)
   }
 
   test("node-local tasks should be scheduled right away " +
@@ -1029,17 +1031,17 @@ String, SchedulerResourceInformation])
 
     // node-local tasks are scheduled without delay
     assert(manager.resourceOffer("execA", "host1", NODE_LOCAL,
-      Map.empty[String, SchedulerResourceInformation]).get.index === 0)
+      Map.empty[String, ResourceInformation]).get.index === 0)
     assert(manager.resourceOffer("execA", "host2", NODE_LOCAL,
-      Map.empty[String, SchedulerResourceInformation]).get.index === 1)
+      Map.empty[String, ResourceInformation]).get.index === 1)
     assert(manager.resourceOffer("execA", "host3", NODE_LOCAL,
-      Map.empty[String, SchedulerResourceInformation]).get.index === 3)
+      Map.empty[String, ResourceInformation]).get.index === 3)
     assert(manager.resourceOffer("execA", "host3", NODE_LOCAL,
-      Map.empty[String, SchedulerResourceInformation]) === None)
+      Map.empty[String, ResourceInformation]) === None)
 
     // schedule no-preference after node local ones
     assert(manager.resourceOffer("execA", "host3", NO_PREF,
-      Map.empty[String, SchedulerResourceInformation]).get.index === 2)
+      Map.empty[String, ResourceInformation]).get.index === 2)
   }
 
   test("SPARK-4939: node-local tasks should be scheduled right after process-local tasks finished")
@@ -1056,18 +1058,18 @@ String, SchedulerResourceInformation])
 
     // process-local tasks are scheduled first
     assert(manager.resourceOffer("execA", "host1", NODE_LOCAL,
-      Map.empty[String, SchedulerResourceInformation]).get.index === 2)
+      Map.empty[String, ResourceInformation]).get.index === 2)
     assert(manager.resourceOffer("execB", "host2", NODE_LOCAL,
-      Map.empty[String, SchedulerResourceInformation]).get.index === 3)
+      Map.empty[String, ResourceInformation]).get.index === 3)
     // node-local tasks are scheduled without delay
     assert(manager.resourceOffer("execA", "host1", NODE_LOCAL,
-      Map.empty[String, SchedulerResourceInformation]).get.index === 0)
+      Map.empty[String, ResourceInformation]).get.index === 0)
     assert(manager.resourceOffer("execB", "host2", NODE_LOCAL,
-      Map.empty[String, SchedulerResourceInformation]).get.index === 1)
+      Map.empty[String, ResourceInformation]).get.index === 1)
     assert(manager.resourceOffer("execA", "host1", NODE_LOCAL,
-      Map.empty[String, SchedulerResourceInformation]) == None)
+      Map.empty[String, ResourceInformation]) == None)
     assert(manager.resourceOffer("execB", "host2", NODE_LOCAL,
-      Map.empty[String, SchedulerResourceInformation]) == None)
+      Map.empty[String, ResourceInformation]) == None)
   }
 
   test("SPARK-4939: no-pref tasks should be scheduled after process-local tasks finished") {
@@ -1082,18 +1084,18 @@ String, SchedulerResourceInformation])
 
     // process-local tasks are scheduled first
     assert(manager.resourceOffer("execA", "host1", PROCESS_LOCAL,
-      Map.empty[String, SchedulerResourceInformation]).get.index === 1)
+      Map.empty[String, ResourceInformation]).get.index === 1)
     assert(manager.resourceOffer("execB", "host2", PROCESS_LOCAL,
-      Map.empty[String, SchedulerResourceInformation]).get.index === 2)
+      Map.empty[String, ResourceInformation]).get.index === 2)
     // no-pref tasks are scheduled without delay
     assert(manager.resourceOffer("execA", "host1", PROCESS_LOCAL,
-      Map.empty[String, SchedulerResourceInformation]) == None)
+      Map.empty[String, ResourceInformation]) == None)
     assert(manager.resourceOffer("execA", "host1", NODE_LOCAL,
-      Map.empty[String, SchedulerResourceInformation]) == None)
+      Map.empty[String, ResourceInformation]) == None)
     assert(manager.resourceOffer("execA", "host1", NO_PREF,
-      Map.empty[String, SchedulerResourceInformation]).get.index === 0)
+      Map.empty[String, ResourceInformation]).get.index === 0)
     assert(manager.resourceOffer("execA", "host1", ANY,
-      Map.empty[String, SchedulerResourceInformation])== None)
+      Map.empty[String, ResourceInformation])== None)
   }
 
   test("Ensure TaskSetManager is usable after addition of levels") {
@@ -1115,10 +1117,10 @@ String, SchedulerResourceInformation])
     // Valid locality should contain PROCESS_LOCAL, NODE_LOCAL and ANY
     assert(manager.myLocalityLevels.sameElements(Array(PROCESS_LOCAL, NODE_LOCAL, ANY)))
     assert(manager.resourceOffer("execA", "host1", ANY,
-      Map.empty[String, SchedulerResourceInformation]) !== None)
+      Map.empty[String, ResourceInformation]) !== None)
     clock.advance(LOCALITY_WAIT_MS * 4)
     assert(manager.resourceOffer("execB.2", "host2", ANY,
-      Map.empty[String, SchedulerResourceInformation]) !== None)
+      Map.empty[String, ResourceInformation]) !== None)
     sched.removeExecutor("execA")
     sched.removeExecutor("execB.2")
     manager.executorLost("execA", "host1", SlaveLost())
@@ -1128,7 +1130,7 @@ String, SchedulerResourceInformation])
     manager.executorAdded()
     // Prior to the fix, this line resulted in an ArrayIndexOutOfBoundsException:
     assert(manager.resourceOffer("execC", "host3", ANY,
-      Map.empty[String, SchedulerResourceInformation]) !== None)
+      Map.empty[String, ResourceInformation]) !== None)
   }
 
   test("Test that locations with HDFSCacheTaskLocation are treated as PROCESS_LOCAL.") {
@@ -1181,7 +1183,7 @@ String, SchedulerResourceInformation])
         "exec2" -> "host2",
         "exec2" -> "host2")) {
       val taskOption = manager.resourceOffer(k, v, NO_PREF,
-        Map.empty[String, SchedulerResourceInformation])
+        Map.empty[String, ResourceInformation])
       assert(taskOption.isDefined)
       val task = taskOption.get
       assert(task.executorId === k)
@@ -1203,7 +1205,7 @@ String, SchedulerResourceInformation])
 
     // Offer resource to start the speculative attempt for the running task
     val taskOption5 = manager.resourceOffer("exec1", "host1", NO_PREF,
-      Map.empty[String, SchedulerResourceInformation])
+      Map.empty[String, ResourceInformation])
     assert(taskOption5.isDefined)
     val task5 = taskOption5.get
     assert(task5.index === 3)
@@ -1243,7 +1245,7 @@ String, SchedulerResourceInformation])
       "exec2" -> "host2",
       "exec2" -> "host2")) {
       val taskOption = manager.resourceOffer(k, v, NO_PREF,
-        Map.empty[String, SchedulerResourceInformation])
+        Map.empty[String, ResourceInformation])
       assert(taskOption.isDefined)
       val task = taskOption.get
       assert(task.executorId === k)
@@ -1277,7 +1279,7 @@ String, SchedulerResourceInformation])
         sched.endedTasks(task.taskId) = endReason
         assert(!manager.isZombie)
         val nextTask = manager.resourceOffer(s"exec2", s"host2", NO_PREF,
-          Map.empty[String, SchedulerResourceInformation])
+          Map.empty[String, ResourceInformation])
         assert(nextTask.isDefined, s"no offer for attempt $attempt of $index")
         tasks += nextTask.get
       }
@@ -1294,7 +1296,7 @@ String, SchedulerResourceInformation])
     assert(sched.speculativeTasks.toSet === Set(3, 4))
     // Offer resource to start the speculative attempt for the running task
     val taskOption5 = manager.resourceOffer("exec1", "host1", NO_PREF,
-      Map.empty[String, SchedulerResourceInformation])
+      Map.empty[String, ResourceInformation])
     assert(taskOption5.isDefined)
     val speculativeTask = taskOption5.get
     assert(speculativeTask.index === 3 || speculativeTask.index === 4)
@@ -1320,7 +1322,7 @@ String, SchedulerResourceInformation])
 
     // now run another speculative task
     val taskOpt6 = manager.resourceOffer("exec1", "host1", NO_PREF,
-      Map.empty[String, SchedulerResourceInformation])
+      Map.empty[String, ResourceInformation])
     assert(taskOpt6.isDefined)
     val speculativeTask2 = taskOpt6.get
     assert(speculativeTask2.index === 3 || speculativeTask2.index === 4)
@@ -1352,7 +1354,7 @@ String, SchedulerResourceInformation])
     when(mockDAGScheduler.taskEnded(any(), any(), any(), any(), any())).thenAnswer(
       (invocationOnMock: InvocationOnMock) => assert(manager.isZombie))
     val taskOption = manager.resourceOffer("exec1", "host1", NO_PREF,
-      Map.empty[String, SchedulerResourceInformation])
+      Map.empty[String, ResourceInformation])
     assert(taskOption.isDefined)
     // this would fail, inside our mock dag scheduler, if it calls dagScheduler.taskEnded() too soon
     manager.handleSuccessfulTask(0, createTaskResult(0))
@@ -1398,7 +1400,7 @@ String, SchedulerResourceInformation])
     ).flatMap { case (exec, host) =>
       // offer each executor twice (simulating 2 cores per executor)
       (0 until 2).flatMap{ _ => tsmSpy.resourceOffer(exec, host, TaskLocality.ANY,
-        Map.empty[String, SchedulerResourceInformation])}
+        Map.empty[String, ResourceInformation])}
     }
     assert(taskDescs.size === 4)
 
@@ -1436,7 +1438,7 @@ String, SchedulerResourceInformation])
     ).flatMap { case (exec, host) =>
       // offer each executor twice (simulating 2 cores per executor)
       (0 until 2).flatMap{ _ => tsm.resourceOffer(exec, host, TaskLocality.ANY,
-        Map.empty[String, SchedulerResourceInformation])}
+        Map.empty[String, ResourceInformation])}
     }
     assert(taskDescs.size === 4)
 
@@ -1473,7 +1475,7 @@ String, SchedulerResourceInformation])
     val taskSetManagerSpy = spy(taskSetManager)
 
     val taskDesc = taskSetManagerSpy.resourceOffer(exec, host, TaskLocality.ANY,
-      Map.empty[String, SchedulerResourceInformation])
+      Map.empty[String, ResourceInformation])
 
     // Assert the task has been black listed on the executor it was last executed on.
     when(taskSetManagerSpy.addPendingTask(anyInt(), anyBoolean())).thenAnswer(
@@ -1502,11 +1504,11 @@ String, SchedulerResourceInformation])
 
     // all tasks from the first taskset have the same jars
     val taskOption1 = manager1.resourceOffer("exec1", "host1", NO_PREF,
-      Map.empty[String, SchedulerResourceInformation])
+      Map.empty[String, ResourceInformation])
 
     assert(taskOption1.get.addedJars === addedJarsPreTaskSet)
     val taskOption2 = manager1.resourceOffer("exec1", "host1", NO_PREF,
-      Map.empty[String, SchedulerResourceInformation])
+      Map.empty[String, ResourceInformation])
 
     assert(taskOption2.get.addedJars === addedJarsPreTaskSet)
 
@@ -1516,7 +1518,7 @@ String, SchedulerResourceInformation])
     val addedJarsMidTaskSet = Map[String, Long](sc.addedJars.toSeq: _*)
     assert(addedJarsPreTaskSet !== addedJarsMidTaskSet)
     val taskOption3 = manager1.resourceOffer("exec1", "host1", NO_PREF,
-      Map.empty[String, SchedulerResourceInformation])
+      Map.empty[String, ResourceInformation])
 
     // which should have the old version of the jars list
     assert(taskOption3.get.addedJars === addedJarsPreTaskSet)
@@ -1526,7 +1528,7 @@ String, SchedulerResourceInformation])
     val manager2 = new TaskSetManager(sched, taskSet2, MAX_TASK_FAILURES, clock = new ManualClock)
 
     val taskOption4 = manager2.resourceOffer("exec1", "host1", NO_PREF,
-      Map.empty[String, SchedulerResourceInformation])
+      Map.empty[String, ResourceInformation])
 
     assert(taskOption4.get.addedJars === addedJarsMidTaskSet)
   }
@@ -1647,7 +1649,7 @@ String, SchedulerResourceInformation])
         "exec3" -> "host3",
         "exec2" -> "host2")) {
       val taskOption = manager.resourceOffer(exec, host, NO_PREF,
-        Map.empty[String, SchedulerResourceInformation])
+        Map.empty[String, ResourceInformation])
 
       assert(taskOption.isDefined)
       val task = taskOption.get
@@ -1675,7 +1677,7 @@ String, SchedulerResourceInformation])
 
     // Offer resource to start the speculative attempt for the running task 2.0
     val taskOption = manager.resourceOffer("exec2", "host2", ANY,
-      Map.empty[String, SchedulerResourceInformation])
+      Map.empty[String, ResourceInformation])
 
     assert(taskOption.isDefined)
     val task4 = taskOption.get
@@ -1722,7 +1724,7 @@ String, SchedulerResourceInformation])
         "exec2" -> "host2",
         "exec2" -> "host2")) {
       val taskOption = manager.resourceOffer(k, v, NO_PREF,
-        Map.empty[String, SchedulerResourceInformation])
+        Map.empty[String, ResourceInformation])
 
       assert(taskOption.isDefined)
       val task = taskOption.get
@@ -1744,7 +1746,7 @@ String, SchedulerResourceInformation])
 
     // Offer resource to start the speculative attempt for the running task
     val taskOption5 = manager.resourceOffer("exec1", "host1", NO_PREF,
-      Map.empty[String, SchedulerResourceInformation])
+      Map.empty[String, ResourceInformation])
     assert(taskOption5.isDefined)
     val task5 = taskOption5.get
     assert(task5.index === 3)
@@ -1804,7 +1806,7 @@ String, SchedulerResourceInformation])
     assert(FakeRackUtil.numSingleHostInvocation === 0)
     // with rack locality, reject an offer on a host with an unknown rack
     assert(manager.resourceOffer("otherExec", "otherHost", TaskLocality.RACK_LOCAL,
-      Map.empty[String, SchedulerResourceInformation]).isEmpty)
+      Map.empty[String, ResourceInformation]).isEmpty)
     (0 until 20).foreach { rackIdx =>
       (0 until 5).foreach { offerIdx =>
         // if we offer hosts which are not in preferred locations,
@@ -1812,9 +1814,9 @@ String, SchedulerResourceInformation])
         // but accept them at RACK_LOCAL level if they're on OK racks
         val hostIdx = 100 + rackIdx
         assert(manager.resourceOffer("exec" + hostIdx, "host" + hostIdx, TaskLocality.NODE_LOCAL,
-          Map.empty[String, SchedulerResourceInformation]).isEmpty)
+          Map.empty[String, ResourceInformation]).isEmpty)
         assert(manager.resourceOffer("exec" + hostIdx, "host" + hostIdx, TaskLocality.RACK_LOCAL,
-          Map.empty[String, SchedulerResourceInformation]).isDefined)
+          Map.empty[String, ResourceInformation]).isDefined)
       }
     }
     // check no more expensive calls to the rack resolution.  manager.resourceOffer() will call

@@ -19,53 +19,67 @@ package org.apache.spark
 
 import java.io.File
 
-import org.apache.spark.{ResourceInformation, SparkConf, SparkException}
+import com.fasterxml.jackson.core.JsonParseException
+import org.json4s.{DefaultFormats, MappingException}
+import org.json4s.jackson.JsonMethods._
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config._
 import org.apache.spark.util.Utils.executeAndGetOutput
 
 /**
- * Discovers resources (gpu/fpgas/etc) available to an executor. Currently this just
- * knows about gpus but could easily be extended.
+ * Discovers resources (GPUs/FPGAs/etc).
+ * This class find resources by running and parses the output of the user specified script
+ * from the config spark.{driver/executor}.{resourceType}.discoveryScript.
+ * The output of the script it runs is expected to be JSON in the format of the
+ * ResourceInformation class, with addresses being optional.
+ *
+ * For example:  {"name": "gpu","count":2, "units":"", "addresses": ["0","1"]}
  */
 private[spark] object ResourceDiscoverer extends Logging {
 
+  private implicit val formats = DefaultFormats
+
   def findResources(sparkconf: SparkConf, isDriver: Boolean): Map[String, ResourceInformation] = {
-    val gpus = getGPUResources(sparkconf, isDriver)
-    if (gpus.isEmpty) {
-      Map()
+    val prefix = if (isDriver) {
+      SPARK_DRIVER_RESOURCE_PREFIX
     } else {
-      Map(ResourceInformation.GPU ->
-        new ResourceInformation(ResourceInformation.GPU, "", gpus.size, gpus))
+      SPARK_EXECUTOR_RESOURCE_PREFIX
     }
+    // get unique resource types
+    val resourceTypes = sparkconf.getAllWithPrefix(prefix).map(x => x._1.split('.')(0)).toSet
+    resourceTypes.map{ rtype => {
+      val rInfo = getResourceAddrsForType(sparkconf, prefix, rtype)
+      (rtype -> rInfo)
+    }}.toMap
   }
 
-  private def getGPUResources(sparkconf: SparkConf, isDriver: Boolean): Array[String] = {
-    val discoveryConf = if (isDriver) DRIVER_GPU_DISCOVERY_SCRIPT else EXECUTOR_GPU_DISCOVERY_SCRIPT
-    val script = sparkconf.get(discoveryConf)
+  private def getResourceAddrsForType(
+      sparkconf: SparkConf,
+      prefix: String,
+      resourceType: String): ResourceInformation = {
+    val discoveryConf = prefix + resourceType + SPARK_RESOURCE_DISCOVERY_SCRIPT_POSTFIX
+    val script = sparkconf.getOption(discoveryConf)
     val result = if (script.nonEmpty) {
       val scriptFile = new File(script.get)
       // check that script exists and try to execute
       if (scriptFile.exists()) {
         try {
           val output = executeAndGetOutput(Seq(script.get), new File("."))
-          // sanity check output is a comma separate list of ints
-          val gpu_ids = output.split(",").map(_.trim())
-          for (gpu <- gpu_ids) {
-            Integer.parseInt(gpu)
-          }
-          gpu_ids
+          val parsedJson = parse(output)
+          parsedJson.extract[ResourceInformation]
         } catch {
-          case e @ (_: SparkException | _: NumberFormatException) =>
-            throw new SparkException("The gpu discover script threw exception, assuming no gpu's",
-              e)
+          case e@(_: SparkException | _: MappingException | _: JsonParseException) =>
+            throw new SparkException(s"Error running the resource discovery script: $scriptFile" +
+              s" for $resourceType", e)
         }
       } else {
-        throw new SparkException(s"Gpu script: $scriptFile to discover gpu's doesn't exist!")
+        throw new SparkException(s"Resource script: $scriptFile to discover $resourceType" +
+          s" doesn't exist!")
       }
     } else {
-      logWarning("User is expecting to use gpu resources but didn't specify a script to find them!")
-      Array.empty[String]
+      throw new SparkException(s"User is expecting to use $resourceType resources but " +
+        s"didn't specify a script via conf: $discoveryConf, to find them!")
     }
     result
   }

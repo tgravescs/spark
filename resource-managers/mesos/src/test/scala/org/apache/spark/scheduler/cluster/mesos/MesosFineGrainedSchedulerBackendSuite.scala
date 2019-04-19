@@ -35,7 +35,7 @@ import org.mockito.ArgumentMatchers.{any, anyLong, eq => meq}
 import org.mockito.Mockito._
 import org.scalatest.mockito.MockitoSugar
 
-import org.apache.spark.{LocalSparkContext, SparkConf, SparkContext, SparkFunSuite}
+import org.apache.spark.{LocalSparkContext, ResourceInformation, SparkConf, SparkContext, SparkFunSuite}
 import org.apache.spark.deploy.mesos.config._
 import org.apache.spark.executor.MesosExecutorBackend
 import org.apache.spark.scheduler.{LiveListenerBus, SparkListenerExecutorAdded,
@@ -262,6 +262,7 @@ class MesosFineGrainedSchedulerBackendSuite
       addedFiles = mutable.Map.empty[String, Long],
       addedJars = mutable.Map.empty[String, Long],
       properties = new Properties(),
+      Map.empty[String, ResourceInformation],
       ByteBuffer.wrap(new Array[Byte](0)))
     when(taskScheduler.resourceOffers(expectedWorkerOffers)).thenReturn(Seq(Seq(taskDesc)))
     when(taskScheduler.CPUS_PER_TASK).thenReturn(2)
@@ -372,6 +373,7 @@ class MesosFineGrainedSchedulerBackendSuite
       addedFiles = mutable.Map.empty[String, Long],
       addedJars = mutable.Map.empty[String, Long],
       properties = new Properties(),
+      Map.empty[String, ResourceInformation],
       ByteBuffer.wrap(new Array[Byte](0)))
     when(taskScheduler.resourceOffers(expectedWorkerOffers)).thenReturn(Seq(Seq(taskDesc)))
     when(taskScheduler.CPUS_PER_TASK).thenReturn(1)

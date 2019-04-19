@@ -21,11 +21,13 @@ import java.nio.ByteBuffer
 
 import scala.collection.mutable.{ArrayBuffer, HashMap}
 import scala.concurrent.duration._
+
 import org.mockito.ArgumentMatchers.{any, anyInt, anyString, eq => meq}
 import org.mockito.Mockito.{atLeast, atMost, never, spy, times, verify, when}
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.concurrent.Eventually
 import org.scalatest.mockito.MockitoSugar
+
 import org.apache.spark._
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config
@@ -185,6 +187,148 @@ class TaskSchedulerImplSuite extends SparkFunSuite with LocalSparkContext with B
     assert(1 === taskDescriptions.length)
     assert("executor0" === taskDescriptions(0).executorId)
     assert(!failedTaskSet)
+  }
+
+  test("check resource scheduling available resources") {
+    val taskCpus = 2
+    val taskGpus = 2
+    val taskScheduler = setupSchedulerWithMaster(
+      s"local[$taskCpus]",
+      config.CPUS_PER_TASK.key -> taskCpus.toString,
+      config.GPUS_PER_TASK.key -> taskGpus.toString,
+      config.EXECUTOR_GPUS.key -> taskGpus.toString,
+      config.EXECUTOR_CORES.key -> taskCpus.toString,
+      config.SPARK_TASK_RESOURCE_PREFIX + "testunit"
+        + config.SPARK_RESOURCE_COUNT_POSTFIX -> "1024",
+      config.SPARK_TASK_RESOURCE_PREFIX + "testunit"
+        + config.SPARK_RESOURCE_UNITS_POSTFIX -> "mb",
+      config.SPARK_TASK_RESOURCE_PREFIX + "fpga"
+        + config.SPARK_RESOURCE_COUNT_POSTFIX -> "3",
+      config.SCHEDULER_RESOURCE_TYPES.key -> "gpu,testunit,fpga"
+    )
+    val taskSet = FakeTask.createTaskSet(3)
+    val fakeOffer = new WorkerOffer("1", "host1", 2)
+    val availResources = Map("gpu" ->
+      new SchedulerResourceInformation("gpu", "", 2, ArrayBuffer("0", "1")),
+    "fpga" -> new SchedulerResourceInformation("fpga", "", 3, ArrayBuffer("f0", "f1", "f2")),
+    "testunit" -> new SchedulerResourceInformation("testunit", "mb", 2048))
+    val taskAssignments = new HashMap[String, ResourceInformation]()
+    val tsm = taskScheduler.createTaskSetManager(taskSet, 4)
+    val canSched = taskScheduler.checkResourcesSchedulable(tsm, fakeOffer,
+      availResources, taskAssignments)
+
+    assert(canSched)
+    assert(taskAssignments.get("gpu").nonEmpty)
+    assert(taskAssignments.get("gpu").get.getCount() === taskGpus)
+    assert(taskAssignments.get("gpu").get.getUnits() === "")
+    assert(taskAssignments.get("gpu").get.getAddresses().deep === Array("0", "1").deep)
+    assert(taskAssignments.get("fpga").nonEmpty)
+    assert(taskAssignments.get("fpga").get.getCount() === 3)
+    assert(taskAssignments.get("fpga").get.getUnits() === "")
+    assert(taskAssignments.get("fpga").get.getAddresses().deep === Array("f0", "f1", "f2").deep)
+    assert(taskAssignments.get("testunit").nonEmpty)
+    assert(taskAssignments.get("testunit").get.getCount() === 1024*1024*1024)
+    assert(taskAssignments.get("testunit").get.getUnits() === "b")
+    assert(taskAssignments.get("testunit").get.getAddresses().isEmpty)
+  }
+
+  test("check resource scheduling available resources one doesn't meet") {
+    val taskCpus = 2
+    val taskGpus = 2
+    val taskScheduler = setupSchedulerWithMaster(
+      s"local[$taskCpus]",
+      config.CPUS_PER_TASK.key -> taskCpus.toString,
+      config.GPUS_PER_TASK.key -> taskGpus.toString,
+      config.EXECUTOR_GPUS.key -> taskGpus.toString,
+      config.EXECUTOR_CORES.key -> taskCpus.toString,
+      config.SPARK_TASK_RESOURCE_PREFIX + "testunit"
+        + config.SPARK_RESOURCE_COUNT_POSTFIX -> "1024",
+      config.SPARK_TASK_RESOURCE_PREFIX + "testunit"
+        + config.SPARK_RESOURCE_UNITS_POSTFIX -> "m",
+      config.SPARK_TASK_RESOURCE_PREFIX + "fpga"
+        + config.SPARK_RESOURCE_COUNT_POSTFIX -> "3",
+      config.SCHEDULER_RESOURCE_TYPES.key -> "gpu,testunit,fpga"
+    )
+    val taskSet = FakeTask.createTaskSet(3)
+    val fakeOffer = new WorkerOffer("1", "host1", 2)
+    val availResources = Map("gpu" ->
+      new SchedulerResourceInformation("gpu", "", 2, ArrayBuffer("0", "1")),
+      "fpga" -> new SchedulerResourceInformation("fpga", "", 3, ArrayBuffer("f0", "f1", "f2")),
+      "testunit" -> new SchedulerResourceInformation("testunit", "m", 512))
+    val taskAssignments = new HashMap[String, ResourceInformation]()
+    val tsm = taskScheduler.createTaskSetManager(taskSet, 4)
+    val canSched = taskScheduler.checkResourcesSchedulable(tsm, fakeOffer,
+      availResources, taskAssignments)
+
+    assert(canSched === false)
+    assert(taskAssignments.size === 0)
+  }
+
+  test("check resources missing config") {
+    val taskCpus = 2
+    val taskGpus = 2
+    val error = intercept[SparkException] {
+      val taskScheduler = setupSchedulerWithMaster(
+        s"local[$taskCpus]",
+        config.CPUS_PER_TASK.key -> taskCpus.toString,
+        config.GPUS_PER_TASK.key -> taskGpus.toString,
+        config.EXECUTOR_GPUS.key -> taskGpus.toString,
+        config.EXECUTOR_CORES.key -> taskCpus.toString,
+        config.SPARK_TASK_RESOURCE_PREFIX + "fpga"
+          + config.SPARK_RESOURCE_COUNT_POSTFIX -> "3",
+        config.SCHEDULER_RESOURCE_TYPES.key -> "gpu,testunit,fpga"
+      )
+    }.getMessage
+
+    assert(error.contains("Expected a count config for resource type: testunit"))
+  }
+
+  test("resource scheduling parsing task configs") {
+    val taskCpus = 2
+    val taskGpus = 2
+    val taskScheduler = setupSchedulerWithMaster(
+      s"local[$taskCpus]",
+      config.CPUS_PER_TASK.key -> taskCpus.toString,
+      config.GPUS_PER_TASK.key -> taskGpus.toString,
+      config.EXECUTOR_GPUS.key -> taskGpus.toString,
+      config.EXECUTOR_CORES.key -> taskCpus.toString,
+      config.SPARK_TASK_RESOURCE_PREFIX + "testunit"
+        + config.SPARK_RESOURCE_COUNT_POSTFIX -> "1024",
+      config.SPARK_TASK_RESOURCE_PREFIX + "testunit"
+        + config.SPARK_RESOURCE_UNITS_POSTFIX -> "m",
+      config.SPARK_TASK_RESOURCE_PREFIX + "fpga"
+        + config.SPARK_RESOURCE_COUNT_POSTFIX -> "3",
+      config.SCHEDULER_RESOURCE_TYPES.key -> "gpu,testunit,fpga"
+    )
+
+    assert(taskScheduler.taskResourceRequirements.get("gpu").nonEmpty)
+    assert(taskScheduler.taskResourceRequirements.get("gpu").get.count === taskGpus)
+    assert(taskScheduler.taskResourceRequirements.get("gpu").get.units === None)
+    assert(taskScheduler.taskResourceRequirements.get("fpga").nonEmpty)
+    assert(taskScheduler.taskResourceRequirements.get("fpga").get.count === 3)
+    assert(taskScheduler.taskResourceRequirements.get("fpga").get.units === None)
+    assert(taskScheduler.taskResourceRequirements.get("testunit").nonEmpty)
+    assert(taskScheduler.taskResourceRequirements.get("testunit").get.count === 1024*1024*1024)
+    assert(taskScheduler.taskResourceRequirements.get("testunit").get.units === Some("b"))
+  }
+
+  test("resource scheduling test invalid type config") {
+    val taskCpus = 2
+    val taskGpus = 2
+    val taskScheduler = setupSchedulerWithMaster(
+      s"local[$taskCpus]",
+      config.CPUS_PER_TASK.key -> taskCpus.toString,
+      config.EXECUTOR_CORES.key -> taskCpus.toString,
+      config.SPARK_TASK_RESOURCE_PREFIX + "testunit"
+        + config.SPARK_RESOURCE_COUNT_POSTFIX -> "1024",
+      config.SPARK_TASK_RESOURCE_PREFIX + "testunit"
+        + config.SPARK_RESOURCE_UNITS_POSTFIX -> "bogus",
+      config.SCHEDULER_RESOURCE_TYPES.key -> "testunit"
+    )
+    assert(taskScheduler.taskResourceRequirements.size === 1)
+    assert(taskScheduler.taskResourceRequirements.get("testunit").nonEmpty)
+    assert(taskScheduler.taskResourceRequirements.get("testunit").get.count === 1024)
+    assert(taskScheduler.taskResourceRequirements.get("testunit").get.units === None)
   }
 
   test("Scheduler correctly accounts for GPUs per task") {
