@@ -22,14 +22,17 @@ import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicInteger
 
 import scala.collection.JavaConverters._
+import scala.collection.immutable
 import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, HashMap, HashSet}
 import scala.util.control.NonFatal
+
 import org.apache.hadoop.yarn.api.records._
 import org.apache.hadoop.yarn.client.api.AMRMClient
 import org.apache.hadoop.yarn.client.api.AMRMClient.ContainerRequest
 import org.apache.hadoop.yarn.conf.YarnConfiguration
-import org.apache.spark.{ResourceInformation, SecurityManager, SparkConf, SparkException}
+
+import org.apache.spark.{Resources, SecurityManager, SparkConf, SparkException}
 import org.apache.spark.deploy.yarn.YarnSparkHadoopUtil._
 import org.apache.spark.deploy.yarn.config._
 import org.apache.spark.internal.Logging
@@ -109,6 +112,8 @@ private[yarn] class YarnAllocator(
   @volatile private var targetNumExecutors =
     SchedulerBackendUtils.getInitialTargetExecutorNumber(sparkConf)
 
+  // TODO - how to keep track of executors by request?
+  private var executorsToResourceReqs: Map[Int, Resources] = _
 
   // Executor loss reason requests that are pending - maps from executor ID for inquiry to a
   // list of requesters that should be responded to once we find out why the given executor
@@ -145,15 +150,18 @@ private[yarn] class YarnAllocator(
     var yarnResources =
       sparkConf.getAllWithPrefix(config.YARN_EXECUTOR_RESOURCE_TYPES_PREFIX).toMap
 
+    // TODO - need to handle all generic resources
     val executorGpus = sparkConf.get(EXECUTOR_GPUS)
     if (executorGpus > 0) {
       yarnResources = yarnResources ++
         Map(YARN_GPU_RESOURCE_CONFIG -> executorGpus.toString)
     }
+    // TODO - how do we do per stage resource requests...
     yarnResources
   }
 
   // Resource capability requested for each executor
+  // TODO - we want to add more of these based on the Stage level resource requests for gpus, etc..
   private[yarn] val resource: Resource = {
     val resource = Resource.newInstance(
       executorMemory + memoryOverhead + pysparkWorkerMemory, executorCores)
@@ -208,7 +216,7 @@ private[yarn] class YarnAllocator(
   /**
    * Request as many executors from the ResourceManager as needed to reach the desired total. If
    * the requested total is smaller than the current number of running executors, no executors will
-   * be killed.
+   * be killed
    * @param requestedTotal total number of containers requested
    * @param localityAwareTasks number of locality aware tasks to be used as container placement hint
    * @param hostToLocalTaskCount a map of preferred hostname to possible task counts to be used as
@@ -221,7 +229,8 @@ private[yarn] class YarnAllocator(
       requestedTotal: Int,
       localityAwareTasks: Int,
       hostToLocalTaskCount: Map[String, Int],
-      nodeBlacklist: Set[String]): Boolean = synchronized {
+      nodeBlacklist: Set[String],
+      resources: Option[Map[Int, Resources]] = None): Boolean = synchronized {
     this.numLocalityAwareTasks = localityAwareTasks
     this.hostToLocalTaskCounts = hostToLocalTaskCount
 
@@ -229,6 +238,7 @@ private[yarn] class YarnAllocator(
       logInfo(s"Driver requested a total number of $requestedTotal executor(s).")
       targetNumExecutors = requestedTotal
       allocatorBlacklistTracker.setSchedulerBlacklistedNodes(nodeBlacklist)
+      executorsToResourceReqs = resources.getOrElse(new immutable.HashMap[Int, Resources]())
       true
     } else {
       false
@@ -266,8 +276,13 @@ private[yarn] class YarnAllocator(
     val allocatedContainers = allocateResponse.getAllocatedContainers()
     allocatorBlacklistTracker.setNumClusterNodes(allocateResponse.getNumClusterNodes)
 
+    logWarning("available response is: " + allocateResponse.getAvailableResources)
+    for(r <- allocateResponse.getAvailableResources.getResources()) {
+      logWarning(" resource info is: " + r.getName())
+    }
+
     if (allocatedContainers.size > 0) {
-      logDebug(("Allocated containers: %d. Current executor count: %d. " +
+      logWarning(("Allocated containers: %d. Current executor count: %d. " +
         "Launching executor count: %d. Cluster resources: %s.")
         .format(
           allocatedContainers.size,
@@ -298,6 +313,11 @@ private[yarn] class YarnAllocator(
     val numPendingAllocate = pendingAllocate.size
     val missing = targetNumExecutors - numPendingAllocate -
       numExecutorsStarting.get - runningExecutors.size
+    // TODO - need to figure out which resource types are missing
+    // if (!executorsToResourceReqs.isEmpty) {
+
+    // }
+
     logDebug(s"Updating resource requests, target: $targetNumExecutors, " +
       s"pending: $numPendingAllocate, running: ${runningExecutors.size}, " +
       s"executorsStarting: ${numExecutorsStarting.get}")
@@ -507,6 +527,11 @@ private[yarn] class YarnAllocator(
     // request; for example, capacity scheduler + DefaultResourceCalculator. So match on requested
     // memory, but use the asked vcore count for matching, effectively disabling matching on vcore
     // count.
+
+    // TODO - we want to match on resource request - gpu/fpga/etc...
+    // What about if not turned on in Yarn though?  ie the cpu scheduling issue like SPARK-6050
+    // TODO - need to test or look at yarn config?
+
     val matchingResource = Resource.newInstance(allocatedContainer.getResource.getMemory,
       resource.getVirtualCores)
 

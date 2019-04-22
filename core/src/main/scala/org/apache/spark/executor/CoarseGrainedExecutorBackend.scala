@@ -104,6 +104,8 @@ private[spark] class CoarseGrainedExecutorBackend(
         resourceMap
       }).getOrElse(ResourceDiscoverer.findResources(env.conf, false))
 
+      // TODO - could add a check here to make sure the spark.executor.resources.*.count
+      // matches what discovered
       if (resources.size == 0) {
         throw new SparkException(s"User specified resources per task via: $taskConfPrefix," +
           s" but can't find any resources available on the executor.")

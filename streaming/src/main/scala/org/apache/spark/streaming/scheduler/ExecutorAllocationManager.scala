@@ -111,6 +111,8 @@ private[streaming] class ExecutorAllocationManager(
     logDebug(s"Executors (${allExecIds.size}) = ${allExecIds}")
     val targetTotalExecutors =
       math.max(math.min(maxNumExecutors, allExecIds.size + numNewExecutors), minNumExecutors)
+    // TODO - instead of just a total number we need a number along with Resources information for
+    // each of those.
     client.requestTotalExecutors(targetTotalExecutors, 0, Map.empty)
     logInfo(s"Requested total $targetTotalExecutors executors")
   }

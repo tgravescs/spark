@@ -73,7 +73,7 @@ class YarnSchedulerBackendSuite extends SparkFunSuite with MockitoSugar with Loc
     } {
       yarnSchedulerBackendExtended.setHostToLocalTaskCount(hostToLocalCount)
       sched.setNodeBlacklist(blacklist)
-      val req = yarnSchedulerBackendExtended.prepareRequestExecutors(numRequested)
+      val req = yarnSchedulerBackendExtended.prepareRequestExecutors(numRequested, None)
       assert(req.requestedTotal === numRequested)
       assert(req.nodeBlacklist === blacklist)
       assert(req.hostToLocalTaskCount.keySet.intersect(blacklist).isEmpty)

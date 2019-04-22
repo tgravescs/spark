@@ -22,7 +22,7 @@ import scala.concurrent.{ExecutionContext, Future}
 
 import io.fabric8.kubernetes.client.KubernetesClient
 
-import org.apache.spark.SparkContext
+import org.apache.spark.{Resources, SparkContext}
 import org.apache.spark.deploy.k8s.Config._
 import org.apache.spark.deploy.k8s.Constants._
 import org.apache.spark.deploy.security.HadoopDelegationTokenManager
@@ -119,7 +119,8 @@ private[spark] class KubernetesClusterSchedulerBackend(
     }
   }
 
-  override def doRequestTotalExecutors(requestedTotal: Int): Future[Boolean] = Future[Boolean] {
+  override def doRequestTotalExecutors(requestedTotal: Int, resources: Option[Map[Int, Resources]]):
+      Future[Boolean] = Future[Boolean] {
     // TODO when we support dynamic allocation, the pod allocator should be told to process the
     // current snapshot in order to decrease/increase the number of executors accordingly.
     podAllocator.setTotalExpectedExecutors(requestedTotal)

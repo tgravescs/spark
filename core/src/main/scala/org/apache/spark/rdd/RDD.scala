@@ -1671,11 +1671,21 @@ abstract class RDD[T: ClassTag](
   @Since("2.4.0")
   def barrier(): RDDBarrier[T] = withScope(new RDDBarrier[T](this))
 
+  // @Experimental
+  // @Since("3.0.0")
+  // def withResources(): RDD[T] = withScope(new RDDBarrier[T](this))
+ /* def withResources(StageResources): this.type = {
+    this
+  } */
+
   // =======================================================================
   // Other internal methods and fields
   // =======================================================================
 
   private var storageLevel: StorageLevel = StorageLevel.NONE
+
+  private var resourceInfo: Map[String, ResourceInformation] =
+    Map.empty[String, ResourceInformation]
 
   /** User code that created this RDD (e.g. `textFile`, `parallelize`). */
   @transient private[spark] val creationSite = sc.getCallSite()

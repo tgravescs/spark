@@ -1398,7 +1398,8 @@ private class DummyLocalSchedulerBackend (sc: SparkContext, sb: SchedulerBackend
   override private[spark] def requestTotalExecutors(
       numExecutors: Int,
       localityAwareTasks: Int,
-      hostToLocalTaskCount: Map[String, Int]): Boolean = true
+      hostToLocalTaskCount: Map[String, Int],
+      resources: Option[Map[Int, Resources]]): Boolean = true
 
   override def requestExecutors(numAdditionalExecutors: Int): Boolean = true
 

@@ -589,8 +589,9 @@ class SparkConf(loadDefaults: Boolean) extends Cloneable with Logging with Seria
       val taskCpus = get(CPUS_PER_TASK)
       if (executorCores > 0 && taskCpus > 0
           && executorGpus * taskCpus != executorCores * taskGpus) {
-        throw new SparkException("Can't make full use of the resources allocated to each " +
-          "executor with current task resource requirements")
+        throw new SparkException(s"Can't make full use of the resources allocated to each " +
+          s"executor with current task resource requirements, executor Gpus: $executorGpus " +
+          s"taskGpus: $taskGpus, taskCpus: $taskCpus, executor cores: $executorCores")
       }
     }
 

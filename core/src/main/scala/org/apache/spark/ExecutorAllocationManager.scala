@@ -645,6 +645,7 @@ private[spark] class ExecutorAllocationManager(
    */
   private[spark] class ExecutorAllocationListener extends SparkListener {
 
+    private val stageIdToTaskReqs = new mutable.HashMap[Int, Resources]
     private val stageIdToNumTasks = new mutable.HashMap[Int, Int]
     // Number of running tasks per stage including speculative tasks.
     // Should be 0 when no stages are active.
@@ -668,6 +669,8 @@ private[spark] class ExecutorAllocationManager(
       val numTasks = stageSubmitted.stageInfo.numTasks
       allocationManager.synchronized {
         stageIdToNumTasks(stageId) = numTasks
+        // TODO need to keep stage task requirements to ask for the right containers
+        // stageIdToTaskReqs(stageId) = stageSubmitted...
         stageIdToNumRunningTask(stageId) = 0
         allocationManager.onSchedulerBacklogged()
 

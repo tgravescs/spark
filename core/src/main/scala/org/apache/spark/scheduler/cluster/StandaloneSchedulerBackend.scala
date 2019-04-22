@@ -22,7 +22,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 import scala.concurrent.Future
 
-import org.apache.spark.{SparkConf, SparkContext}
+import org.apache.spark.{Resources, SparkConf, SparkContext}
 import org.apache.spark.deploy.{ApplicationDescription, Command}
 import org.apache.spark.deploy.client.{StandaloneAppClient, StandaloneAppClientListener}
 import org.apache.spark.internal.{config, Logging}
@@ -190,9 +190,11 @@ private[spark] class StandaloneSchedulerBackend(
    *
    * @return whether the request is acknowledged.
    */
-  protected override def doRequestTotalExecutors(requestedTotal: Int): Future[Boolean] = {
+  protected override def doRequestTotalExecutors(requestedTotal: Int, resources:
+    Option[Map[Int, Resources]]):
+  Future[Boolean] = {
     Option(client) match {
-      case Some(c) => c.requestTotalExecutors(requestedTotal)
+      case Some(c) => c.requestTotalExecutors(requestedTotal) // TODO - finish plumbing this in
       case None =>
         logWarning("Attempted to request executors before driver fully initialized.")
         Future.successful(false)

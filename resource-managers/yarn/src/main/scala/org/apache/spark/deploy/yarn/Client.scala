@@ -29,6 +29,7 @@ import scala.collection.mutable.{ArrayBuffer, HashMap, HashSet, ListBuffer, Map}
 import scala.util.control.NonFatal
 import com.google.common.base.Objects
 import com.google.common.io.Files
+
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs._
 import org.apache.hadoop.fs.permission.FsPermission
@@ -45,7 +46,8 @@ import org.apache.hadoop.yarn.conf.YarnConfiguration
 import org.apache.hadoop.yarn.exceptions.ApplicationNotFoundException
 import org.apache.hadoop.yarn.security.AMRMTokenIdentifier
 import org.apache.hadoop.yarn.util.Records
-import org.apache.spark.{ResourceInformation, SecurityManager, SparkConf, SparkException}
+
+import org.apache.spark.{SecurityManager, SparkConf, SparkException}
 import org.apache.spark.deploy.{SparkApplication, SparkHadoopUtil}
 import org.apache.spark.deploy.security.HadoopDelegationTokenManager
 import org.apache.spark.deploy.yarn.config._
@@ -189,6 +191,10 @@ private[spark] class Client(
       // Set up the appropriate contexts to launch our AM
       val containerContext = createContainerLaunchContext(newAppResponse)
       val appContext = createApplicationSubmissionContext(newApp, containerContext)
+
+      // TODO - get resource info from yarn, only available > 3.0
+      val resourcesInfo = yarnClient.getResourceTypeInfo()
+      logWarning(" resource info is: " + resourcesInfo)
 
       // Finally, submit and monitor the application
       logInfo(s"Submitting application $appId to ResourceManager")
