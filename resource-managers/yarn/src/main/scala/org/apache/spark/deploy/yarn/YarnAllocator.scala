@@ -277,6 +277,7 @@ private[yarn] class YarnAllocator(
     allocatorBlacklistTracker.setNumClusterNodes(allocateResponse.getNumClusterNodes)
 
     logWarning("available response is: " + allocateResponse.getAvailableResources)
+    // TODO - yarn erros with ResourceNotFoundException if passing in resource it doesn't know about
     for(r <- allocateResponse.getAvailableResources.getResources()) {
       logWarning(" resource info is: " + r.getName())
     }
