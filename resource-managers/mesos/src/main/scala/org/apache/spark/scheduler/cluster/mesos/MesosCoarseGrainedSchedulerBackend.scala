@@ -29,8 +29,7 @@ import scala.concurrent.Future
 
 import org.apache.mesos.Protos.{TaskInfo => MesosTaskInfo, _}
 import org.apache.mesos.SchedulerDriver
-
-import org.apache.spark.{SecurityManager, SparkConf, SparkContext, SparkException, TaskState}
+import org.apache.spark.{Resources, SecurityManager, SparkConf, SparkContext, SparkException, TaskState}
 import org.apache.spark.deploy.mesos.config._
 import org.apache.spark.deploy.security.HadoopDelegationTokenManager
 import org.apache.spark.internal.config
@@ -745,7 +744,8 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
       super.applicationId
     }
 
-  override def doRequestTotalExecutors(requestedTotal: Int): Future[Boolean] = Future.successful {
+  override def doRequestTotalExecutors(requestedTotal: Int,
+      resources: Option[Map[Int, Resources]]): Future[Boolean] = Future.successful {
     // We don't truly know if we can fulfill the full amount of executors
     // since at coarse grain it depends on the amount of slaves available.
     logInfo("Capping the total amount of executors to " + requestedTotal)

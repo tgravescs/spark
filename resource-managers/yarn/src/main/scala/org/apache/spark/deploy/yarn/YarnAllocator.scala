@@ -26,13 +26,11 @@ import scala.collection.immutable
 import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, HashMap, HashSet}
 import scala.util.control.NonFatal
-
 import org.apache.hadoop.yarn.api.records._
 import org.apache.hadoop.yarn.client.api.AMRMClient
 import org.apache.hadoop.yarn.client.api.AMRMClient.ContainerRequest
 import org.apache.hadoop.yarn.conf.YarnConfiguration
-
-import org.apache.spark.{Resources, SecurityManager, SparkConf, SparkException}
+import org.apache.spark.{ResourceInformation, Resources, SecurityManager, SparkConf, SparkException}
 import org.apache.spark.deploy.yarn.YarnSparkHadoopUtil._
 import org.apache.spark.deploy.yarn.config._
 import org.apache.spark.internal.Logging
@@ -179,7 +177,10 @@ private[yarn] class YarnAllocator(
   private val labelExpression = sparkConf.get(EXECUTOR_NODE_LABEL_EXPRESSION)
 
   // A map to store preferred hostname and possible task numbers running on it.
+  // TODO - we need a way to map hostname -> resource amount -> number needed
   private var hostToLocalTaskCounts: Map[String, Int] = Map.empty
+  private var hostToResources: Map[String, Array[ResourceInformation]] = Map.empty
+
 
   // Number of tasks that have locality preferences in active stages
   private[yarn] var numLocalityAwareTasks: Int = 0

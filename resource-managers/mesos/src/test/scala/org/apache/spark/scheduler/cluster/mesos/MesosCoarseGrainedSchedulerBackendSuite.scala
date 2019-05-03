@@ -71,7 +71,7 @@ class MesosCoarseGrainedSchedulerBackendSuite extends SparkFunSuite
     verifyTaskLaunched(driver, "o1")
 
     // kills executors
-    assert(backend.doRequestTotalExecutors(0).futureValue)
+    assert(backend.doRequestTotalExecutors(0, None).futureValue)
     assert(backend.doKillExecutors(Seq("0")).futureValue)
     val taskID0 = createTaskId("0")
     verify(driver, times(1)).killTask(taskID0)
@@ -81,7 +81,7 @@ class MesosCoarseGrainedSchedulerBackendSuite extends SparkFunSuite
     verifyDeclinedOffer(driver, createOfferId("o2"))
 
     // Launches a new task when requested executors is positive
-    backend.doRequestTotalExecutors(2)
+    backend.doRequestTotalExecutors(2, None)
     offerResources(offers, 2)
     verifyTaskLaunched(driver, "o2")
   }

@@ -96,14 +96,13 @@ private[spark] class TaskSchedulerImpl(
   // GPUs to request per task
   val GPUS_PER_TASK = conf.get(config.GPUS_PER_TASK)
 
+  // TODO - do we want this or just use all?
   val reqResourceTypes = conf.get(SCHEDULER_RESOURCE_TYPES) match {
     case Some(x) => x
     case None => Seq.empty[String]
   }
 
-  case class TaskResourceRequirements(count: Long, units: Option[String])
-
-  val taskResourceRequirements = reqResourceTypes.map { rType =>
+  val globalTaskResourceRequirements = reqResourceTypes.map { rType =>
     val unitsConfig = SPARK_TASK_RESOURCE_PREFIX + rType + SPARK_RESOURCE_UNITS_POSTFIX
     val countValConfig = SPARK_TASK_RESOURCE_PREFIX + rType + SPARK_RESOURCE_COUNT_POSTFIX
     val countVal = conf.getOption(countValConfig).
@@ -372,17 +371,23 @@ private[spark] class TaskSchedulerImpl(
   // pass offer in here if we need it for plugin???
   // taskSet not currently used
   // visible for testing
-  def checkResourcesSchedulable(taskSet: TaskSetManager, offer: WorkerOffer,
+  def checkResourcesSchedulable(taskSet: TaskSetManager,
       availWorkerResources: Map[String, SchedulerResourceInformation],
       taskResourceAssignments: HashMap[String, ResourceInformation]): Boolean = {
 
     val localTaskReqAssign = HashMap[String, ResourceInformation]()
     // SPARK internal scheduler will only base it off the counts and known byte units, if
     // user is trying to use something else they will have to write their own plugin
-    for (rType <- reqResourceTypes) {
-      // don't need to error check here as did when taskResourceRequirements built
-      val resourceReqs = taskResourceRequirements.get(rType).get
+
+    logInfo("task set resources is: " + taskSet.taskSet.resources)
+    // combine app level requirements with the stage level requirements
+    val tsResources = globalTaskResourceRequirements ++ taskSet.taskSet.resources
+    logInfo("all resources is: " + tsResources)
+
+    for (rType <- tsResources.keys) {
+      val resourceReqs = tsResources.get(rType).get
       val actualCount = resourceReqs.count
+      logInfo("actualCount is: " + actualCount + " " + resourceReqs)
 
       val rInfo = availWorkerResources.get(rType).get
       val workerAv = rInfo.getCount()
@@ -424,12 +429,12 @@ private[spark] class TaskSchedulerImpl(
     true
   }
 
-  private def canScheduleTaskSetToOffer(taskSet: TaskSetManager, availableCpus: Int,
-      offer: WorkerOffer,
+  // returns the taskResourceAssignments if it has enough
+  private def offerHasEnoughResources(taskSet: TaskSetManager, availableCpus: Int,
       availableResources: Map[String, SchedulerResourceInformation],
       taskResourceAssignments: HashMap[String, ResourceInformation]): Boolean = {
 
-    val resourcesSchedulable = checkResourcesSchedulable(taskSet, offer,
+    val resourcesSchedulable = checkResourcesSchedulable(taskSet,
       availableResources, taskResourceAssignments)
     availableCpus >= CPUS_PER_TASK && resourcesSchedulable
   }
@@ -443,8 +448,6 @@ private[spark] class TaskSchedulerImpl(
       tasks: IndexedSeq[ArrayBuffer[TaskDescription]],
       addressesWithDescs: ArrayBuffer[(String, TaskDescription)]) : Boolean = {
 
-    //  tsResources = taskSet.taskSet.resources
-
     var launchedTask = false
     // nodes and executors that are blacklisted for the entire application have already been
     // filtered out by this point
@@ -452,11 +455,11 @@ private[spark] class TaskSchedulerImpl(
       val execId = shuffledOffers(i).executorId
       val host = shuffledOffers(i).host
 
-      // need to check all resources available against what the taskset wants
-
+      // the specific resource assignments that would be given to a task
       val taskResourceAssignments = HashMap[String, ResourceInformation]()
-      if (canScheduleTaskSetToOffer(taskSet, availableCpus(i),
-          shuffledOffers(i), availableResources(i), taskResourceAssignments)) {
+      // need to check all resources available against what the taskset wants
+      if (offerHasEnoughResources(taskSet, availableCpus(i), availableResources(i),
+          taskResourceAssignments)) {
         try {
           for (task <- taskSet.resourceOffer(execId, host, maxLocality,
               taskResourceAssignments.toMap)) {
@@ -477,6 +480,8 @@ private[spark] class TaskSchedulerImpl(
               } else {
                 rinfo.decCount(entry._2.getCount())
               }
+              logInfo(" after decrement: " + availableResources(i).get(entry._1).get.getCount())
+
             })
             assert(availableCpus(i) >= 0)
             // Only update hosts for a barrier task.
@@ -546,6 +551,7 @@ private[spark] class TaskSchedulerImpl(
     // into resourceOfferSingleTaskSet
     // val availableGpuIndices = gpuResources.map(_.getAddresses())
 
+    /*
     val reqResourceTypes = conf.get(SCHEDULER_RESOURCE_TYPES) match {
       case Some(x) => x
       case None => Seq.empty[String]
@@ -553,7 +559,9 @@ private[spark] class TaskSchedulerImpl(
     val availableResources = shuffledOffers.map(o => {
       o.resources.filterKeys(reqResourceTypes.contains(_))
     }).toArray
+    */
 
+    val availableResources = shuffledOffers.map(o => o.resources).toArray
     val availableCpus = shuffledOffers.map(o => o.cores).toArray
     val availableSlots = shuffledOffers.map(o => o.cores / CPUS_PER_TASK).sum
     val sortedTaskSets = rootPool.getSortedTaskSetQueue

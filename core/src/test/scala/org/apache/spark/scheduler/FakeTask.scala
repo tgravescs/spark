@@ -19,7 +19,7 @@ package org.apache.spark.scheduler
 
 import java.util.Properties
 
-import org.apache.spark.{Partition, SparkEnv, TaskContext}
+import org.apache.spark.{Partition, SparkEnv, TaskContext, TaskResourceRequirements}
 import org.apache.spark.executor.TaskMetrics
 
 class FakeTask(
@@ -46,7 +46,8 @@ object FakeTask {
   }
 
   def createTaskSet(numTasks: Int, stageAttemptId: Int, prefLocs: Seq[TaskLocation]*): TaskSet = {
-    createTaskSet(numTasks, stageId = 0, stageAttemptId, prefLocs: _*)
+    createTaskSet(numTasks, stageId = 0,
+      stageAttemptId, prefLocs: _*)
   }
 
   def createTaskSet(numTasks: Int, stageId: Int, stageAttemptId: Int, prefLocs: Seq[TaskLocation]*):
@@ -58,6 +59,18 @@ object FakeTask {
       new FakeTask(stageId, i, if (prefLocs.size != 0) prefLocs(i) else Nil)
     }
     new TaskSet(tasks, stageId, stageAttemptId, priority = 0, null)
+  }
+
+  def createTaskSet(numTasks: Int, stageId: Int, stageAttemptId: Int,
+    resources: Map[String, TaskResourceRequirements], prefLocs: Seq[TaskLocation]*):
+  TaskSet = {
+    if (prefLocs.size != 0 && prefLocs.size != numTasks) {
+      throw new IllegalArgumentException("Wrong number of task locations")
+    }
+    val tasks = Array.tabulate[Task[_]](numTasks) { i =>
+      new FakeTask(stageId, i, if (prefLocs.size != 0) prefLocs(i) else Nil)
+    }
+    new TaskSet(tasks, stageId, stageAttemptId, priority = 0, null, resources)
   }
 
   def createShuffleMapTaskSet(

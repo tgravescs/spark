@@ -36,7 +36,7 @@ import org.apache.spark.annotation.Evolving
  */
 @Evolving
 class Resources() {
-  private val resourceMap = new HashMap[String, ResourceInformation]()
+  private val resourceMap = new HashMap[String, TaskResourceRequirements]()
 
   def require(name: String, value: Long, units: Option[String] = None): Unit = {
 
@@ -44,7 +44,7 @@ class Resources() {
     // how to split name or deal with sub-categories like GPU.Type....
     // ??  how about name be {resource}.count or {resource}.type to match user configs??
 
-    val rInfo = new ResourceInformation(name, units.getOrElse(""), value, Array.empty)
+    val rInfo = new TaskResourceRequirements(value, units)
     resourceMap += (name -> rInfo)
   }
 

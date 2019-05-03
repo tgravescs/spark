@@ -20,6 +20,7 @@ package org.apache.spark.rdd
 import java.util.Random
 
 import scala.collection.{mutable, Map}
+import scala.collection.immutable
 import scala.collection.mutable.ArrayBuffer
 import scala.io.Codec
 import scala.language.implicitConversions
@@ -1674,9 +1675,17 @@ abstract class RDD[T: ClassTag](
   // @Experimental
   // @Since("3.0.0")
   // def withResources(): RDD[T] = withScope(new RDDBarrier[T](this))
- /* def withResources(StageResources): this.type = {
+  def withResources(stageResources: immutable.Map[String, TaskResourceRequirements]): this.type = {
+    resourceInfo = stageResources
     this
-  } */
+  }
+
+  def withResourcestest(): this.type = {
+    resourceInfo = stageResources
+    this
+  }
+
+  def getResources(): immutable.Map[String, TaskResourceRequirements] = resourceInfo
 
   // =======================================================================
   // Other internal methods and fields
@@ -1684,8 +1693,8 @@ abstract class RDD[T: ClassTag](
 
   private var storageLevel: StorageLevel = StorageLevel.NONE
 
-  private var resourceInfo: Map[String, ResourceInformation] =
-    Map.empty[String, ResourceInformation]
+  private var resourceInfo: immutable.Map[String, TaskResourceRequirements] =
+    immutable.Map.empty[String, TaskResourceRequirements]
 
   /** User code that created this RDD (e.g. `textFile`, `parallelize`). */
   @transient private[spark] val creationSite = sc.getCallSite()
