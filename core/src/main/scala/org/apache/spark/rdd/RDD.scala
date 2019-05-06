@@ -1675,15 +1675,12 @@ abstract class RDD[T: ClassTag](
   // @Experimental
   // @Since("3.0.0")
   // def withResources(): RDD[T] = withScope(new RDDBarrier[T](this))
+  // if withResources gives you need RDD we wouldn't return this.type
   def withResources(stageResources: immutable.Map[String, TaskResourceRequirements]): this.type = {
     resourceInfo = stageResources
     this
   }
 
-  def withResourcestest(): this.type = {
-    resourceInfo = stageResources
-    this
-  }
 
   def getResources(): immutable.Map[String, TaskResourceRequirements] = resourceInfo
 
