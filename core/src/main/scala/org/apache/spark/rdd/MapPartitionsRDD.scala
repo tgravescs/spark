@@ -19,7 +19,7 @@ package org.apache.spark.rdd
 
 import scala.reflect.ClassTag
 
-import org.apache.spark.{Partition, TaskContext}
+import org.apache.spark.{Partition, ResourceProfile, TaskContext}
 
 /**
  * An RDD that applies the provided function to every partition of the parent RDD.
@@ -41,7 +41,8 @@ private[spark] class MapPartitionsRDD[U: ClassTag, T: ClassTag](
     f: (TaskContext, Int, Iterator[T]) => Iterator[U],  // (TaskContext, partition index, iterator)
     preservesPartitioning: Boolean = false,
     isFromBarrier: Boolean = false,
-    isOrderSensitive: Boolean = false)
+    isOrderSensitive: Boolean = false,
+    resourceProfile: Option[ResourceProfile] = None)
   extends RDD[U](prev) {
 
   override val partitioner = if (preservesPartitioning) firstParent[T].partitioner else None
@@ -55,6 +56,8 @@ private[spark] class MapPartitionsRDD[U: ClassTag, T: ClassTag](
     super.clearDependencies()
     prev = null
   }
+
+  override def getResources(): Option[ResourceProfile] = resourceProfile
 
   @transient protected lazy override val isBarrier_ : Boolean =
     isFromBarrier || dependencies.exists(_.rdd.isBarrier())

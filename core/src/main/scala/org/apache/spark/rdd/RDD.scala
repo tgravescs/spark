@@ -371,9 +371,10 @@ abstract class RDD[T: ClassTag](
   /**
    * Return a new RDD by applying a function to all elements of this RDD.
    */
-  def map[U: ClassTag](f: T => U): RDD[U] = withScope {
+  def map[U: ClassTag](f: T => U, rprof: Option[ResourceProfile] = None): RDD[U] = withScope {
     val cleanF = sc.clean(f)
-    new MapPartitionsRDD[U, T](this, (context, pid, iter) => iter.map(cleanF))
+    new MapPartitionsRDD[U, T](this, (context, pid, iter) => iter.map(cleanF),
+      resourceProfile = rprof)
   }
 
   /**
@@ -1682,7 +1683,7 @@ abstract class RDD[T: ClassTag](
   }
 
 
-  def getResources(): immutable.Map[String, TaskResourceRequirements] = resourceInfo
+  def getResources(): Option[ResourceProfile] = resourceProfile
 
   // =======================================================================
   // Other internal methods and fields
@@ -1692,6 +1693,8 @@ abstract class RDD[T: ClassTag](
 
   private var resourceInfo: immutable.Map[String, TaskResourceRequirements] =
     immutable.Map.empty[String, TaskResourceRequirements]
+
+  private var resourceProfile: Option[ResourceProfile] = None
 
   /** User code that created this RDD (e.g. `textFile`, `parallelize`). */
   @transient private[spark] val creationSite = sc.getCallSite()
