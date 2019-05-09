@@ -381,7 +381,7 @@ private[spark] class TaskSchedulerImpl(
 
     logInfo("task set resources is: " + taskSet.taskSet.resources)
     // combine app level requirements with the stage level requirements
-    val tsResources = globalTaskResourceRequirements ++ taskSet.taskSet.resources
+    val tsResources = globalTaskResourceRequirements ++ taskSet.taskSet.resources.get.getResources
     logInfo("all resources is: " + tsResources)
 
     for (rType <- tsResources.keys) {

@@ -377,6 +377,16 @@ private[spark] class DAGScheduler(
     }
   }
 
+  private def calculateResourceRequirementsForStage(rdd: RDD[_]): Unit = {
+    if (rdd.isBarrier() &&
+      !traverseParentRDDsWithinStage(rdd, (r: RDD[_]) =>
+        r.getNumPartitions == numTasksInStage &&
+          r.dependencies.count(_.rdd.isBarrier()) <= 1)) {
+      throw new BarrierJobUnsupportedRDDChainException
+    }
+  }
+
+
   /**
    * Creates a ShuffleMapStage that generates the given shuffle dependency's partitions. If a
    * previously run stage generated the same shuffle data, this function will copy the output
@@ -390,6 +400,7 @@ private[spark] class DAGScheduler(
     checkBarrierStageWithRDDChainPattern(rdd, rdd.getNumPartitions)
 
     // TODO - do we need logic here for the withResources???  to resolve multiple requirements, etc
+
 
     val numTasks = rdd.partitions.length
     val parents = getOrCreateParentStages(rdd, jobId)
@@ -1235,7 +1246,7 @@ private[spark] class DAGScheduler(
         s"tasks are for partitions ${tasks.take(15).map(_.partitionId)})")
       taskScheduler.submitTasks(new TaskSet(
         tasks.toArray, stage.id, stage.latestInfo.attemptNumber,
-        jobId, properties, stage.rdd.getResources))
+        jobId, properties, stage.rdd.getResources()))
     } else {
       // Because we posted SparkListenerStageSubmitted earlier, we should mark
       // the stage as completed here in case there are no tasks to run

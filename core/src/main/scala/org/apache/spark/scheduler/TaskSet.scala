@@ -19,7 +19,7 @@ package org.apache.spark.scheduler
 
 import java.util.Properties
 
-import org.apache.spark.TaskResourceRequirements
+import org.apache.spark.ResourceProfile
 
 /**
  * A set of tasks submitted together to the low-level TaskScheduler, usually representing
@@ -31,8 +31,7 @@ private[spark] class TaskSet(
     val stageAttemptId: Int,
     val priority: Int,
     val properties: Properties,
-    val resources: Map[String, TaskResourceRequirements] =
-      Map.empty[String, TaskResourceRequirements]) {
+    val resources: Option[ResourceProfile] = None) {
   val id: String = stageId + "." + stageAttemptId
 
   override def toString: String = "TaskSet " + id
