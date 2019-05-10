@@ -378,14 +378,31 @@ private[spark] class DAGScheduler(
   }
 
   private def calculateResourceRequirementsForStage(rdd: RDD[_]): Unit = {
-    if (rdd.isBarrier() &&
+    if (
       !traverseParentRDDsWithinStage(rdd, (r: RDD[_]) =>
-        r.getNumPartitions == numTasksInStage &&
+          r.getResources() != None &&
           r.dependencies.count(_.rdd.isBarrier()) <= 1)) {
       throw new BarrierJobUnsupportedRDDChainException
     }
   }
 
+  def mergeResourceProfiles(r1: ResourceProfile, r2: ResourceProfile): ResourceProfile = {
+    val mergedKeys = r1.getResources.keySet ++ r2.getResources.keySet
+    val merged = mergedKeys.map { rName =>
+      if (r2.getResources.contains(rName) && r1.getResources.contains(rName)) {
+        val r2ri = r2.getResources(rName)
+        val r1ri = r1.getResources(rName)
+        // TODO - need to handle units here
+        // TODO - do we want to sum things like Memory?
+        if (r2ri.count > r1ri.count) (rName, r2ri) else (rName, r1ri)
+      } else if (r2.getResources.contains(rName)) {
+        (rName, r2.getResources(rName))
+      } else {
+        (rName, r1.getResources(rName))
+      }
+    }.toMap
+    new ResourceProfile(merged)
+  }
 
   /**
    * Creates a ShuffleMapStage that generates the given shuffle dependency's partitions. If a
@@ -400,13 +417,23 @@ private[spark] class DAGScheduler(
     checkBarrierStageWithRDDChainPattern(rdd, rdd.getNumPartitions)
 
     // TODO - do we need logic here for the withResources???  to resolve multiple requirements, etc
-
+    val stageResourceProfiles = getStageResourceProfiles(rdd)
+    // need to resolve conflicts if multiple
+    var resourceProfile: Option[ResourceProfile] = None
+    for (profile <- stageResourceProfiles) {
+      if (resourceProfile.isEmpty) {
+        resourceProfile = Some(profile)
+      } else {
+        resourceProfile = Some(mergeResourceProfiles(resourceProfile.get, profile))
+      }
+    }
 
     val numTasks = rdd.partitions.length
     val parents = getOrCreateParentStages(rdd, jobId)
     val id = nextStageId.getAndIncrement()
     val stage = new ShuffleMapStage(
-      id, rdd, numTasks, parents, jobId, rdd.creationSite, shuffleDep, mapOutputTracker)
+      id, rdd, numTasks, parents, jobId, rdd.creationSite, shuffleDep, mapOutputTracker,
+      resourceProfile)
 
     stageIdToStage(id) = stage
     shuffleIdToMapStage(shuffleDep.shuffleId) = stage
@@ -463,9 +490,10 @@ private[spark] class DAGScheduler(
     checkBarrierStageWithDynamicAllocation(rdd)
     checkBarrierStageWithNumSlots(rdd)
     checkBarrierStageWithRDDChainPattern(rdd, partitions.toSet.size)
+    // TODO - add in resource profile calculations
     val parents = getOrCreateParentStages(rdd, jobId)
     val id = nextStageId.getAndIncrement()
-    val stage = new ResultStage(id, rdd, func, partitions, parents, jobId, callSite)
+    val stage = new ResultStage(id, rdd, func, partitions, parents, jobId, callSite, resourceProfile)
     stageIdToStage(id) = stage
     updateJobIdStageIdMaps(jobId, stage)
     stage
@@ -537,6 +565,32 @@ private[spark] class DAGScheduler(
     }
     parents
   }
+
+  private[scheduler] def getStageResourceProfiles(rdd: RDD[_]):
+      HashSet[ResourceProfile] = {
+    val resourceProfiles = new HashSet[ResourceProfile]
+    val visited = new HashSet[RDD[_]]
+    val waitingForVisit = new ArrayStack[RDD[_]]
+    waitingForVisit.push(rdd)
+    while (waitingForVisit.nonEmpty) {
+      val toVisit = waitingForVisit.pop()
+      if (!visited(toVisit)) {
+        visited += toVisit
+        toVisit.dependencies.foreach {
+          case _: ShuffleDependency[_, _, _] =>
+            // Not within the same stage with current rdd, do nothing.
+            // TODO - need to handle operations that cross stage boundaries?
+          case dependency =>
+            if (rdd.getResources().nonEmpty) {
+              resourceProfiles += rdd.getResources().get
+            }
+            waitingForVisit.push(dependency.rdd)
+        }
+      }
+    }
+    resourceProfiles
+  }
+
 
   /**
    * Traverses the given RDD and its ancestors within the same stage and checks whether all of the

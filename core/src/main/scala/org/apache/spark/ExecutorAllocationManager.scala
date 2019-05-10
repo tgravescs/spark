@@ -670,6 +670,7 @@ private[spark] class ExecutorAllocationManager(
       allocationManager.synchronized {
         stageIdToNumTasks(stageId) = numTasks
         // TODO need to keep stage task requirements to ask for the right containers
+        // stageSubmitted.stageInfo.resourceProfile
         // stageIdToTaskReqs(stageId) = stageSubmitted.stageInfo
         stageIdToNumRunningTask(stageId) = 0
         allocationManager.onSchedulerBacklogged()

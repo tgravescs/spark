@@ -17,8 +17,9 @@
 
 package org.apache.spark.scheduler
 
-import scala.collection.mutable.HashSet
+import org.apache.spark.ResourceProfile
 
+import scala.collection.mutable.HashSet
 import org.apache.spark.executor.TaskMetrics
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
@@ -59,7 +60,8 @@ private[scheduler] abstract class Stage(
     val numTasks: Int,
     val parents: List[Stage],
     val firstJobId: Int,
-    val callSite: CallSite)
+    val callSite: CallSite,
+    val resourceProfile: Option[ResourceProfile])
   extends Logging {
 
   val numPartitions = rdd.partitions.length

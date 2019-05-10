@@ -91,6 +91,7 @@ private[spark] class ShuffleMapTask(
     _executorDeserializeCpuTime = if (threadMXBean.isCurrentThreadCpuTimeSupported) {
       threadMXBean.getCurrentThreadCpuTime - deserializeStartCpuTime
     } else 0L
+    logInfo("runTask shuffle map task, rdd debug string: " + rdd.toDebugString)
 
     dep.shuffleWriterProcessor.write(rdd, dep, partitionId, context, partition)
   }
