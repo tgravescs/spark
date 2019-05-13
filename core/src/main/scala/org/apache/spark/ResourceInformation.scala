@@ -37,12 +37,12 @@ case class ResourceInformation(
     private val name: String,
     private val units: String,
     private val count: Long,
-    private val addresses: Array[String] = Array.empty,
-    private val attributes: Map[String, String]) {
+    private val addresses: Array[String] = Array.empty) {
+   //  private val attributes: Map[String, String]) {
 
   def getName(): String = name
   def getUnits(): String = units
   def getCount(): Long = count
   def getAddresses(): Array[String] = addresses
-  def getAttribute(attr: String): Option[String] = attributes.get(attr)
+  // def getAttribute(attr: String): Option[String] = attributes.get(attr)
 }

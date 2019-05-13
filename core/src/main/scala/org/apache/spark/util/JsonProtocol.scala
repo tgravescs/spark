@@ -654,7 +654,8 @@ private[spark] object JsonProtocol {
     val stageInfos = jsonOption(json \ "Stage Infos")
       .map(_.extract[Seq[JValue]].map(stageInfoFromJson)).getOrElse {
         stageIds.map { id =>
-          new StageInfo(id, 0, "unknown", 0, Seq.empty, Seq.empty, "unknown")
+          new StageInfo(id, 0, "unknown", 0, Seq.empty, Seq.empty, "unknown",
+            resourceProfile = None)
         }
       }
     SparkListenerJobStart(jobId, submissionTime, stageInfos, properties)
@@ -787,9 +788,12 @@ private[spark] object JsonProtocol {
         case None => Seq.empty[AccumulableInfo]
       }
     }
+    // TODO - probably need conversion function like ResourceInformation
+    val resourceProfile = jsonOption(json \ "resourceProfile").map(_.extract[ResourceProfile])
 
     val stageInfo = new StageInfo(
-      stageId, attemptId, stageName, numTasks, rddInfos, parentIds, details)
+      stageId, attemptId, stageName, numTasks, rddInfos, parentIds, details,
+      resourceProfile = resourceProfile)
     stageInfo.submissionTime = submissionTime
     stageInfo.completionTime = completionTime
     stageInfo.failureReason = failureReason

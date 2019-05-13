@@ -490,10 +490,23 @@ private[spark] class DAGScheduler(
     checkBarrierStageWithDynamicAllocation(rdd)
     checkBarrierStageWithNumSlots(rdd)
     checkBarrierStageWithRDDChainPattern(rdd, partitions.toSet.size)
-    // TODO - add in resource profile calculations
+
+    // TODO - do we need logic here for the withResources???
+    val stageResourceProfiles = getStageResourceProfiles(rdd)
+    // need to resolve conflicts if multiple
+    var resourceProfile: Option[ResourceProfile] = None
+    for (profile <- stageResourceProfiles) {
+      if (resourceProfile.isEmpty) {
+        resourceProfile = Some(profile)
+      } else {
+        resourceProfile = Some(mergeResourceProfiles(resourceProfile.get, profile))
+      }
+    }
+
     val parents = getOrCreateParentStages(rdd, jobId)
     val id = nextStageId.getAndIncrement()
-    val stage = new ResultStage(id, rdd, func, partitions, parents, jobId, callSite, resourceProfile)
+    val stage = new ResultStage(id, rdd, func, partitions, parents, jobId, callSite,
+      resourceProfile)
     stageIdToStage(id) = stage
     updateJobIdStageIdMaps(jobId, stage)
     stage
@@ -1186,6 +1199,7 @@ private[spark] class DAGScheduler(
         outputCommitCoordinator.stageStart(
           stage = s.id, maxPartitionId = s.rdd.partitions.length - 1)
     }
+    // TODO - do we need anything here for resource requests dealing with locality?
     val taskIdToLocations: Map[Int, Seq[TaskLocation]] = try {
       stage match {
         case s: ShuffleMapStage =>

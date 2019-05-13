@@ -369,7 +369,6 @@ private[spark] class TaskSchedulerImpl(
   }
 
   // pass offer in here if we need it for plugin???
-  // taskSet not currently used
   // visible for testing
   def checkResourcesSchedulable(taskSet: TaskSetManager,
       availWorkerResources: Map[String, SchedulerResourceInformation],
@@ -381,19 +380,21 @@ private[spark] class TaskSchedulerImpl(
 
     logInfo("task set resources is: " + taskSet.taskSet.resources)
     // combine app level requirements with the stage level requirements
+    // TODO - do we want this or have stage level be able to override?
     val tsResources = globalTaskResourceRequirements ++ taskSet.taskSet.resources.get.getResources
     logInfo("all resources is: " + tsResources)
 
-    for (rType <- tsResources.keys) {
-      val resourceReqs = tsResources.get(rType).get
+    for (rName <- tsResources.keys) {
+      val resourceReqs = tsResources.get(rName).get
       val actualCount = resourceReqs.count
       logInfo("actualCount is: " + actualCount + " " + resourceReqs)
 
-      val rInfo = availWorkerResources.get(rType).get
+      // for debugging - if leaving need to check is not there
+      val rInfo = availWorkerResources.get(rName).get
       val workerAv = rInfo.getCount()
-      logInfo(s"available type is: $rType, count is: $workerAv")
+      logInfo(s"available type is: $rName, count is: $workerAv")
 
-      val offerSatisfies = availWorkerResources.get(rType).map( r => {
+      val offerSatisfies = availWorkerResources.get(rName).map( r => {
         val unit = r.getUnits()
         val availCount = if (!unit.isEmpty) {
           try {
@@ -408,7 +409,7 @@ private[spark] class TaskSchedulerImpl(
               r.getCount()
           }
         } else {
-          availWorkerResources.get(rType).get.getCount()
+          availWorkerResources.get(rName).get.getCount()
         }
 
         availCount >= actualCount
@@ -416,9 +417,9 @@ private[spark] class TaskSchedulerImpl(
 
       // choose specific resources to give to next task
       if (offerSatisfies) {
-        logInfo(s"good to go for $rType")
+        logInfo(s"good to go for $rName")
         // TODO - do we want to try to take addresses if have units??
-        localTaskReqAssign.put(rType, new ResourceInformation(rType,
+        localTaskReqAssign.put(rName, new ResourceInformation(rName,
           resourceReqs.units.getOrElse(""), actualCount,
           rInfo.takeAddresses(actualCount.toInt).toArray))
       } else {
@@ -478,11 +479,13 @@ private[spark] class TaskSchedulerImpl(
               if (entry._2.getAddresses().size > 0) {
                 rinfo.removeAddresses(entry._2.getAddresses())
               } else {
+                // TODO - need to make sure units match here, this is currently a bug!
                 rinfo.decCount(entry._2.getCount())
               }
               logInfo(" after decrement: " + availableResources(i).get(entry._1).get.getCount())
 
             })
+            // TODO - do we want to add in more resource check?
             assert(availableCpus(i) >= 0)
             // Only update hosts for a barrier task.
             if (taskSet.isBarrier) {
@@ -542,8 +545,10 @@ private[spark] class TaskSchedulerImpl(
     }.getOrElse(offers)
 
     val shuffledOffers = shuffleOffers(filteredOffers)
-    // Build a list of tasks to assign to each worker.
+    // Build a list of tasks to assign to each worker. This will be a max since other resources
+    // may also be required
     val tasks = shuffledOffers.map(o => new ArrayBuffer[TaskDescription](o.cores / CPUS_PER_TASK))
+
     // val availableResources = shuffledOffers.map(o => o.resources).toArray
     // val gpuResources = availableResources.map(_.getOrElse(ResourceInformation.GPU,
     //   SchedulerResourceInformation.empty))
@@ -578,7 +583,8 @@ private[spark] class TaskSchedulerImpl(
     // NOTE: the preferredLocality order: PROCESS_LOCAL, NODE_LOCAL, NO_PREF, RACK_LOCAL, ANY
     for (taskSet <- sortedTaskSets) {
       // Skip the barrier taskSet if the available slots are less than the number of pending tasks.
-      // TODO - for generic this would need to handle more then just slots!!
+      // TODO - for stage scheduling this would need to handle more then just slots!! Or this is
+      // left as simple sanity check and we skip later anyway
       if (taskSet.isBarrier && availableSlots < taskSet.numTasks) {
       // if (taskSet.isBarrier && taskSet.checkAvailResources(allresources(cpu, memory, other))) {
 

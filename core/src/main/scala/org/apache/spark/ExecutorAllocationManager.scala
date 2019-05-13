@@ -645,8 +645,8 @@ private[spark] class ExecutorAllocationManager(
    */
   private[spark] class ExecutorAllocationListener extends SparkListener {
 
-    private val stageIdToTaskReqs = new mutable.HashMap[Int, Resources]
     private val stageIdToNumTasks = new mutable.HashMap[Int, Int]
+    private val stageIdToResourceProfile = new mutable.HashMap[Int, Option[ResourceProfile]]
     // Number of running tasks per stage including speculative tasks.
     // Should be 0 when no stages are active.
     private val stageIdToNumRunningTask = new mutable.HashMap[Int, Int]
@@ -670,14 +670,15 @@ private[spark] class ExecutorAllocationManager(
       allocationManager.synchronized {
         stageIdToNumTasks(stageId) = numTasks
         // TODO need to keep stage task requirements to ask for the right containers
-        // stageSubmitted.stageInfo.resourceProfile
-        // stageIdToTaskReqs(stageId) = stageSubmitted.stageInfo
+        stageIdToResourceProfile(stageId) = stageSubmitted.stageInfo.resourceProfile
         stageIdToNumRunningTask(stageId) = 0
         allocationManager.onSchedulerBacklogged()
 
         // Compute the number of tasks requested by the stage on each host
         var numTasksPending = 0
         val hostToLocalTaskCountPerStage = new mutable.HashMap[String, Int]()
+        // TODO - what if locality preference and resourceprofile conflict?? Do we want to change
+        // this logic?
         stageSubmitted.stageInfo.taskLocalityPreferences.foreach { locality =>
           if (!locality.isEmpty) {
             numTasksPending += 1
@@ -868,6 +869,7 @@ private[spark] class ExecutorAllocationManager(
       stageIdToExecutorPlacementHints.values.foreach { case (numTasksPending, localities) =>
         localityAwareTasks += numTasksPending
         localities.foreach { case (hostname, count) =>
+          // TODO - need to keep track per stage or per resource profile
           val updatedCount = localityToCount.getOrElse(hostname, 0) + count
           localityToCount(hostname) = updatedCount
         }
