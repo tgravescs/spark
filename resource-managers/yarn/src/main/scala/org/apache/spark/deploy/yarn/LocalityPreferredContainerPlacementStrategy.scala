@@ -155,6 +155,7 @@ private[yarn] class LocalityPreferredContainerPlacementStrategy(
    * Calculate the number of executors need to satisfy the given number of pending tasks.
    */
   private def numExecutorsPending(numTasksPending: Int): Int = {
+    // TODO - this would need to be stage level
     val coresPerExecutor = resource.getVirtualCores
     (numTasksPending * sparkConf.get(CPUS_PER_TASK) + coresPerExecutor - 1) / coresPerExecutor
   }

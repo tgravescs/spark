@@ -186,6 +186,7 @@ private[yarn] class YarnAllocator(
   private[yarn] var numLocalityAwareTasks: Int = 0
 
   // A container placement strategy based on pending tasks' locality preference
+  // TODO - need to update resource based on stage level
   private[yarn] val containerPlacementStrategy =
     new LocalityPreferredContainerPlacementStrategy(sparkConf, conf, resource, resolver)
 

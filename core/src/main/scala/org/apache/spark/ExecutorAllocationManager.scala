@@ -186,6 +186,9 @@ private[spark] class ExecutorAllocationManager(
   // Host to possible task running on it, used for executor placement.
   private var hostToLocalTaskCount: Map[String, Int] = Map.empty
 
+  private var hostToResourceProfile: Map[String, Set[(ResourceProfile, Int)]] =
+    Map.empty
+
   /**
    * Verify that the settings specified through the config are valid.
    * If not, throw an appropriate exception.
@@ -866,15 +869,20 @@ private[spark] class ExecutorAllocationManager(
     def updateExecutorPlacementHints(): Unit = {
       var localityAwareTasks = 0
       val localityToCount = new mutable.HashMap[String, Int]()
-      stageIdToExecutorPlacementHints.values.foreach { case (numTasksPending, localities) =>
+      val hostToRProfile = new mutable.HashMap[String, (Option[ResourceProfile], Int)]()
+      stageIdToExecutorPlacementHints.foreach { case (key, (numTasksPending, localities)) =>
         localityAwareTasks += numTasksPending
         localities.foreach { case (hostname, count) =>
           // TODO - need to keep track per stage or per resource profile
           val updatedCount = localityToCount.getOrElse(hostname, 0) + count
           localityToCount(hostname) = updatedCount
+          // val rProfAndCount = hostToRProfile.getOrElseUpdate(hostname,
+          //   (stageIdToResourceProfile(key), 0))
+          // hostToRProfile(hostname) = (rProfAndCount._1, rProfAndCount._2 + 1)
         }
       }
 
+      // allocationManager.hostToResourceProfile =
       allocationManager.localityAwareTasks = localityAwareTasks
       allocationManager.hostToLocalTaskCount = localityToCount.toMap
     }
