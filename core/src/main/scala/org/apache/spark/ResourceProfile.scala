@@ -29,15 +29,18 @@ import org.apache.spark.annotation.Evolving
  * @param addresses an optional array of strings describing the addresses of the resource
  */
 @Evolving
-class ResourceProfile(resourceReqs: Map[String, TaskResourceRequirements]) {
+class ResourceProfile(taskReqs: Map[String, TaskResourceRequirements], sparkConf: SparkConf) {
 
-  private var resources: Map[String, TaskResourceRequirements] =
+  // TODO - want to add both task requirements and executor requirements
+  // Perhaps use sparkConf as a way???
+
+  private var taskResources: Map[String, TaskResourceRequirements] =
     Map.empty[String, TaskResourceRequirements]
 
   // TODO - what about number of hosts?  or having different hosts with different profiles?
   // limit the number of tasks running per stage??
 
-  def getResources: Map[String, TaskResourceRequirements] = resources
+  def getResources: Map[String, TaskResourceRequirements] = taskResources
 
   def required(name: String, value: Long, units: String): Unit = {
 
