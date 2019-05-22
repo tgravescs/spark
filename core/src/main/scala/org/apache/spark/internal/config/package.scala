@@ -35,7 +35,7 @@ package object config {
   private[spark] val SPARK_TASK_RESOURCE_PREFIX = "spark.task.resource."
 
   private[spark] val SPARK_RESOURCE_COUNT_SUFFIX = ".count"
-  private[spark] val SPARK_RESOURCE_ADDRESSES_SUFFIX = ".addresses"
+  private[spark] val SPARK_RESOURCE_FILE_SUFFIX = ".resourcesFile"
   private[spark] val SPARK_RESOURCE_DISCOVERY_SCRIPT_SUFFIX = ".discoveryScript"
 
   private[spark] val DRIVER_CLASS_PATH =

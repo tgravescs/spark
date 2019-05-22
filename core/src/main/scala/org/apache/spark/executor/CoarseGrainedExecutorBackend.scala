@@ -17,7 +17,6 @@
 
 package org.apache.spark.executor
 
-import java.io.{BufferedInputStream, FileInputStream}
 import java.net.URL
 import java.nio.ByteBuffer
 import java.util.Locale
@@ -27,18 +26,13 @@ import scala.collection.mutable
 import scala.util.{Failure, Success}
 import scala.util.control.NonFatal
 
-import com.fasterxml.jackson.databind.exc.MismatchedInputException
-import org.json4s.DefaultFormats
-import org.json4s.JsonAST.JArray
-import org.json4s.MappingException
-import org.json4s.jackson.JsonMethods._
-
 import org.apache.spark._
 import org.apache.spark.TaskState.TaskState
 import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.deploy.worker.WorkerWatcher
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config._
+import org.apache.spark.ResourceUtils._
 import org.apache.spark.rpc._
 import org.apache.spark.scheduler.{ExecutorLossReason, TaskDescription}
 import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages._
@@ -55,8 +49,6 @@ private[spark] class CoarseGrainedExecutorBackend(
     env: SparkEnv,
     resourcesFile: Option[String])
   extends ThreadSafeRpcEndpoint with ExecutorBackend with Logging {
-
-  private implicit val formats = DefaultFormats
 
   private[this] val stopping = new AtomicBoolean(false)
   var executor: Executor = null
@@ -84,48 +76,31 @@ private[spark] class CoarseGrainedExecutorBackend(
   }
 
   // visible for testing
-  def parseOrFindResources(resourcesFile: Option[String]): Map[String, ResourceInformation] = {
+  def parseOrFindResources(resourcesFileOpt: Option[String]): Map[String, ResourceInformation] = {
     // only parse the resources if a task requires them
-    val resourceInfo = if (env.conf.getAllWithPrefix(SPARK_TASK_RESOURCE_PREFIX).nonEmpty) {
-      val actualExecResources = resourcesFile.map { resourceFileStr => {
-        val source = new BufferedInputStream(new FileInputStream(resourceFileStr))
-        val resourceMap = try {
-          val parsedJson = parse(source).asInstanceOf[JArray].arr
-          parsedJson.map { json =>
-            val name = (json \ "name").extract[String]
-            val addresses = (json \ "addresses").extract[Array[String]]
-            new ResourceInformation(name, addresses)
-          }.map(x => (x.name -> x)).toMap
-        } catch {
-          case e @ (_: MappingException | _: MismatchedInputException) =>
-            throw new SparkException(
-              s"Exception parsing the resources in $resourceFileStr", e)
-        } finally {
-          source.close()
-        }
-        resourceMap
-      }}.getOrElse(ResourceDiscoverer.discoverResourcesInformation(env.conf,
-        SPARK_EXECUTOR_RESOURCE_PREFIX))
+    val resourceInfo = if (anyComponentResourceRequests(env.conf, SPARK_TASK_RESOURCE_PREFIX)) {
+      val executorAllocations =
+        parseAllocatedAndDiscoverResources(
+          env.conf,
+          SPARK_EXECUTOR_RESOURCE_PREFIX,
+          resourcesFileOpt)
 
-      if (actualExecResources.isEmpty) {
+      if (executorAllocations.isEmpty) {
         throw new SparkException("User specified resources per task via: " +
           s"$SPARK_TASK_RESOURCE_PREFIX, but can't find any resources available on the executor.")
       }
-      val execReqResourcesAndCounts =
-        env.conf.getAllWithPrefixAndSuffix(SPARK_EXECUTOR_RESOURCE_PREFIX,
-          SPARK_RESOURCE_COUNT_SUFFIX).toMap
+      val requests = parseAllResourceRequests(env.conf, SPARK_TASK_RESOURCE_PREFIX)
+      assertAllResourceAllocationMeetRequests(executorAllocations, requests)
+      val execResourceInformation = executorAllocations
+        .map(alloc => (alloc.id.resourceName, alloc.toResourceInfo())).toMap
 
-      ResourceDiscoverer.checkActualResourcesMeetRequirements(execReqResourcesAndCounts,
-        actualExecResources)
-
-      logInfo("===============================================================================")
+      logInfo("==============================================================")
       logInfo(s"Executor $executorId Resources:")
-      actualExecResources.foreach { case (k, v) => logInfo(s"$k -> $v") }
-      logInfo("===============================================================================")
-
-      actualExecResources
+      execResourceInformation.foreach { case (k, v) => logInfo(s"$k -> $v") }
+      logInfo("==============================================================")
+      execResourceInformation
     } else {
-      if (resourcesFile.nonEmpty) {
+      if (resourcesFileOpt.nonEmpty) {
         logWarning(s"A resources file was specified but the application is not configured " +
           s"to use any resources, see the configs with prefix: ${SPARK_TASK_RESOURCE_PREFIX}")
       }

@@ -17,11 +17,11 @@
 
 package org.apache.spark
 
-import java.io.File
+import java.io.{BufferedInputStream, File, FileInputStream}
 
 import com.fasterxml.jackson.core.JsonParseException
+import com.fasterxml.jackson.databind.exc.MismatchedInputException
 import org.json4s.{DefaultFormats, MappingException}
-import org.json4s.JsonAST.JValue
 import org.json4s.jackson.JsonMethods._
 
 import org.apache.spark.internal.Logging
@@ -29,18 +29,96 @@ import org.apache.spark.internal.config._
 import org.apache.spark.util.Utils.executeAndGetOutput
 
 /**
- * Discovers information about resources (GPUs/FPGAs/etc). It currently only supports
- * resources that have addresses.
- * This class finds resources by running and parsing the output of the user specified script
- * from the config spark.{driver/executor}.resource.{resourceName}.discoveryScript.
- * The output of the script it runs is expected to be JSON in the format of the
- * ResourceInformation class.
  *
- * For example:  {"name": "gpu", "addresses": ["0","1"]}
+ * @param componentName spark.driver / spark.executor / spark.task
+ * @param resourceName  gpu, fpga
  */
-private[spark] object ResourceDiscoverer extends Logging {
+private[spark] case class ResourceID(componentName: String, resourceName: String) {
+  def confPrefix: String = s"$componentName.resource.$resourceName." // with ending dot
+}
 
-  private implicit val formats = DefaultFormats
+private[spark] case class ResourceRequest(
+    id: ResourceID,
+    count: Double,
+    discoveryScript: Option[String])
+
+private[spark] case class ResourceAllocation(id: ResourceID, addresses: Seq[String]) {
+  def toResourceInfo(): ResourceInformation = {
+    new ResourceInformation(id.resourceName, addresses.toArray)
+  }
+}
+
+private[spark] object ResourceUtils extends Logging {
+
+  def parseResourceRequest(sparkConf: SparkConf, resourceId: ResourceID): ResourceRequest = {
+    val settings = sparkConf.getAllWithPrefix(resourceId.confPrefix).toMap
+    val quantity = settings.get(SPARK_RESOURCE_COUNT_SUFFIX).getOrElse(
+      throw new SparkException("You must specify a count")).toDouble
+    val discoveryScript = settings.get(SPARK_RESOURCE_DISCOVERY_SCRIPT_SUFFIX)
+    ResourceRequest(resourceId, quantity, discoveryScript)
+  }
+
+  def listResourceIds(sparkConf: SparkConf, componentName: String): Seq[ResourceID] = {
+    sparkConf.getAllWithPrefix(s"$componentName.resource.").map { case (key, _) =>
+      key.substring(0, key.indexOf('.'))
+    }.toSet.toSeq.map(name => ResourceID(componentName, name))
+  }
+
+  def parseAllResourceRequests(
+      sparkConf: SparkConf, componentName: String): Seq[ResourceRequest] = {
+    listResourceIds(sparkConf, componentName).map { id =>
+      parseResourceRequest(sparkConf, id)
+    }
+  }
+
+  def parseAllocatedFromJsonFile(resourcesFile: String): Seq[ResourceAllocation] = {
+    implicit val formats = DefaultFormats
+    val resourceInput = new BufferedInputStream(new FileInputStream(resourcesFile))
+    try {
+      parse(resourceInput).extract[Seq[ResourceAllocation]]
+    } catch {
+      case e@(_: MappingException | _: MismatchedInputException | _: ClassCastException) =>
+        throw new SparkException(s"Exception parsing the resources in $resourcesFile", e)
+    } finally {
+      resourceInput.close()
+    }
+  }
+
+  def parseAllocatedAndDiscoverResources(
+      sparkConf: SparkConf,
+      componentName: String,
+      resourcesFileOpt: Option[String]): Seq[ResourceAllocation] = {
+    val allocated = resourcesFileOpt.map(parseAllocatedFromJsonFile(_))
+      .getOrElse(Seq.empty[ResourceAllocation])
+      .filter(_.id.componentName == componentName)
+    val otherResourceIds = listResourceIds(sparkConf, componentName).diff(allocated.map(_.id))
+    allocated ++ otherResourceIds.map { id =>
+      val request = parseResourceRequest(sparkConf, id)
+      discoverResource(request)
+    }
+  }
+
+  def assertResourceAllocationMeetsRequest(
+      allocation: ResourceAllocation, request: ResourceRequest): Unit = {
+    require(allocation.id == request.id && allocation.addresses.size >= request.count)
+  }
+
+  def assertAllResourceAllocationMeetRequests(
+      allocations: Seq[ResourceAllocation], requests: Seq[ResourceRequest]): Unit = {
+    val allocated = allocations.map(x => x.id -> x).toMap
+    requests.foreach { r =>
+      assertResourceAllocationMeetsRequest(allocated(r.id), r)
+    }
+  }
+
+  def anyComponentResourceRequests(
+      sparkConf: SparkConf,
+      componentName: String): Boolean = {
+    sparkConf.getAllWithPrefix(componentName).nonEmpty
+  }
+
+  // also add some methods to convert requests to Spark conf entries to simplify tests
+
 
   /**
    * This function will discover information about a set of resources by using the
@@ -56,6 +134,8 @@ private[spark] object ResourceDiscoverer extends Logging {
    *                  configs based on confPrefix passed in to get the resource names.
    * @return Map of resource name to ResourceInformation
    */
+  def discoverResource(resourceRequest: ResourceRequest): ResourceAllocation = ???
+
   def discoverResourcesInformation(
       sparkConf: SparkConf,
       confPrefix: String,
