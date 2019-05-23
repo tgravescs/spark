@@ -34,9 +34,15 @@ package object config {
   private[spark] val SPARK_EXECUTOR_RESOURCE_PREFIX = "spark.executor.resource."
   private[spark] val SPARK_TASK_RESOURCE_PREFIX = "spark.task.resource."
 
-  private[spark] val SPARK_RESOURCE_COUNT_SUFFIX = ".count"
-  private[spark] val SPARK_RESOURCE_FILE_SUFFIX = ".resourcesFile"
+  private[spark] val SPARK_RESOURCE_AMOUNT_SUFFIX = ".amount"
   private[spark] val SPARK_RESOURCE_DISCOVERY_SCRIPT_SUFFIX = ".discoveryScript"
+
+  private[spark] val SPARK_DRIVER_RESOURCES_FILE = ConfigBuilder("spark.driver.resourcesFile")
+    .doc("JSON file containing the resources allocated to the container, this is " +
+      "an internal config for standalone mode.")
+    .internal()
+    .stringConf
+    .createOptional
 
   private[spark] val DRIVER_CLASS_PATH =
     ConfigBuilder(SparkLauncher.DRIVER_EXTRA_CLASSPATH).stringConf.createOptional

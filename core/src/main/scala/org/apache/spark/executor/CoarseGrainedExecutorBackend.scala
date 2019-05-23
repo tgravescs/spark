@@ -47,7 +47,7 @@ private[spark] class CoarseGrainedExecutorBackend(
     cores: Int,
     userClassPath: Seq[URL],
     env: SparkEnv,
-    resourcesFile: Option[String])
+    resourcesFileOpt: Option[String])
   extends ThreadSafeRpcEndpoint with ExecutorBackend with Logging {
 
   private[this] val stopping = new AtomicBoolean(false)
@@ -60,7 +60,7 @@ private[spark] class CoarseGrainedExecutorBackend(
 
   override def onStart() {
     logInfo("Connecting to driver: " + driverUrl)
-    val resources = parseOrFindResources(resourcesFile)
+    val resources = parseOrFindExecutorResources(resourcesFileOpt)
     rpcEnv.asyncSetupEndpointRefByURI(driverUrl).flatMap { ref =>
       // This is a very fast action so we can use "ThreadUtils.sameThread"
       driver = Some(ref)
@@ -76,29 +76,19 @@ private[spark] class CoarseGrainedExecutorBackend(
   }
 
   // visible for testing
-  def parseOrFindResources(resourcesFileOpt: Option[String]): Map[String, ResourceInformation] = {
+  def parseOrFindExecutorResources(
+      resourcesFileOpt: Option[String]
+      ): Map[String, ResourceInformation] = {
     // only parse the resources if a task requires them
-    val resourceInfo = if (anyComponentResourceRequests(env.conf, SPARK_TASK_RESOURCE_PREFIX)) {
-      val executorAllocations =
-        parseAllocatedAndDiscoverResources(
-          env.conf,
-          SPARK_EXECUTOR_RESOURCE_PREFIX,
-          resourcesFileOpt)
+    val resourceInfo = if (anyTaskComponentResourceRequests(env.conf)) {
+      val resources =
+        getAllResources(env.conf, SPARK_EXECUTOR_RESOURCE_PREFIX, resourcesFileOpt)
 
-      if (executorAllocations.isEmpty) {
+      if (resources.isEmpty) {
         throw new SparkException("User specified resources per task via: " +
           s"$SPARK_TASK_RESOURCE_PREFIX, but can't find any resources available on the executor.")
       }
-      val requests = parseAllResourceRequests(env.conf, SPARK_TASK_RESOURCE_PREFIX)
-      assertAllResourceAllocationMeetRequests(executorAllocations, requests)
-      val execResourceInformation = executorAllocations
-        .map(alloc => (alloc.id.resourceName, alloc.toResourceInfo())).toMap
-
-      logInfo("==============================================================")
-      logInfo(s"Executor $executorId Resources:")
-      execResourceInformation.foreach { case (k, v) => logInfo(s"$k -> $v") }
-      logInfo("==============================================================")
-      execResourceInformation
+      resources
     } else {
       if (resourcesFileOpt.nonEmpty) {
         logWarning(s"A resources file was specified but the application is not configured " +
