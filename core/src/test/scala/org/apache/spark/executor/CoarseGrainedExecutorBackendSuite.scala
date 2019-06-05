@@ -39,6 +39,7 @@ import org.scalatest.mockito.MockitoSugar
 import org.apache.spark._
 import org.apache.spark.ResourceInformation
 import org.apache.spark.ResourceName._
+import org.apache.spark.ResourceUtils._
 import org.apache.spark.internal.config._
 import org.apache.spark.rpc.RpcEnv
 import org.apache.spark.scheduler.TaskDescription
@@ -49,15 +50,9 @@ import org.apache.spark.util.{SerializableBuffer, Utils}
 class CoarseGrainedExecutorBackendSuite extends SparkFunSuite
     with LocalSparkContext with MockitoSugar {
 
-  private def writeFileWithJson(dir: File, strToWrite: JArray): String = {
-    val f1 = File.createTempFile("test-resource-parser1", "", dir)
-    JavaFiles.write(f1.toPath(), compact(render(strToWrite)).getBytes())
-    f1.getPath()
-  }
-
   test("parsing no resources") {
     val conf = new SparkConf
-    conf.set(SPARK_TASK_RESOURCE_PREFIX + GPU + SPARK_RESOURCE_AMOUNT_SUFFIX, "2")
+    setResourceAmountConf(conf, GpuTaskResourceID, "2")
     val serializer = new JavaSerializer(conf)
     val env = createMockEnv(conf, serializer)
 
@@ -67,7 +62,7 @@ class CoarseGrainedExecutorBackendSuite extends SparkFunSuite
     withTempDir { tmpDir =>
       val testResourceArgs: JObject = ("" -> "")
       val ja = JArray(List(testResourceArgs))
-      val f1 = writeFileWithJson(tmpDir, ja)
+      val f1 = writeJsonFile(tmpDir, ja)
       var error = intercept[SparkException] {
         val parsedResources = backend.parseOrFindResources(Some(f1))
       }.getMessage()

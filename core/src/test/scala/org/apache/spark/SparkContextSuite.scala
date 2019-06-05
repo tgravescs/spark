@@ -40,6 +40,7 @@ import org.scalatest.Matchers._
 import org.scalatest.concurrent.Eventually
 
 import org.apache.spark.ResourceName.GPU
+import org.apache.spark.ResourceUtils._
 import org.apache.spark.internal.config._
 import org.apache.spark.internal.config.UI._
 import org.apache.spark.scheduler.{SparkListener, SparkListenerExecutorMetricsUpdate, SparkListenerJobStart, SparkListenerTaskEnd, SparkListenerTaskStart}
@@ -739,19 +740,17 @@ class SparkContextSuite extends SparkFunSuite with LocalSparkContext with Eventu
     }
   }
 
-  test("test gpu driver discovery under local-cluster mode") {
+  test("test driver discovery under local-cluster mode") {
     withTempDir { dir =>
       val gpuFile = new File(dir, "gpuDiscoverScript")
       val scriptPath = mockDiscoveryScript(gpuFile,
         """'{"name": "gpu","addresses":["5", "6"]}'""")
 
       val conf = new SparkConf()
-        .set(SPARK_DRIVER_RESOURCE_PREFIX + GPU +
-          SPARK_RESOURCE_AMOUNT_SUFFIX, "1")
-        .set(SPARK_DRIVER_RESOURCE_PREFIX + GPU +
-          SPARK_RESOURCE_DISCOVERY_SCRIPT_SUFFIX, scriptPath)
         .setMaster("local-cluster[1, 1, 1024]")
         .setAppName("test-cluster")
+      setResourceAmountConf(conf, GpuDriverResourceID, "1")
+      setResourceDiscoveryScriptConf(conf, GpuDriverResourceID, scriptPath)
       sc = new SparkContext(conf)
 
       // Ensure all executors has started
@@ -762,12 +761,6 @@ class SparkContextSuite extends SparkFunSuite with LocalSparkContext with Eventu
       assert(sc.resources.get(GPU).get.addresses === Array("5", "6"))
       assert(sc.resources.get(GPU).get.name === "gpu")
     }
-  }
-
-  private def writeJsonFile(dir: File, strToWrite: JArray): String = {
-    val f1 = File.createTempFile("test-resource-parser1", "", dir)
-    JavaFiles.write(f1.toPath(), compact(render(strToWrite)).getBytes())
-    f1.getPath()
   }
 
   test("test gpu driver resource files and discovery under local-cluster mode") {
@@ -783,20 +776,20 @@ class SparkContextSuite extends SparkFunSuite with LocalSparkContext with Eventu
       val resourcesFile = writeJsonFile(dir, ja)
 
       val conf = new SparkConf()
-        .set(SPARK_DRIVER_RESOURCE_PREFIX + GPU +
-          SPARK_RESOURCE_AMOUNT_SUFFIX, "1")
-        .set(SPARK_DRIVER_RESOURCE_PREFIX + GPU +
-          SPARK_RESOURCE_DISCOVERY_SCRIPT_SUFFIX, scriptPath)
         .set(DRIVER_RESOURCES_FILE, resourcesFile)
         .setMaster("local-cluster[1, 1, 1024]")
         .setAppName("test-cluster")
+
+      setResourceAmountConf(conf, GpuDriverResourceID, "1")
+      setResourceDiscoveryScriptConf(conf, GpuDriverResourceID, scriptPath)
+
       sc = new SparkContext(conf)
 
       // Ensure all executors has started
       eventually(timeout(10.seconds)) {
         assert(sc.statusTracker.getExecutorInfos.size == 1)
       }
-      // driver gpu addresses config should take precedence over the script
+      // driver gpu resources file should take precedence over the script
       assert(sc.resources.size === 1)
       assert(sc.resources.get(GPU).get.addresses === Array("0", "1", "8"))
       assert(sc.resources.get(GPU).get.name === "gpu")
@@ -805,10 +798,11 @@ class SparkContextSuite extends SparkFunSuite with LocalSparkContext with Eventu
 
   test("Test parsing resources task configs with missing executor config") {
     val conf = new SparkConf()
-      .set(SPARK_TASK_RESOURCE_PREFIX + GPU +
-        SPARK_RESOURCE_AMOUNT_SUFFIX, "1")
       .setMaster("local-cluster[1, 1, 1024]")
       .setAppName("test-cluster")
+
+    val gpuTaskResourceID = ResourceID(SPARK_TASK_RESOURCE_PREFIX, "gpu")
+    setResourceAmountConf(conf, gpuTaskResourceID, "1")
 
     var error = intercept[SparkException] {
       sc = new SparkContext(conf)
@@ -851,13 +845,6 @@ class SparkContextSuite extends SparkFunSuite with LocalSparkContext with Eventu
     assert(error.contains("The configuration of resource: gpu (exec = 4, task = 2) will result " +
       "in wasted resources due to resource CPU limiting the number of runnable tasks per " +
       "executor to: 1. Please adjust your configuration."))
-  }
-
-  def mockDiscoveryScript(file: File, result: String): String = {
-    Files.write(s"echo $result", file, StandardCharsets.UTF_8)
-    JavaFiles.setPosixFilePermissions(file.toPath(),
-      EnumSet.of(OWNER_READ, OWNER_EXECUTE, OWNER_WRITE))
-    file.getPath()
   }
 
   test("test resource scheduling under local-cluster mode") {

@@ -26,10 +26,11 @@ import java.util.EnumSet
 import com.google.common.io.Files
 
 import org.apache.spark.ResourceName._
+import org.apache.spark.ResourceUtils._
 import org.apache.spark.internal.config._
 import org.apache.spark.util.Utils
 
-class ResourceDiscovererSuite extends SparkFunSuite
+class ResourceUtilsSuite extends SparkFunSuite
     with LocalSparkContext {
 
   def mockDiscoveryScript(file: File, result: String): String = {
@@ -39,11 +40,12 @@ class ResourceDiscovererSuite extends SparkFunSuite
     file.getPath()
   }
 
+  /*
   test("Resource discoverer no resources") {
     val sparkconf = new SparkConf
-    val resources =
-      ResourceDiscoverer.discoverResourcesInformation(sparkconf, SPARK_EXECUTOR_RESOURCE_PREFIX)
-    assert(resources.size === 0)
+    val request = ResourceRequest(ResourceID(SPARK_EXECUTOR_RESOURCE_PREFIX, "gpu"), 2, None)
+    val resources = discoverResource(request)
+    assert(resources.addresses.size === 0)
     assert(resources.get(GPU).isEmpty,
       "Should have a gpus entry that is empty")
   }
@@ -201,17 +203,21 @@ class ResourceDiscovererSuite extends SparkFunSuite
       assert(error.contains("Error running the resource discovery"))
     }
   }
+  */
 
   test("Resource discoverer script doesn't exist") {
     val sparkconf = new SparkConf
     withTempDir { dir =>
       val file1 = new File(dir, "bogusfilepath")
       try {
-        sparkconf.set(SPARK_EXECUTOR_RESOURCE_PREFIX + GPU +
-          SPARK_RESOURCE_DISCOVERY_SCRIPT_SUFFIX, file1.getPath())
+        val request =
+          ResourceRequest(
+            ResourceID(SPARK_EXECUTOR_RESOURCE_PREFIX, "gpu"),
+            2,
+            Some(file1.getPath()))
 
         val error = intercept[SparkException] {
-          ResourceDiscoverer.discoverResourcesInformation(sparkconf, SPARK_EXECUTOR_RESOURCE_PREFIX)
+          discoverResource(sparkconf, SPARK_EXECUTOR_RESOURCE_PREFIX)
         }.getMessage()
 
         assert(error.contains("doesn't exist"))
@@ -226,8 +232,10 @@ class ResourceDiscovererSuite extends SparkFunSuite
     sparkconf.set(SPARK_EXECUTOR_RESOURCE_PREFIX + GPU +
       SPARK_RESOURCE_AMOUNT_SUFFIX, "2")
 
+    val request = ResourceRequest(ResourceID(SPARK_EXECUTOR_RESOURCE_PREFIX, "gpu"), 2, None)
+
     val error = intercept[SparkException] {
-      ResourceDiscoverer.discoverResourcesInformation(sparkconf, SPARK_EXECUTOR_RESOURCE_PREFIX)
+      discoverResource(request)
     }.getMessage()
 
     assert(error.contains("User is expecting to use"))

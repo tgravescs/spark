@@ -52,6 +52,7 @@ import org.apache.spark.metrics.source.JVMCPUSource
 import org.apache.spark.partial.{ApproximateEvaluator, PartialResult}
 import org.apache.spark.rdd._
 import org.apache.spark.rpc.RpcEndpointRef
+import org.apache.spark.ResourceUtils._
 import org.apache.spark.scheduler._
 import org.apache.spark.scheduler.cluster.StandaloneSchedulerBackend
 import org.apache.spark.scheduler.local.LocalSchedulerBackend
@@ -363,43 +364,6 @@ class SparkContext(config: SparkConf) extends Logging {
     Utils.setLogLevel(org.apache.log4j.Level.toLevel(upperCased))
   }
 
-  /**
-   * Checks to see if any resources (GPU/FPGA/etc) are available to the driver by looking
-   * at and processing the spark.driver.resourcesFile and
-   * spark.driver.resource.resourceName.discoveryScript configs. The configs have to be
-   * present when the driver starts, setting them after startup does not work.
-   *
-   * If a resources file was specified then assume all resources will be specified
-   * in that file. Otherwise use the discovery scripts to find the resources. Users should
-   * not be setting the resources file config directly and should not be mixing methods
-   * for different types of resources since the resources file config is meant for Standalone mode
-   * and other cluster managers should use the discovery scripts.
-   */
-  private def setupDriverResources(): Unit = {
-    // Only call getAllWithPrefix once and filter on those since there could be a lot of spark
-    // configs.
-    val allDriverResourceConfs = _conf.getAllWithPrefix(SPARK_DRIVER_RESOURCE_PREFIX)
-    val resourcesFile = _conf.get(DRIVER_RESOURCES_FILE)
-    _resources = resourcesFile.map { rFile => {
-      ResourceDiscoverer.parseAllocatedFromJsonFile(rFile)
-    }}.getOrElse {
-      // we already have the resources confs here so just pass in the unique resource names
-      // rather then having the resource discoverer reparse all the configs.
-      val uniqueResources = SparkConf.getBaseOfConfigs(allDriverResourceConfs)
-      ResourceDiscoverer.discoverResourcesInformation(_conf, SPARK_DRIVER_RESOURCE_PREFIX,
-        Some(uniqueResources))
-    }
-    // verify the resources we discovered are what the user requested
-    val driverReqResourcesAndCounts =
-      SparkConf.getConfigsWithSuffix(allDriverResourceConfs, SPARK_RESOURCE_AMOUNT_SUFFIX).toMap
-    ResourceDiscoverer.checkActualResourcesMeetRequirements(driverReqResourcesAndCounts, _resources)
-
-    logInfo("===============================================================================")
-    logInfo(s"Driver Resources:")
-    _resources.foreach { case (k, v) => logInfo(s"$k -> $v") }
-    logInfo("===============================================================================")
-  }
-
   try {
     _conf = config.clone()
     _conf.validateSettings()
@@ -413,7 +377,8 @@ class SparkContext(config: SparkConf) extends Logging {
 
     _driverLogger = DriverLogger(_conf)
 
-    setupDriverResources()
+    val resourcesFileOpt = conf.get(DRIVER_RESOURCES_FILE)
+    _resources = getAllResources(_conf, SPARK_DRIVER_RESOURCE_PREFIX, resourcesFileOpt)
 
     // log out spark.app.name in the Spark driver logs
     logInfo(s"Submitted application: $appName")
