@@ -311,17 +311,6 @@ private[spark] object TestUtils {
     val current = f.listFiles
     current ++ current.filter(_.isDirectory).flatMap(recursiveList)
   }
-
-  /**
-   * Set task resource requirement.
-   */
-  def setTaskResourceRequirement(
-      conf: SparkConf,
-      resourceName: String,
-      resourceCount: Int): SparkConf = {
-    val key = s"${SPARK_TASK_RESOURCE_PREFIX}${resourceName}${SPARK_RESOURCE_AMOUNT_SUFFIX}"
-    conf.set(key, resourceCount.toString)
-  }
 }
 
 

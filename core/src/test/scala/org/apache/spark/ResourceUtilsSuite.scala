@@ -25,10 +25,8 @@ import java.util.EnumSet
 
 import com.google.common.io.Files
 
-import org.apache.spark.ResourceName._
 import org.apache.spark.ResourceUtils._
 import org.apache.spark.internal.config._
-import org.apache.spark.util.Utils
 
 class ResourceUtilsSuite extends SparkFunSuite
     with LocalSparkContext {
@@ -214,10 +212,11 @@ class ResourceUtilsSuite extends SparkFunSuite
           ResourceRequest(
             ResourceID(SPARK_EXECUTOR_RESOURCE_PREFIX, "gpu"),
             2,
-            Some(file1.getPath()))
+            Some(file1.getPath()),
+            None)
 
         val error = intercept[SparkException] {
-          discoverResource(sparkconf, SPARK_EXECUTOR_RESOURCE_PREFIX)
+          discoverResource(request)
         }.getMessage()
 
         assert(error.contains("doesn't exist"))
@@ -228,17 +227,14 @@ class ResourceUtilsSuite extends SparkFunSuite
   }
 
   test("gpu's specified but not discovery script") {
-    val sparkconf = new SparkConf
-    sparkconf.set(SPARK_EXECUTOR_RESOURCE_PREFIX + GPU +
-      SPARK_RESOURCE_AMOUNT_SUFFIX, "2")
-
-    val request = ResourceRequest(ResourceID(SPARK_EXECUTOR_RESOURCE_PREFIX, "gpu"), 2, None)
+    val request = ResourceRequest(ResourceID(SPARK_EXECUTOR_RESOURCE_PREFIX, "gpu"), 2, None, None)
 
     val error = intercept[SparkException] {
       discoverResource(request)
     }.getMessage()
 
-    assert(error.contains("User is expecting to use"))
+    assert(error.contains("User is expecting to use resource: gpu but " +
+      "didn't specify a discovery script!"))
   }
 
 }

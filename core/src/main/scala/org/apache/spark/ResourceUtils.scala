@@ -44,8 +44,10 @@ private[spark] case class ResourceID(componentName: String, resourceName: String
 
 private[spark] case class ResourceRequest(
     id: ResourceID,
-    count: Double,
-    discoveryScript: Option[String])
+    count: Double,  // count or amount?? TODO
+    discoveryScript: Option[String],
+    vendor: Option[String]) {
+}
 
 private[spark] case class ResourceAllocation(id: ResourceID, addresses: Seq[String]) {
   def toResourceInfo(): ResourceInformation = {
@@ -55,15 +57,20 @@ private[spark] case class ResourceAllocation(id: ResourceID, addresses: Seq[Stri
 
 private[spark] object ResourceUtils extends Logging {
 
+  val AMOUNT = ".amount"
+  val DISCOVERY_SCRIPT = ".discoveryScript"
+  val VENDOR = ".vendor"
+
   // case class to make extracting the JSON resource information easy
   case class JsonResourceInformation(name: String, addresses: Seq[String])
 
   def parseResourceRequest(sparkConf: SparkConf, resourceId: ResourceID): ResourceRequest = {
     val settings = sparkConf.getAllWithPrefix(resourceId.confPrefix).toMap
-    val quantity = settings.get(SPARK_RESOURCE_AMOUNT_SUFFIX).getOrElse(
+    val quantity = settings.get(AMOUNT).getOrElse(
       throw new SparkException("You must specify an amount")).toDouble
-    val discoveryScript = settings.get(SPARK_RESOURCE_DISCOVERY_SCRIPT_SUFFIX)
-    ResourceRequest(resourceId, quantity, discoveryScript)
+    val discoveryScript = settings.get(DISCOVERY_SCRIPT)
+    val vendor = settings.get(VENDOR)
+    ResourceRequest(resourceId, quantity, discoveryScript, vendor)
   }
 
   def listResourceIds(sparkConf: SparkConf, componentName: String): Seq[ResourceID] = {
@@ -138,15 +145,6 @@ private[spark] object ResourceUtils extends Logging {
     sparkConf.getAllWithPrefix(SPARK_TASK_RESOURCE_PREFIX).nonEmpty
   }
 
-  /**
-   * Get task resource requirements.
-   */
-  def getTaskResourceRequirements(sparkConf: SparkConf): Map[String, Int] = {
-    sparkConf.getAllWithPrefix(SPARK_TASK_RESOURCE_PREFIX)
-      .withFilter { case (k, v) => k.endsWith(SPARK_RESOURCE_AMOUNT_SUFFIX)}
-      .map { case (k, v) => (k.dropRight(SPARK_RESOURCE_AMOUNT_SUFFIX.length), v.toInt)}.toMap
-  }
-
   def getAllResources(
       sparkConf: SparkConf,
       componentName: String,
@@ -186,6 +184,76 @@ private[spark] object ResourceUtils extends Logging {
     result
   }
 
+  /**
+   * Get task resource requirements.
+   */
+  def getTaskResourceRequirements(sparkConf: SparkConf): Map[String, Int] = {
+    sparkConf.getAllWithPrefix(SPARK_TASK_RESOURCE_PREFIX)
+      .withFilter { case (k, v) => k.endsWith(AMOUNT)}
+      .map { case (k, v) => (k.dropRight(AMOUNT.length), v.toInt)}.toMap
+  }
+
+  def resourceAmountConfigName(id: ResourceID): String = {
+    s"${id.componentName}${id.resourceName}$AMOUNT"
+  }
+
+  def resourceDiscoveryScriptConfigName(id: ResourceID): String = {
+    s"${id.componentName}${id.resourceName}$DISCOVERY_SCRIPT"
+  }
+
+  def resourceVendorConfigName(id: ResourceID): String = {
+    s"${id.componentName}${id.resourceName}$VENDOR"
+  }
+
+  def setDriverResourceAmountConf(conf: SparkConf, resourceName: String, value: String): Unit = {
+    val resourceId = ResourceID(SPARK_DRIVER_RESOURCE_PREFIX, resourceName)
+    setResourceAmountConf(conf, resourceId, value)
+  }
+
+  def setDriverResourceDiscoveryConf(conf: SparkConf, resourceName: String, value: String): Unit = {
+    val resourceId = ResourceID(SPARK_DRIVER_RESOURCE_PREFIX, resourceName)
+    setResourceDiscoveryScriptConf(conf, resourceId, value)
+  }
+
+  def setExecutorResourceAmountConf(conf: SparkConf, resourceName: String, value: String): Unit = {
+    val resourceId = ResourceID(SPARK_EXECUTOR_RESOURCE_PREFIX, resourceName)
+    setResourceAmountConf(conf, resourceId, value)
+  }
+
+  def setExecutorResourceDiscoveryConf(
+      conf: SparkConf,
+      resourceName: String,
+      value: String): Unit = {
+    val resourceId = ResourceID(SPARK_EXECUTOR_RESOURCE_PREFIX, resourceName)
+    setResourceDiscoveryScriptConf(conf, resourceId, value)
+  }
+
+  def setExecutorResourceVendorConf(conf: SparkConf, resourceName: String, value: String): Unit = {
+    val resourceId = ResourceID(SPARK_EXECUTOR_RESOURCE_PREFIX, resourceName)
+    setResourceVendorConf(conf, resourceId, value)
+  }
+
+  def setTaskResourceAmountConf(conf: SparkConf, resourceName: String, value: String): Unit = {
+    val resourceId = ResourceID(SPARK_TASK_RESOURCE_PREFIX, resourceName)
+    setResourceAmountConf(conf, resourceId, value)
+  }
+
+  def setResourceAmountConf(conf: SparkConf, id: ResourceID, value: String) {
+    conf.set(resourceAmountConfigName(id), value)
+  }
+
+  def setResourceDiscoveryScriptConf(conf: SparkConf, id: ResourceID, value: String) {
+    conf.set(resourceAmountConfigName(id), value)
+  }
+
+  def setResourceVendorConf(conf: SparkConf, id: ResourceID, value: String) {
+    conf.set(resourceVendorConfigName(id), value)
+  }
+
+  // known types of resources
+  final val GPU: String = "gpu"
+  final val FPGA: String = "fpga"
+
   // TESTING UTILS
 
   def writeJsonFile(dir: File, strToWrite: JArray): String = {
@@ -200,42 +268,4 @@ private[spark] object ResourceUtils extends Logging {
       EnumSet.of(OWNER_READ, OWNER_EXECUTE, OWNER_WRITE))
     file.getPath()
   }
-
-  def componentAmountConfig(id: ResourceID): String = {
-    s"${id.componentName}${id.resourceName}$SPARK_RESOURCE_AMOUNT_SUFFIX"
-  }
-
-  def componentDiscoveryScriptConfig(id: ResourceID): String = {
-    s"${id.componentName}${id.resourceName}$SPARK_RESOURCE_DISCOVERY_SCRIPT_SUFFIX"
-  }
-
-  def setDriverResourceAmountConf(conf: SparkConf, resourceName: String, value: String): Unit = {
-    conf.set(componentAmountConfig(ResourceID(SPARK_DRIVER_RESOURCE_PREFIX, resourceName)), value)
-  }
-
-  def setDriverResourceDiscoveryConf(conf: SparkConf, resourceName: String, value: String): Unit = {
-    conf.set(componentDiscoveryScriptConfig(
-      ResourceID(SPARK_DRIVER_RESOURCE_PREFIX, resourceName)), value)
-  }
-/*
-  def setExecutorResourceAmountConf(conf: SparkConf, resourceName: String, value: String): Unit = {
-    conf.set(componentAmountConfig(ResourceID(SPARK_EXECUTOR_RESOURCE_PREFIX, resourceName)), value)
-  }
-
-  def setTaskResourceAmountConf(conf: SparkConf, resourceName: String, value: String): Unit = {
-    conf.set(componentAmountConfig(ResourceID(SPARK_TASK_RESOURCE_PREFIX, resourceName)), value)
-  } */
-
-  def setResourceAmountConf(conf: SparkConf, id: ResourceID, value: String) {
-    conf.set(componentAmountConfig(id), value)
-  }
-
-  def setResourceDiscoveryScriptConf(conf: SparkConf, id: ResourceID, value: String) {
-    conf.set(componentAmountConfig(id), value)
-  }
-
-  val GpuTaskResourceID = ResourceID(SPARK_TASK_RESOURCE_PREFIX, "gpu")
-  val GpuExecutorResourceID = ResourceID(SPARK_EXECUTOR_RESOURCE_PREFIX, "gpu")
-  val GpuDriverResourceID = ResourceID(SPARK_DRIVER_RESOURCE_PREFIX, "gpu")
-
 }

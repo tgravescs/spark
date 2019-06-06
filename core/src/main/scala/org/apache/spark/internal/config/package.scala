@@ -35,10 +35,6 @@ package object config {
   private[spark] val SPARK_EXECUTOR_RESOURCE_PREFIX = "spark.executor.resource."
   private[spark] val SPARK_TASK_RESOURCE_PREFIX = "spark.task.resource."
 
-  private[spark] val SPARK_RESOURCE_AMOUNT_SUFFIX = ".amount"
-  private[spark] val SPARK_RESOURCE_DISCOVERY_SCRIPT_SUFFIX = ".discoveryScript"
-  private[spark] val SPARK_RESOURCE_VENDOR_SUFFIX = ".vendor"
-
   private[spark] val DRIVER_RESOURCES_FILE =
     ConfigBuilder("spark.driver.resourcesFile")
       .internal()

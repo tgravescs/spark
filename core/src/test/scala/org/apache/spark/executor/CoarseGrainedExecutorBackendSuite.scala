@@ -31,14 +31,12 @@ import scala.concurrent.duration._
 import com.google.common.io.Files
 import org.json4s.JsonAST.{JArray, JObject}
 import org.json4s.JsonDSL._
-import org.json4s.jackson.JsonMethods.{compact, render}
 import org.mockito.Mockito.when
 import org.scalatest.concurrent.Eventually.{eventually, timeout}
 import org.scalatest.mockito.MockitoSugar
 
 import org.apache.spark._
 import org.apache.spark.ResourceInformation
-import org.apache.spark.ResourceName._
 import org.apache.spark.ResourceUtils._
 import org.apache.spark.internal.config._
 import org.apache.spark.rpc.RpcEnv
@@ -52,7 +50,7 @@ class CoarseGrainedExecutorBackendSuite extends SparkFunSuite
 
   test("parsing no resources") {
     val conf = new SparkConf
-    setResourceAmountConf(conf, GpuTaskResourceID, "2")
+    setTaskResourceAmountConf(conf, GPU, "2")
     val serializer = new JavaSerializer(conf)
     val env = createMockEnv(conf, serializer)
 
@@ -74,8 +72,8 @@ class CoarseGrainedExecutorBackendSuite extends SparkFunSuite
 
   test("parsing one resources") {
     val conf = new SparkConf
-    conf.set(SPARK_EXECUTOR_RESOURCE_PREFIX + GPU + SPARK_RESOURCE_AMOUNT_SUFFIX, "2")
-    conf.set(SPARK_TASK_RESOURCE_PREFIX + GPU + SPARK_RESOURCE_AMOUNT_SUFFIX, "2")
+    setExecutorResourceAmountConf(conf, GPU, "2")
+    setTaskResourceAmountConf(conf, GPU, "2")
     val serializer = new JavaSerializer(conf)
     val env = createMockEnv(conf, serializer)
     // we don't really use this, just need it to get at the parser function
@@ -86,7 +84,7 @@ class CoarseGrainedExecutorBackendSuite extends SparkFunSuite
         ("name" -> "gpu") ~
         ("addresses" -> Seq("0", "1"))
       val ja = JArray(List(testResourceArgs))
-      val f1 = writeFileWithJson(tmpDir, ja)
+      val f1 = writeJsonFile(tmpDir, ja)
       val parsedResources = backend.parseOrFindResources(Some(f1))
 
       assert(parsedResources.size === 1)
@@ -98,10 +96,11 @@ class CoarseGrainedExecutorBackendSuite extends SparkFunSuite
 
   test("parsing multiple resources") {
     val conf = new SparkConf
-    conf.set(SPARK_EXECUTOR_RESOURCE_PREFIX + FPGA + SPARK_RESOURCE_AMOUNT_SUFFIX, "3")
-    conf.set(SPARK_TASK_RESOURCE_PREFIX + FPGA + SPARK_RESOURCE_AMOUNT_SUFFIX, "3")
-    conf.set(SPARK_EXECUTOR_RESOURCE_PREFIX + GPU + SPARK_RESOURCE_AMOUNT_SUFFIX, "2")
-    conf.set(SPARK_TASK_RESOURCE_PREFIX + GPU + SPARK_RESOURCE_AMOUNT_SUFFIX, "2")
+    setExecutorResourceAmountConf(conf, GPU, "2")
+    setTaskResourceAmountConf(conf, GPU, "2")
+    setExecutorResourceAmountConf(conf, FPGA, "3")
+    setTaskResourceAmountConf(conf, FPGA, "3")
+
     val serializer = new JavaSerializer(conf)
     val env = createMockEnv(conf, serializer)
     // we don't really use this, just need it to get at the parser function
@@ -116,7 +115,7 @@ class CoarseGrainedExecutorBackendSuite extends SparkFunSuite
         ("name" -> "fpga") ~
           ("addresses" -> Seq("f1", "f2", "f3"))
       val ja = JArray(List(gpuArgs, fpgaArgs))
-      val f1 = writeFileWithJson(tmpDir, ja)
+      val f1 = writeJsonFile(tmpDir, ja)
       val parsedResources = backend.parseOrFindResources(Some(f1))
 
       assert(parsedResources.size === 2)
@@ -131,8 +130,8 @@ class CoarseGrainedExecutorBackendSuite extends SparkFunSuite
 
   test("error checking parsing resources and executor and task configs") {
     val conf = new SparkConf
-    conf.set(SPARK_EXECUTOR_RESOURCE_PREFIX + GPU + SPARK_RESOURCE_AMOUNT_SUFFIX, "2")
-    conf.set(SPARK_TASK_RESOURCE_PREFIX + GPU + SPARK_RESOURCE_AMOUNT_SUFFIX, "2")
+    setExecutorResourceDiscoveryConf(conf, GPU, "2")
+    setTaskResourceAmountConf(conf, GPU, "2")
     val serializer = new JavaSerializer(conf)
     val env = createMockEnv(conf, serializer)
     // we don't really use this, just need it to get at the parser function
@@ -145,7 +144,7 @@ class CoarseGrainedExecutorBackendSuite extends SparkFunSuite
         ("name" -> "gpu") ~
           ("addresses" -> Seq("0"))
       val ja = JArray(List(gpuArgs))
-      val f1 = writeFileWithJson(tmpDir, ja)
+      val f1 = writeJsonFile(tmpDir, ja)
 
       var error = intercept[SparkException] {
         val parsedResources = backend.parseOrFindResources(Some(f1))
@@ -161,7 +160,7 @@ class CoarseGrainedExecutorBackendSuite extends SparkFunSuite
         ("name" -> "fpga") ~
           ("addresses" -> Seq("0"))
       val ja = JArray(List(gpuArgs))
-      val f1 = writeFileWithJson(tmpDir, ja)
+      val f1 = writeJsonFile(tmpDir, ja)
 
       var error = intercept[SparkException] {
         val parsedResources = backend.parseOrFindResources(Some(f1))
@@ -173,8 +172,8 @@ class CoarseGrainedExecutorBackendSuite extends SparkFunSuite
 
   test("executor resource found less than required") {
     val conf = new SparkConf
-    conf.set(SPARK_EXECUTOR_RESOURCE_PREFIX + GPU + SPARK_RESOURCE_AMOUNT_SUFFIX, "4")
-    conf.set(SPARK_TASK_RESOURCE_PREFIX + GPU + SPARK_RESOURCE_AMOUNT_SUFFIX, "1")
+    setExecutorResourceDiscoveryConf(conf, GPU, "4")
+    setTaskResourceAmountConf(conf, GPU, "1")
     val serializer = new JavaSerializer(conf)
     val env = createMockEnv(conf, serializer)
     // we don't really use this, just need it to get at the parser function
@@ -187,7 +186,7 @@ class CoarseGrainedExecutorBackendSuite extends SparkFunSuite
         ("name" -> "gpu") ~
           ("addresses" -> Seq("0", "1"))
       val ja = JArray(List(gpuArgs))
-      val f1 = writeFileWithJson(tmpDir, ja)
+      val f1 = writeJsonFile(tmpDir, ja)
 
       var error = intercept[SparkException] {
         val parsedResources = backend.parseOrFindResources(Some(f1))
@@ -199,8 +198,8 @@ class CoarseGrainedExecutorBackendSuite extends SparkFunSuite
 
   test("use discoverer") {
     val conf = new SparkConf
-    conf.set(SPARK_EXECUTOR_RESOURCE_PREFIX + FPGA + SPARK_RESOURCE_AMOUNT_SUFFIX, "3")
-    conf.set(SPARK_TASK_RESOURCE_PREFIX + FPGA + SPARK_RESOURCE_AMOUNT_SUFFIX, "3")
+    setResourceAmountConf(conf, ResourceID(SPARK_EXECUTOR_RESOURCE_PREFIX, FPGA), "3")
+    setResourceAmountConf(conf, ResourceID(SPARK_TASK_RESOURCE_PREFIX, FPGA), "3")
     assume(!(Utils.isWindows))
     withTempDir { dir =>
       val fpgaDiscovery = new File(dir, "resourceDiscoverScriptfpga")
@@ -208,8 +207,8 @@ class CoarseGrainedExecutorBackendSuite extends SparkFunSuite
         fpgaDiscovery, StandardCharsets.UTF_8)
       JavaFiles.setPosixFilePermissions(fpgaDiscovery.toPath(),
         EnumSet.of(OWNER_READ, OWNER_EXECUTE, OWNER_WRITE))
-      conf.set(SPARK_EXECUTOR_RESOURCE_PREFIX + FPGA +
-        SPARK_RESOURCE_DISCOVERY_SCRIPT_SUFFIX, fpgaDiscovery.getPath())
+      val fpgaID = ResourceID(SPARK_EXECUTOR_RESOURCE_PREFIX, FPGA)
+      setResourceDiscoveryScriptConf(conf, fpgaID, fpgaDiscovery.getPath())
 
       val serializer = new JavaSerializer(conf)
       val env = createMockEnv(conf, serializer)

@@ -35,11 +35,9 @@ import org.apache.hadoop.mapred.TextInputFormat
 import org.apache.hadoop.mapreduce.lib.input.{TextInputFormat => NewTextInputFormat}
 import org.json4s.JsonAST.JArray
 import org.json4s.JsonDSL._
-import org.json4s.jackson.JsonMethods.{compact, render}
 import org.scalatest.Matchers._
 import org.scalatest.concurrent.Eventually
 
-import org.apache.spark.ResourceName.GPU
 import org.apache.spark.ResourceUtils._
 import org.apache.spark.internal.config._
 import org.apache.spark.internal.config.UI._
@@ -749,8 +747,8 @@ class SparkContextSuite extends SparkFunSuite with LocalSparkContext with Eventu
       val conf = new SparkConf()
         .setMaster("local-cluster[1, 1, 1024]")
         .setAppName("test-cluster")
-      setResourceAmountConf(conf, GpuDriverResourceID, "1")
-      setResourceDiscoveryScriptConf(conf, GpuDriverResourceID, scriptPath)
+      setDriverResourceAmountConf(conf, GPU, "1")
+      setDriverResourceDiscoveryConf(conf, GPU, scriptPath)
       sc = new SparkContext(conf)
 
       // Ensure all executors has started
@@ -780,8 +778,8 @@ class SparkContextSuite extends SparkFunSuite with LocalSparkContext with Eventu
         .setMaster("local-cluster[1, 1, 1024]")
         .setAppName("test-cluster")
 
-      setResourceAmountConf(conf, GpuDriverResourceID, "1")
-      setResourceDiscoveryScriptConf(conf, GpuDriverResourceID, scriptPath)
+      setDriverResourceAmountConf(conf, GPU, "1")
+      setDriverResourceDiscoveryConf(conf, GPU, scriptPath)
 
       sc = new SparkContext(conf)
 
@@ -801,9 +799,7 @@ class SparkContextSuite extends SparkFunSuite with LocalSparkContext with Eventu
       .setMaster("local-cluster[1, 1, 1024]")
       .setAppName("test-cluster")
 
-    val gpuTaskResourceID = ResourceID(SPARK_TASK_RESOURCE_PREFIX, "gpu")
-    setResourceAmountConf(conf, gpuTaskResourceID, "1")
-
+    setTaskResourceAmountConf(conf, GPU, "1")
     var error = intercept[SparkException] {
       sc = new SparkContext(conf)
     }.getMessage()
@@ -815,12 +811,10 @@ class SparkContextSuite extends SparkFunSuite with LocalSparkContext with Eventu
 
   test("Test parsing resources executor config < task requirements") {
     val conf = new SparkConf()
-      .set(SPARK_TASK_RESOURCE_PREFIX + GPU +
-        SPARK_RESOURCE_AMOUNT_SUFFIX, "2")
-      .set(SPARK_EXECUTOR_RESOURCE_PREFIX + GPU +
-        SPARK_RESOURCE_AMOUNT_SUFFIX, "1")
       .setMaster("local-cluster[1, 1, 1024]")
       .setAppName("test-cluster")
+    setTaskResourceAmountConf(conf, GPU, "2")
+    setExecutorResourceAmountConf(conf, GPU, "1")
 
     var error = intercept[SparkException] {
       sc = new SparkContext(conf)
@@ -833,10 +827,10 @@ class SparkContextSuite extends SparkFunSuite with LocalSparkContext with Eventu
 
   test("Parse resources executor config not the same multiple numbers of the task requirements") {
     val conf = new SparkConf()
-      .set(SPARK_TASK_RESOURCE_PREFIX + GPU + SPARK_RESOURCE_AMOUNT_SUFFIX, "2")
-      .set(SPARK_EXECUTOR_RESOURCE_PREFIX + GPU + SPARK_RESOURCE_AMOUNT_SUFFIX, "4")
       .setMaster("local-cluster[1, 1, 1024]")
       .setAppName("test-cluster")
+    setTaskResourceAmountConf(conf, GPU, "2")
+    setExecutorResourceAmountConf(conf, GPU, "4")
 
     var error = intercept[SparkException] {
       sc = new SparkContext(conf)
@@ -860,12 +854,12 @@ class SparkContextSuite extends SparkFunSuite with LocalSparkContext with Eventu
       val discoveryScript = resourceFile.getPath()
 
       val conf = new SparkConf()
-        .set(s"${SPARK_EXECUTOR_RESOURCE_PREFIX}${GPU}${SPARK_RESOURCE_AMOUNT_SUFFIX}", "3")
-        .set(s"${SPARK_EXECUTOR_RESOURCE_PREFIX}${GPU}${SPARK_RESOURCE_DISCOVERY_SCRIPT_SUFFIX}",
-          discoveryScript)
         .setMaster("local-cluster[3, 3, 1024]")
         .setAppName("test-cluster")
-      setTaskResourceRequirement(conf, GPU, 1)
+      setTaskResourceAmountConf(conf, GPU, "1")
+      setExecutorResourceAmountConf(conf, GPU, "3")
+      setExecutorResourceDiscoveryConf(conf, GPU, discoveryScript)
+
       sc = new SparkContext(conf)
 
       // Ensure all executors has started
