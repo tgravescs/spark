@@ -36,7 +36,7 @@ import org.apache.spark.util.Utils.executeAndGetOutput
 /**
  * Resource identifier.
  * @param componentName spark.driver / spark.executor / spark.task
- * @param resourceName  gpu, fpga
+ * @param resourceName  gpu, fpga, etc
  */
 private[spark] case class ResourceID(componentName: String, resourceName: String) {
   def confPrefix: String = s"$componentName.resource.$resourceName." // with ending dot
@@ -61,7 +61,7 @@ private[spark] object ResourceUtils extends Logging {
   def parseResourceRequest(sparkConf: SparkConf, resourceId: ResourceID): ResourceRequest = {
     val settings = sparkConf.getAllWithPrefix(resourceId.confPrefix).toMap
     val quantity = settings.get(SPARK_RESOURCE_AMOUNT_SUFFIX).getOrElse(
-      throw new SparkException("You must specify a count")).toDouble
+      throw new SparkException("You must specify an amount")).toDouble
     val discoveryScript = settings.get(SPARK_RESOURCE_DISCOVERY_SCRIPT_SUFFIX)
     ResourceRequest(resourceId, quantity, discoveryScript)
   }
@@ -136,6 +136,15 @@ private[spark] object ResourceUtils extends Logging {
 
   def hasTaskComponentResourceRequests(sparkConf: SparkConf): Boolean = {
     sparkConf.getAllWithPrefix(SPARK_TASK_RESOURCE_PREFIX).nonEmpty
+  }
+
+  /**
+   * Get task resource requirements.
+   */
+  def getTaskResourceRequirements(sparkConf: SparkConf): Map[String, Int] = {
+    sparkConf.getAllWithPrefix(SPARK_TASK_RESOURCE_PREFIX)
+      .withFilter { case (k, v) => k.endsWith(SPARK_RESOURCE_AMOUNT_SUFFIX)}
+      .map { case (k, v) => (k.dropRight(SPARK_RESOURCE_AMOUNT_SUFFIX.length), v.toInt)}.toMap
   }
 
   def getAllResources(

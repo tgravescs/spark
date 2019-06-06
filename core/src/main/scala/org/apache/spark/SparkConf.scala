@@ -507,14 +507,6 @@ class SparkConf(loadDefaults: Boolean) extends Cloneable with Logging with Seria
     }
   }
 
-  /**
-   * Get task resource requirements.
-   */
-  private[spark] def getTaskResourceRequirements(): Map[String, Int] = {
-    getAllWithPrefix(SPARK_TASK_RESOURCE_PREFIX)
-      .withFilter { case (k, v) => k.endsWith(SPARK_RESOURCE_AMOUNT_SUFFIX)}
-      .map { case (k, v) => (k.dropRight(SPARK_RESOURCE_AMOUNT_SUFFIX.length), v.toInt)}.toMap
-  }
 
   /**
    * Checks for illegal or deprecated config settings. Throws an exception for the former. Not

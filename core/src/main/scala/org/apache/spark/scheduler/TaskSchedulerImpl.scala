@@ -93,7 +93,7 @@ private[spark] class TaskSchedulerImpl(
   val CPUS_PER_TASK = conf.get(config.CPUS_PER_TASK)
 
   // Resources to request per task
-  val resourcesPerTask = conf.getTaskResourceRequirements()
+  val resourcesPerTask = ResourceUtils.getTaskResourceRequirements(conf)
 
   // TaskSetManagers are not thread safe, so any access to one should be synchronized
   // on this class.  Protected by `this`
