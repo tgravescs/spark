@@ -111,34 +111,6 @@ class SparkConfSuite extends SparkFunSuite with LocalSparkContext with ResetSyst
     assert(conf.getOption("k4") === None)
   }
 
-  test("basic getAllWithPrefixAndPostfix") {
-    val conf = new SparkConf(false)
-    conf.set("spark.prefix.main.suffix", "v1")
-    val prefix = "spark.prefix."
-    val suffix = ".suffix"
-    assert(conf.getAllWithPrefixAndSuffix(prefix, suffix).toSet ===
-      Set(("main", "v1")))
-
-    conf.set("spark.prefix.main2.suffix", "v2")
-    conf.set("spark.prefix.main3.extra1.suffix", "v3")
-    conf.set("spark.prefix.main4.extra2.nonmatchingsuffix", "v4")
-    conf.set("spark.notmatchingprefix.main4.suffix", "v5")
-
-    assert(conf.getAllWithPrefixAndSuffix(prefix, suffix).toSet ===
-      Set(("main", "v1"), ("main2", "v2"), ("main3.extra1", "v3")))
-  }
-
-  test("test prefix config parsing utilities") {
-    val conf = new SparkConf(false)
-    conf.set("spark.prefix.main.suffix", "v1")
-    val prefix = "spark.prefix."
-    val suffix = ".suffix"
-    val configsWithPrefix = conf.getAllWithPrefix(prefix)
-    assert(configsWithPrefix.toSet === Set(("main.suffix", "v1")))
-    assert(SparkConf.getBaseOfConfigs(configsWithPrefix) === Set("main"))
-    assert(SparkConf.getConfigsWithSuffix(configsWithPrefix, suffix).toSet === Set(("main", "v1")))
-  }
-
   test("basic getAllWithPrefix") {
     val prefix = "spark.prefix."
     val conf = new SparkConf(false)
@@ -452,7 +424,9 @@ class SparkConfSuite extends SparkFunSuite with LocalSparkContext with ResetSyst
     val conf = new SparkConf()
     setTaskResourceAmountConf(conf, GPU, "2")
     setTaskResourceAmountConf(conf, FPGA, "1")
-    var taskResourceRequirement = ResourceUtils.getTaskResourceRequirements(conf)
+    var taskResourceRequirement =
+      parseTaskResourceRequirements(sc.conf).map(req => (req.resourceName, req.count)).toMap
+
     assert(taskResourceRequirement.size == 2)
     assert(taskResourceRequirement(GPU) == 2)
     assert(taskResourceRequirement(FPGA) == 1)
@@ -460,13 +434,15 @@ class SparkConfSuite extends SparkFunSuite with LocalSparkContext with ResetSyst
     conf.remove(resourceAmountConfigName(ResourceID(SPARK_TASK_RESOURCE_PREFIX, FPGA)))
     // Ignore invalid prefix
     setResourceAmountConf(conf, ResourceID("spark.invalid.prefix", FPGA), "1")
-    taskResourceRequirement = ResourceUtils.getTaskResourceRequirements(conf)
+    taskResourceRequirement =
+      parseTaskResourceRequirements(sc.conf).map(req => (req.resourceName, req.count)).toMap
     assert(taskResourceRequirement.size == 1)
     assert(taskResourceRequirement.get(FPGA).isEmpty)
 
     // Ignore invalid suffix
     conf.set(SPARK_TASK_RESOURCE_PREFIX + FPGA + "invalid.suffix", "1")
-    taskResourceRequirement = ResourceUtils.getTaskResourceRequirements(conf)
+    taskResourceRequirement =
+      parseTaskResourceRequirements(sc.conf).map(req => (req.resourceName, req.count)).toMap
     assert(taskResourceRequirement.size == 1)
     assert(taskResourceRequirement.get(FPGA).isEmpty)
   }

@@ -39,6 +39,7 @@ import org.apache.hadoop.mapred.{FileInputFormat, InputFormat, JobConf, Sequence
 import org.apache.hadoop.mapreduce.{InputFormat => NewInputFormat, Job => NewHadoopJob}
 import org.apache.hadoop.mapreduce.lib.input.{FileInputFormat => NewFileInputFormat}
 
+import org.apache.spark.ResourceUtils._
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.deploy.{LocalSparkCluster, SparkHadoopUtil}
@@ -52,7 +53,6 @@ import org.apache.spark.metrics.source.JVMCPUSource
 import org.apache.spark.partial.{ApproximateEvaluator, PartialResult}
 import org.apache.spark.rdd._
 import org.apache.spark.rpc.RpcEndpointRef
-import org.apache.spark.ResourceUtils._
 import org.apache.spark.scheduler._
 import org.apache.spark.scheduler.cluster.StandaloneSchedulerBackend
 import org.apache.spark.scheduler.local.LocalSchedulerBackend
@@ -2688,44 +2688,45 @@ object SparkContext extends Logging {
 
       // Calculate the max slots each executor can provide based on resources available on each
       // executor and resources required by each task.
-      val taskResourcesAndCount = getTaskResourceRequirements(sc.conf)
+      val taskResourceRequirements = parseTaskResourceRequirements(sc.conf)
       val executorResourcesAndCounts =
         parseAllResourceRequests(sc.conf, SPARK_EXECUTOR_RESOURCE_PREFIX)
           .map(request => (request.id.resourceName, request.count)).toMap
       var numSlots = execCores / taskCores
       var limitingResourceName = "CPU"
 
-      taskResourcesAndCount.foreach { case (rName, taskCount) =>
+      taskResourceRequirements.foreach { req =>
         // Make sure the executor resources were specified through config.
-        val execCount = executorResourcesAndCounts.getOrElse(rName,
+        val execCount = executorResourcesAndCounts.getOrElse(req.resourceName,
           throw new SparkException("The executor resource config: " +
-            resourceAmountConfigName(ResourceID(SPARK_EXECUTOR_RESOURCE_PREFIX, rName)) +
+            resourceAmountConfigName(ResourceID(SPARK_EXECUTOR_RESOURCE_PREFIX, req.resourceName)) +
             "needs to be specified since a task requirement config: " +
-            resourceAmountConfigName(ResourceID(SPARK_TASK_RESOURCE_PREFIX, rName)) +
+            resourceAmountConfigName(ResourceID(SPARK_TASK_RESOURCE_PREFIX, req.resourceName)) +
             " was specified")
         )
         // Make sure the executor resources are large enough to launch at least one task.
-        if (execCount.toLong < taskCount.toLong) {
+        if (execCount.toLong < req.count.toLong) {
           throw new SparkException("The executor resource config: " +
-            resourceAmountConfigName(ResourceID(SPARK_EXECUTOR_RESOURCE_PREFIX, rName)) +
+            resourceAmountConfigName(ResourceID(SPARK_EXECUTOR_RESOURCE_PREFIX, req.resourceName)) +
             s"= $execCount has to be >= the task config: " +
-            resourceAmountConfigName(ResourceID(SPARK_TASK_RESOURCE_PREFIX, rName)) +
-            s" = $taskCount")
+            resourceAmountConfigName(ResourceID(SPARK_TASK_RESOURCE_PREFIX, req.resourceName)) +
+            s" = ${req.count}")
         }
         // Compare and update the max slots each executor can provide.
-        val resourceNumSlots = execCount.toInt / taskCount
+        val resourceNumSlots = execCount.toInt / req.count.toInt
         if (resourceNumSlots < numSlots) {
           numSlots = resourceNumSlots
-          limitingResourceName = rName
+          limitingResourceName = req.resourceName
         }
       }
       // There have been checks above to make sure the executor resources were specified and are
       // large enough if any task resources were specified.
-      taskResourcesAndCount.foreach { case (rName, taskCount) =>
-        val execCount = executorResourcesAndCounts(rName)
-        if (taskCount.toInt * numSlots < execCount.toInt) {
-          val message = s"The configuration of resource: $rName (exec = ${execCount.toInt}, " +
-            s"task = ${taskCount}) will result in wasted resources due to resource " +
+      taskResourceRequirements.foreach { req =>
+        val execCount = executorResourcesAndCounts(req.resourceName)
+        if (req.count.toInt * numSlots < execCount.toInt) {
+          val message = s"The configuration of resource: ${req.resourceName} " +
+            s"(exec = ${execCount.toInt}, " +
+            s"task = ${req.count}) will result in wasted resources due to resource " +
             s"${limitingResourceName} limiting the number of runnable tasks per executor to: " +
             s"${numSlots}. Please adjust your configuration."
           if (Utils.isTesting) {

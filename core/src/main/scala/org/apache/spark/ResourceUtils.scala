@@ -44,10 +44,12 @@ private[spark] case class ResourceID(componentName: String, resourceName: String
 
 private[spark] case class ResourceRequest(
     id: ResourceID,
-    count: Double,  // count or amount?? TODO
+    count: Int,
     discoveryScript: Option[String],
     vendor: Option[String]) {
 }
+
+private[spark] case class TaskResourceRequirements(resourceName: String, count: Int)
 
 private[spark] case class ResourceAllocation(id: ResourceID, addresses: Seq[String]) {
   def toResourceInfo(): ResourceInformation = {
@@ -57,20 +59,23 @@ private[spark] case class ResourceAllocation(id: ResourceID, addresses: Seq[Stri
 
 private[spark] object ResourceUtils extends Logging {
 
-  val AMOUNT = ".amount"
+  // config suffixes
   val DISCOVERY_SCRIPT = ".discoveryScript"
   val VENDOR = ".vendor"
+  // user facing configs use .amount to allow to extend in the future,
+  // internally we currnetly only support addresses, so its just an integer count
+  val AMOUNT = ".amount"
 
   // case class to make extracting the JSON resource information easy
   case class JsonResourceInformation(name: String, addresses: Seq[String])
 
   def parseResourceRequest(sparkConf: SparkConf, resourceId: ResourceID): ResourceRequest = {
     val settings = sparkConf.getAllWithPrefix(resourceId.confPrefix).toMap
-    val quantity = settings.get(AMOUNT).getOrElse(
-      throw new SparkException("You must specify an amount")).toDouble
+    val amount = settings.get(AMOUNT).getOrElse(
+      throw new SparkException("You must specify an amount")).toInt
     val discoveryScript = settings.get(DISCOVERY_SCRIPT)
     val vendor = settings.get(VENDOR)
-    ResourceRequest(resourceId, quantity, discoveryScript, vendor)
+    ResourceRequest(resourceId, amount, discoveryScript, vendor)
   }
 
   def listResourceIds(sparkConf: SparkConf, componentName: String): Seq[ResourceID] = {
@@ -87,6 +92,19 @@ private[spark] object ResourceUtils extends Logging {
     }
   }
 
+  def parseTaskResourceRequirements(sparkConf: SparkConf): Seq[TaskResourceRequirements] = {
+    listResourceIds(sparkConf, SPARK_TASK_RESOURCE_PREFIX).map { id =>
+      val settings = sparkConf.getAllWithPrefix(id.confPrefix).toMap
+      val amount = settings.get(AMOUNT).getOrElse(
+        throw new SparkException(s"You must specify an amount for ${id.resourceName}")).toInt
+      TaskResourceRequirements(id.resourceName, amount)
+    }
+  }
+
+  def hasTaskResourceRequirements(sparkConf: SparkConf): Boolean = {
+    sparkConf.getAllWithPrefix(SPARK_TASK_RESOURCE_PREFIX).nonEmpty
+  }
+
   def parseAllocatedFromJsonFile(resourcesFile: String): Seq[ResourceAllocation] = {
     implicit val formats = DefaultFormats
     val resourceInput = new BufferedInputStream(new FileInputStream(resourcesFile))
@@ -100,7 +118,7 @@ private[spark] object ResourceUtils extends Logging {
     }
   }
 
-  def parseResourceAllocationFromJson(resourcesJson: String): JsonResourceInformation = {
+  def parseResourceInformationFromJson(resourcesJson: String): JsonResourceInformation = {
     implicit val formats = DefaultFormats
     try {
       parse(resourcesJson).extract[JsonResourceInformation]
@@ -125,7 +143,8 @@ private[spark] object ResourceUtils extends Logging {
   }
 
   def assertResourceAllocationMeetsRequest(
-      allocation: ResourceAllocation, request: ResourceRequest): Unit = {
+      allocation: ResourceAllocation,
+      request: ResourceRequest): Unit = {
     // TODO - test printing error message
     require(allocation.id == request.id && allocation.addresses.size >= request.count,
       s"Resource: ${allocation.id}, with addresses: " +
@@ -133,16 +152,13 @@ private[spark] object ResourceUtils extends Logging {
       s"is less than what the user requested: ${request.count})")
   }
 
-  def assertAllResourceAllocationMeetRequests(
-      allocations: Seq[ResourceAllocation], requests: Seq[ResourceRequest]): Unit = {
+  def assertAllResourceAllocationsMeetRequests(
+      allocations: Seq[ResourceAllocation],
+      requests: Seq[ResourceRequest]): Unit = {
     val allocated = allocations.map(x => x.id -> x).toMap
     requests.foreach { r =>
       assertResourceAllocationMeetsRequest(allocated(r.id), r)
     }
-  }
-
-  def hasTaskComponentResourceRequests(sparkConf: SparkConf): Boolean = {
-    sparkConf.getAllWithPrefix(SPARK_TASK_RESOURCE_PREFIX).nonEmpty
   }
 
   def getAllResources(
@@ -150,12 +166,8 @@ private[spark] object ResourceUtils extends Logging {
       componentName: String,
       resourcesFileOpt: Option[String]): Map[String, ResourceInformation] = {
     val requests = parseAllResourceRequests(sparkConf, componentName)
-    val allocations =
-      parseAllocatedAndDiscoverResources(
-        sparkConf,
-        componentName,
-        resourcesFileOpt)
-    assertAllResourceAllocationMeetRequests(allocations, requests)
+    val allocations = parseAllocatedAndDiscoverResources(sparkConf, componentName, resourcesFileOpt)
+    assertAllResourceAllocationsMeetRequests(allocations, requests)
     val resourceInfoMap = allocations.map(a => (a.id.resourceName, a.toResourceInfo())).toMap
     logInfo("==============================================================")
     logInfo("Resources:")
@@ -172,7 +184,7 @@ private[spark] object ResourceUtils extends Logging {
       // check that script exists and try to execute
       if (scriptFile.exists()) {
         val output = executeAndGetOutput(Seq(script.get), new File("."))
-        parseResourceAllocationFromJson(output)
+        parseResourceInformationFromJson(output)
       } else {
         throw new SparkException(s"Resource script: $scriptFile to discover $resourceName " +
           "doesn't exist!")
@@ -182,15 +194,6 @@ private[spark] object ResourceUtils extends Logging {
         "didn't specify a discovery script!")
     }
     result
-  }
-
-  /**
-   * Get task resource requirements.
-   */
-  def getTaskResourceRequirements(sparkConf: SparkConf): Map[String, Int] = {
-    sparkConf.getAllWithPrefix(SPARK_TASK_RESOURCE_PREFIX)
-      .withFilter { case (k, v) => k.endsWith(AMOUNT)}
-      .map { case (k, v) => (k.dropRight(AMOUNT.length), v.toInt)}.toMap
   }
 
   def resourceAmountConfigName(id: ResourceID): String = {
@@ -203,6 +206,18 @@ private[spark] object ResourceUtils extends Logging {
 
   def resourceVendorConfigName(id: ResourceID): String = {
     s"${id.componentName}${id.resourceName}$VENDOR"
+  }
+
+  def setResourceAmountConf(conf: SparkConf, id: ResourceID, value: String) {
+    conf.set(resourceAmountConfigName(id), value)
+  }
+
+  def setResourceDiscoveryScriptConf(conf: SparkConf, id: ResourceID, value: String) {
+    conf.set(resourceAmountConfigName(id), value)
+  }
+
+  def setResourceVendorConf(conf: SparkConf, id: ResourceID, value: String) {
+    conf.set(resourceVendorConfigName(id), value)
   }
 
   def setDriverResourceAmountConf(conf: SparkConf, resourceName: String, value: String): Unit = {
@@ -236,18 +251,6 @@ private[spark] object ResourceUtils extends Logging {
   def setTaskResourceAmountConf(conf: SparkConf, resourceName: String, value: String): Unit = {
     val resourceId = ResourceID(SPARK_TASK_RESOURCE_PREFIX, resourceName)
     setResourceAmountConf(conf, resourceId, value)
-  }
-
-  def setResourceAmountConf(conf: SparkConf, id: ResourceID, value: String) {
-    conf.set(resourceAmountConfigName(id), value)
-  }
-
-  def setResourceDiscoveryScriptConf(conf: SparkConf, id: ResourceID, value: String) {
-    conf.set(resourceAmountConfigName(id), value)
-  }
-
-  def setResourceVendorConf(conf: SparkConf, id: ResourceID, value: String) {
-    conf.set(resourceVendorConfigName(id), value)
   }
 
   // known types of resources

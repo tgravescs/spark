@@ -31,13 +31,6 @@ import org.apache.spark.internal.config._
 class ResourceUtilsSuite extends SparkFunSuite
     with LocalSparkContext {
 
-  def mockDiscoveryScript(file: File, result: String): String = {
-    Files.write(s"echo $result", file, StandardCharsets.UTF_8)
-    JavaFiles.setPosixFilePermissions(file.toPath(),
-      EnumSet.of(OWNER_READ, OWNER_EXECUTE, OWNER_WRITE))
-    file.getPath()
-  }
-
   /*
   test("Resource discoverer no resources") {
     val sparkconf = new SparkConf
