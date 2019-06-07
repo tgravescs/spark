@@ -20,9 +20,6 @@ package org.apache.spark
 import java.io.File
 import java.net.{MalformedURLException, URI}
 import java.nio.charset.StandardCharsets
-import java.nio.file.{Files => JavaFiles}
-import java.nio.file.attribute.PosixFilePermission._
-import java.util.EnumSet
 import java.util.concurrent.{CountDownLatch, Semaphore, TimeUnit}
 
 import scala.concurrent.duration._
@@ -38,6 +35,7 @@ import org.scalatest.Matchers._
 import org.scalatest.concurrent.Eventually
 
 import org.apache.spark.ResourceUtils._
+import org.apache.spark.TestUtils._
 import org.apache.spark.internal.config._
 import org.apache.spark.internal.config.UI._
 import org.apache.spark.scheduler.{SparkListener, SparkListenerExecutorMetricsUpdate, SparkListenerJobStart, SparkListenerTaskEnd, SparkListenerTaskStart}
@@ -740,7 +738,7 @@ class SparkContextSuite extends SparkFunSuite with LocalSparkContext with Eventu
   test("test driver discovery under local-cluster mode") {
     withTempDir { dir =>
       val gpuFile = new File(dir, "gpuDiscoverScript")
-      val scriptPath = mockDiscoveryScript(gpuFile,
+      val scriptPath = writeStringToFileAndSetPermissions(gpuFile,
         """'{"name": "gpu","addresses":["5", "6"]}'""")
 
       val conf = new SparkConf()
@@ -763,19 +761,18 @@ class SparkContextSuite extends SparkFunSuite with LocalSparkContext with Eventu
   test("test gpu driver resource files and discovery under local-cluster mode") {
     withTempDir { dir =>
       val gpuFile = new File(dir, "gpuDiscoverScript")
-      val scriptPath = mockDiscoveryScript(gpuFile,
+      val scriptPath = writeStringToFileAndSetPermissions(gpuFile,
         """'{"name": "gpu","addresses":["5", "6"]}'""")
 
       val gpusAllocated =
         ResourceAllocation(ResourceID(SPARK_DRIVER_PREFIX, GPU), Seq("0", "1", "8"))
       val ja = JArray(List(gpusAllocated.toJson))
-      val resourcesFile = writeJsonFile(dir, ja)
+      val resourcesFile = writeJsonToFile(dir, ja)
 
       val conf = new SparkConf()
         .set(DRIVER_RESOURCES_FILE, resourcesFile)
         .setMaster("local-cluster[1, 1, 1024]")
         .setAppName("test-cluster")
-
       setDriverResourceAmountConf(conf, GPU, "1")
       setDriverResourceDiscoveryConf(conf, GPU, scriptPath)
 
@@ -796,8 +793,8 @@ class SparkContextSuite extends SparkFunSuite with LocalSparkContext with Eventu
     val conf = new SparkConf()
       .setMaster("local-cluster[1, 1, 1024]")
       .setAppName("test-cluster")
-
     setTaskResourceAmountConf(conf, GPU, "1")
+
     var error = intercept[SparkException] {
       sc = new SparkContext(conf)
     }.getMessage()
@@ -845,7 +842,7 @@ class SparkContextSuite extends SparkFunSuite with LocalSparkContext with Eventu
     assume(!(Utils.isWindows))
     withTempDir { dir =>
       val resourceFile = new File(dir, "resourceDiscoverScript")
-      val discoveryScript = mockDiscoveryScript(resourceFile,
+      val discoveryScript = writeStringToFileAndSetPermissions(resourceFile,
         """'{"name": "gpu","addresses":["0", "1", "2"]}'""")
 
       val conf = new SparkConf()

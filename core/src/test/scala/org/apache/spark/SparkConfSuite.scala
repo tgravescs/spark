@@ -440,7 +440,8 @@ class SparkConfSuite extends SparkFunSuite with LocalSparkContext with ResetSyst
     assert(taskResourceRequirement.get(FPGA).isEmpty)
 
     // Ignore invalid suffix
-    conf.set(SPARK_TASK_PREFIX + FPGA + "invalid.suffix", "1")
+    val fpgaId = ResourceID(SPARK_TASK_PREFIX, FPGA)
+    conf.set(s"${fpgaId.confPrefix}invalid.suffix", "1")
     taskResourceRequirement =
       parseTaskResourceRequirements(sc.conf).map(req => (req.resourceName, req.count)).toMap
     assert(taskResourceRequirement.size == 1)

@@ -19,8 +19,8 @@ package org.apache.spark.deploy.k8s.features
 import scala.collection.JavaConverters._
 
 import io.fabric8.kubernetes.api.model.{ContainerPort, ContainerPortBuilder, LocalObjectReferenceBuilder}
-import org.apache.spark.{ResourceID, SparkConf, SparkFunSuite}
 
+import org.apache.spark.{ResourceID, SparkConf, SparkFunSuite}
 import org.apache.spark.ResourceUtils._
 import org.apache.spark.deploy.k8s.{KubernetesTestConf, SparkPod}
 import org.apache.spark.deploy.k8s.Config._

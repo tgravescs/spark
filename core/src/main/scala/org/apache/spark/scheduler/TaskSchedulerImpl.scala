@@ -26,7 +26,7 @@ import scala.collection.mutable.{ArrayBuffer, Buffer, HashMap, HashSet}
 import scala.util.Random
 
 import org.apache.spark._
-
+import org.apache.spark.ResourceUtils.parseTaskResourceRequirements
 import org.apache.spark.TaskState.TaskState
 import org.apache.spark.executor.ExecutorMetrics
 import org.apache.spark.internal.Logging
@@ -37,7 +37,6 @@ import org.apache.spark.scheduler.SchedulingMode.SchedulingMode
 import org.apache.spark.scheduler.TaskLocality.TaskLocality
 import org.apache.spark.storage.BlockManagerId
 import org.apache.spark.util.{AccumulatorV2, SystemClock, ThreadUtils, Utils}
-import org.apache.spark.ResourceUtils.{parseAllResourceRequests, parseTaskResourceRequirements}
 
 /**
  * Schedules tasks for multiple types of clusters by acting through a SchedulerBackend.

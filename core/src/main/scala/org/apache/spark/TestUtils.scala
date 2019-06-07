@@ -20,9 +20,11 @@ package org.apache.spark
 import java.io.{ByteArrayInputStream, File, FileInputStream, FileOutputStream}
 import java.net.{HttpURLConnection, URI, URL}
 import java.nio.charset.StandardCharsets
+import java.nio.file.{Files => JavaFiles}
+import java.nio.file.attribute.PosixFilePermission.{OWNER_EXECUTE, OWNER_READ, OWNER_WRITE}
 import java.security.SecureRandom
 import java.security.cert.X509Certificate
-import java.util.{Arrays, Properties}
+import java.util.{Arrays, EnumSet, Properties}
 import java.util.concurrent.{TimeoutException, TimeUnit}
 import java.util.jar.{JarEntry, JarOutputStream}
 import javax.net.ssl._
@@ -36,6 +38,8 @@ import scala.util.Try
 
 import com.google.common.io.{ByteStreams, Files}
 import org.apache.log4j.PropertyConfigurator
+import org.json4s.JsonAST.JArray
+import org.json4s.jackson.JsonMethods.{compact, render}
 
 import org.apache.spark.executor.TaskMetrics
 import org.apache.spark.internal.config._
@@ -310,6 +314,19 @@ private[spark] object TestUtils {
     require(f.isDirectory)
     val current = f.listFiles
     current ++ current.filter(_.isDirectory).flatMap(recursiveList)
+  }
+
+  def writeJsonToFile(dir: File, strToWrite: JArray): String = {
+    val f1 = File.createTempFile("jsonResourceFile", "", dir)
+    JavaFiles.write(f1.toPath(), compact(render(strToWrite)).getBytes())
+    f1.getPath()
+  }
+
+  def writeStringToFileAndSetPermissions(file: File, result: String): String = {
+    Files.write(s"echo $result", file, StandardCharsets.UTF_8)
+    JavaFiles.setPosixFilePermissions(file.toPath(),
+      EnumSet.of(OWNER_READ, OWNER_EXECUTE, OWNER_WRITE))
+    file.getPath()
   }
 }
 

@@ -21,6 +21,7 @@ import java.io.File
 import java.nio.file.{Files => JavaFiles}
 
 import org.apache.spark.ResourceUtils._
+import org.apache.spark.TestUtils._
 import org.apache.spark.internal.config._
 import org.apache.spark.util.Utils
 
@@ -28,17 +29,16 @@ class ResourceUtilsSuite extends SparkFunSuite
     with LocalSparkContext {
 
   test("Resource discoverer no addresses errors") {
-    val sparkconf = new SparkConf
+    val conf = new SparkConf
     assume(!(Utils.isWindows))
     withTempDir { dir =>
       val gpuFile = new File(dir, "gpuDiscoverScript")
-      val scriptPath = mockDiscoveryScript(gpuFile,
-        """'{"name": "gpu"}'""")
-      setExecutorResourceAmountConf(sparkconf, GPU, "2")
-      setExecutorResourceDiscoveryConf(sparkconf, GPU, scriptPath)
+      val scriptPath = writeStringToFileAndSetPermissions(gpuFile, """'{"name": "gpu"}'""")
+      setExecutorResourceAmountConf(conf, GPU, "2")
+      setExecutorResourceDiscoveryConf(conf, GPU, scriptPath)
 
       val error = intercept[IllegalArgumentException] {
-        getAllResources(sparkconf, SPARK_EXECUTOR_PREFIX, None)
+        getAllResources(conf, SPARK_EXECUTOR_PREFIX, None)
       }.getMessage()
       assert(error.contains("Resource: gpu, with " +
         "addresses:  is less than what the user requested: 2"))
@@ -46,22 +46,22 @@ class ResourceUtilsSuite extends SparkFunSuite
   }
 
   test("Resource discoverer multiple resource types") {
-    val sparkconf = new SparkConf
+    val conf = new SparkConf
     assume(!(Utils.isWindows))
     withTempDir { dir =>
       val gpuFile = new File(dir, "gpuDiscoverScript")
-      val gpuDiscovery = mockDiscoveryScript(gpuFile,
+      val gpuDiscovery = writeStringToFileAndSetPermissions(gpuFile,
         """'{"name": "gpu", "addresses": ["0", "1"]}'""")
-      setExecutorResourceAmountConf(sparkconf, GPU, "2")
-      setExecutorResourceDiscoveryConf(sparkconf, GPU, gpuDiscovery)
+      setExecutorResourceAmountConf(conf, GPU, "2")
+      setExecutorResourceDiscoveryConf(conf, GPU, gpuDiscovery)
 
       val fpgaFile = new File(dir, "fpgaDiscoverScript")
-      val fpgaDiscovery = mockDiscoveryScript(fpgaFile,
+      val fpgaDiscovery = writeStringToFileAndSetPermissions(fpgaFile,
         """'{"name": "fpga", "addresses": ["f1", "f2", "f3"]}'""")
-      setExecutorResourceAmountConf(sparkconf, FPGA, "2")
-      setExecutorResourceDiscoveryConf(sparkconf, FPGA, fpgaDiscovery)
+      setExecutorResourceAmountConf(conf, FPGA, "2")
+      setExecutorResourceDiscoveryConf(conf, FPGA, fpgaDiscovery)
 
-      val resources = getAllResources(sparkconf, SPARK_EXECUTOR_PREFIX, None)
+      val resources = getAllResources(conf, SPARK_EXECUTOR_PREFIX, None)
       assert(resources.size === 2)
       val gpuValue = resources.get(GPU)
       assert(gpuValue.nonEmpty, "Should have a gpu entry")
@@ -79,26 +79,25 @@ class ResourceUtilsSuite extends SparkFunSuite
   }
 
   test("list resource ids") {
-    val sparkconf = new SparkConf
-    setDriverResourceAmountConf(sparkconf, GPU, "2")
-    var resources = listResourceIds(sparkconf, SPARK_DRIVER_PREFIX)
+    val conf = new SparkConf
+    setDriverResourceAmountConf(conf, GPU, "2")
+    var resources = listResourceIds(conf, SPARK_DRIVER_PREFIX)
     assert(resources.size === 1, "should only have GPU for resource")
     assert(resources(0).resourceName == GPU, "name should be gpu")
 
-    setDriverResourceAmountConf(sparkconf, FPGA, "2")
-    val resourcesMap = listResourceIds(sparkconf, SPARK_DRIVER_PREFIX)
+    setDriverResourceAmountConf(conf, FPGA, "2")
+    val resourcesMap = listResourceIds(conf, SPARK_DRIVER_PREFIX)
       .map{ rId => (rId.resourceName, 1)}.toMap
     assert(resourcesMap.size === 2, "should only have GPU for resource")
     assert(resourcesMap.get(GPU).nonEmpty, "should have GPU")
     assert(resourcesMap.get(FPGA).nonEmpty, "should have FPGA")
-
   }
 
   test("parse resource request") {
-    val sparkconf = new SparkConf
-    setDriverResourceAmountConf(sparkconf, GPU, "2")
+    val conf = new SparkConf
+    setDriverResourceAmountConf(conf, GPU, "2")
     val gpuResourceID = ResourceID(SPARK_DRIVER_PREFIX, GPU)
-    var request = parseResourceRequest(sparkconf, gpuResourceID)
+    var request = parseResourceRequest(conf, gpuResourceID)
     assert(request.id.resourceName === GPU, "should only have GPU for resource")
     assert(request.count === 2, "GPU count should be 2")
     assert(request.discoveryScript === None, "discovery script should be empty")
@@ -106,34 +105,34 @@ class ResourceUtilsSuite extends SparkFunSuite
 
     val vendor = "nvidia.com"
     val discoveryScript = "discoveryScriptGPU"
-    setDriverResourceDiscoveryConf(sparkconf, GPU, discoveryScript)
-    setDriverResourceVendorConf(sparkconf, GPU, vendor)
-    request = parseResourceRequest(sparkconf, gpuResourceID)
+    setDriverResourceDiscoveryConf(conf, GPU, discoveryScript)
+    setDriverResourceVendorConf(conf, GPU, vendor)
+    request = parseResourceRequest(conf, gpuResourceID)
     assert(request.id.resourceName === GPU, "should only have GPU for resource")
     assert(request.count === 2, "GPU count should be 2")
     assert(request.discoveryScript.get === discoveryScript, "discovery script should be empty")
     assert(request.vendor.get === vendor, "vendor should be empty")
 
-    sparkconf.remove(s"${gpuResourceID.confPrefix}$AMOUNT")
+    conf.remove(s"${gpuResourceID.confPrefix}$AMOUNT")
     val error = intercept[SparkException] {
-      request = parseResourceRequest(sparkconf, gpuResourceID)
+      request = parseResourceRequest(conf, gpuResourceID)
     }.getMessage()
 
     assert(error.contains("You must specify an amount for gpu"))
   }
 
   test("Resource discoverer multiple gpus on driver") {
-    val sparkconf = new SparkConf
+    val conf = new SparkConf
     assume(!(Utils.isWindows))
     withTempDir { dir =>
       val gpuFile = new File(dir, "gpuDiscoverScript")
-      val gpuDiscovery = mockDiscoveryScript(gpuFile,
+      val gpuDiscovery = writeStringToFileAndSetPermissions(gpuFile,
         """'{"name": "gpu", "addresses": ["0", "1"]}'""")
-      setDriverResourceAmountConf(sparkconf, GPU, "2")
-      setDriverResourceDiscoveryConf(sparkconf, GPU, gpuDiscovery)
+      setDriverResourceAmountConf(conf, GPU, "2")
+      setDriverResourceDiscoveryConf(conf, GPU, gpuDiscovery)
 
       // make sure it reads from correct config, here it should use driver
-      val resources = getAllResources(sparkconf, SPARK_DRIVER_PREFIX, None)
+      val resources = getAllResources(conf, SPARK_DRIVER_PREFIX, None)
       val gpuValue = resources.get(GPU)
       assert(gpuValue.nonEmpty, "Should have a gpu entry")
       assert(gpuValue.get.name == "gpu", "name should be gpu")
@@ -143,11 +142,11 @@ class ResourceUtilsSuite extends SparkFunSuite
   }
 
   test("Resource discoverer script returns mismatched name") {
-    val sparkconf = new SparkConf
+    val conf = new SparkConf
     assume(!(Utils.isWindows))
     withTempDir { dir =>
       val gpuFile = new File(dir, "gpuDiscoverScript")
-      val gpuDiscovery = mockDiscoveryScript(gpuFile,
+      val gpuDiscovery = writeStringToFileAndSetPermissions(gpuFile,
         """'{"name": "fpga", "addresses": ["0", "1"]}'""")
       val request =
         ResourceRequest(
@@ -166,11 +165,11 @@ class ResourceUtilsSuite extends SparkFunSuite
   }
 
   test("Resource discoverer script returns invalid format") {
-    val sparkconf = new SparkConf
+    val conf = new SparkConf
     assume(!(Utils.isWindows))
     withTempDir { dir =>
       val gpuFile = new File(dir, "gpuDiscoverScript")
-      val gpuDiscovery = mockDiscoveryScript(gpuFile,
+      val gpuDiscovery = writeStringToFileAndSetPermissions(gpuFile,
         """'{"addresses": ["0", "1"]}'""")
 
       val request =
@@ -189,7 +188,7 @@ class ResourceUtilsSuite extends SparkFunSuite
   }
 
   test("Resource discoverer script doesn't exist") {
-    val sparkconf = new SparkConf
+    val conf = new SparkConf
     withTempDir { dir =>
       val file1 = new File(dir, "bogusfilepath")
       try {

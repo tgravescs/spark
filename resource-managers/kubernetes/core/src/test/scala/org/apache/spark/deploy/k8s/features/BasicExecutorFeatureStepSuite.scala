@@ -25,8 +25,8 @@ import scala.collection.JavaConverters._
 import com.google.common.net.InternetDomainName
 import io.fabric8.kubernetes.api.model._
 import org.scalatest.BeforeAndAfter
-import org.apache.spark.{ResourceID, SecurityManager, SparkConf, SparkException, SparkFunSuite}
 
+import org.apache.spark.{ResourceID, SecurityManager, SparkConf, SparkException, SparkFunSuite}
 import org.apache.spark.ResourceUtils._
 import org.apache.spark.deploy.k8s.{KubernetesExecutorConf, KubernetesTestConf, SparkPod}
 import org.apache.spark.deploy.k8s.Config._

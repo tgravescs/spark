@@ -27,7 +27,6 @@ import org.apache.hadoop.yarn.util.ConverterUtils
 
 import org.apache.spark.{ResourceID, SecurityManager, SparkConf}
 import org.apache.spark.ResourceUtils._
-import org.apache.spark.internal.config._
 import org.apache.spark.launcher.YarnCommandBuilderUtils
 import org.apache.spark.util.Utils
 
