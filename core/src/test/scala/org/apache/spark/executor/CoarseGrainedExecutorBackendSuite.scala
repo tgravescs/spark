@@ -216,11 +216,10 @@ class CoarseGrainedExecutorBackendSuite extends SparkFunSuite
     setResourceAmountConf(conf, ResourceID(SPARK_TASK_PREFIX, FPGA), "3")
     assume(!(Utils.isWindows))
     withTempDir { dir =>
+
       val fpgaDiscovery = new File(dir, "resourceDiscoverScriptfpga")
-      Files.write("""echo '{"name": "fpga","addresses":["f1", "f2", "f3"]}'""",
-        fpgaDiscovery, StandardCharsets.UTF_8)
-      JavaFiles.setPosixFilePermissions(fpgaDiscovery.toPath(),
-        EnumSet.of(OWNER_READ, OWNER_EXECUTE, OWNER_WRITE))
+      val scriptPath = mockDiscoveryScript(fpgaDiscovery,
+        """'{"name": "fpga","addresses":["f1", "f2", "f3"]}'""")
       val fpgaID = ResourceID(SPARK_EXECUTOR_PREFIX, FPGA)
       setResourceDiscoveryScriptConf(conf, fpgaID, fpgaDiscovery.getPath())
 
@@ -247,11 +246,8 @@ class CoarseGrainedExecutorBackendSuite extends SparkFunSuite
     assume(!(Utils.isWindows))
     withTempDir { dir =>
       val fpgaDiscovery = new File(dir, "resourceDiscoverScriptfpga")
-      Files.write(
-        """echo '{"name": "fpga","addresses":["f1", "f2", "f3"]}'""",
-        fpgaDiscovery, StandardCharsets.UTF_8)
-      JavaFiles.setPosixFilePermissions(fpgaDiscovery.toPath(),
-        EnumSet.of(OWNER_READ, OWNER_EXECUTE, OWNER_WRITE))
+      val scriptPath = mockDiscoveryScript(fpgaDiscovery,
+        """'{"name": "fpga","addresses":["f1", "f2", "f3"]}'""")
       val fpgaID = ResourceID(SPARK_EXECUTOR_PREFIX, FPGA)
       setResourceDiscoveryScriptConf(conf, fpgaID, fpgaDiscovery.getPath())
 
