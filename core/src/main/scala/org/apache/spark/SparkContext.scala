@@ -378,7 +378,8 @@ class SparkContext(config: SparkConf) extends Logging {
     _driverLogger = DriverLogger(_conf)
 
     val resourcesFileOpt = conf.get(DRIVER_RESOURCES_FILE)
-    _resources = getAllResources(_conf, SPARK_DRIVER_RESOURCE_PREFIX, resourcesFileOpt)
+    logInfo("resources file is: " + resourcesFileOpt)
+    _resources = getAllResources(_conf, SPARK_DRIVER_PREFIX, resourcesFileOpt)
 
     // log out spark.app.name in the Spark driver logs
     logInfo(s"Submitted application: $appName")
@@ -2690,7 +2691,7 @@ object SparkContext extends Logging {
       // executor and resources required by each task.
       val taskResourceRequirements = parseTaskResourceRequirements(sc.conf)
       val executorResourcesAndCounts =
-        parseAllResourceRequests(sc.conf, SPARK_EXECUTOR_RESOURCE_PREFIX)
+        parseAllResourceRequests(sc.conf, SPARK_EXECUTOR_PREFIX)
           .map(request => (request.id.resourceName, request.count)).toMap
       var numSlots = execCores / taskCores
       var limitingResourceName = "CPU"
@@ -2699,17 +2700,17 @@ object SparkContext extends Logging {
         // Make sure the executor resources were specified through config.
         val execCount = executorResourcesAndCounts.getOrElse(req.resourceName,
           throw new SparkException("The executor resource config: " +
-            resourceAmountConfigName(ResourceID(SPARK_EXECUTOR_RESOURCE_PREFIX, req.resourceName)) +
-            "needs to be specified since a task requirement config: " +
-            resourceAmountConfigName(ResourceID(SPARK_TASK_RESOURCE_PREFIX, req.resourceName)) +
+            resourceAmountConfigName(ResourceID(SPARK_EXECUTOR_PREFIX, req.resourceName)) +
+            " needs to be specified since a task requirement config: " +
+            resourceAmountConfigName(ResourceID(SPARK_TASK_PREFIX, req.resourceName)) +
             " was specified")
         )
         // Make sure the executor resources are large enough to launch at least one task.
         if (execCount.toLong < req.count.toLong) {
           throw new SparkException("The executor resource config: " +
-            resourceAmountConfigName(ResourceID(SPARK_EXECUTOR_RESOURCE_PREFIX, req.resourceName)) +
-            s"= $execCount has to be >= the task config: " +
-            resourceAmountConfigName(ResourceID(SPARK_TASK_RESOURCE_PREFIX, req.resourceName)) +
+            resourceAmountConfigName(ResourceID(SPARK_EXECUTOR_PREFIX, req.resourceName)) +
+            s" = $execCount has to be >= the task config: " +
+            resourceAmountConfigName(ResourceID(SPARK_TASK_PREFIX, req.resourceName)) +
             s" = ${req.count}")
         }
         // Compare and update the max slots each executor can provide.

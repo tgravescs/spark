@@ -431,7 +431,7 @@ class SparkConfSuite extends SparkFunSuite with LocalSparkContext with ResetSyst
     assert(taskResourceRequirement(GPU) == 2)
     assert(taskResourceRequirement(FPGA) == 1)
 
-    conf.remove(resourceAmountConfigName(ResourceID(SPARK_TASK_RESOURCE_PREFIX, FPGA)))
+    conf.remove(resourceAmountConfigName(ResourceID(SPARK_TASK_PREFIX, FPGA)))
     // Ignore invalid prefix
     setResourceAmountConf(conf, ResourceID("spark.invalid.prefix", FPGA), "1")
     taskResourceRequirement =
@@ -440,7 +440,7 @@ class SparkConfSuite extends SparkFunSuite with LocalSparkContext with ResetSyst
     assert(taskResourceRequirement.get(FPGA).isEmpty)
 
     // Ignore invalid suffix
-    conf.set(SPARK_TASK_RESOURCE_PREFIX + FPGA + "invalid.suffix", "1")
+    conf.set(SPARK_TASK_PREFIX + FPGA + "invalid.suffix", "1")
     taskResourceRequirement =
       parseTaskResourceRequirements(sc.conf).map(req => (req.resourceName, req.count)).toMap
     assert(taskResourceRequirement.size == 1)

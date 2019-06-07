@@ -768,7 +768,9 @@ class SparkContextSuite extends SparkFunSuite with LocalSparkContext with Eventu
         """'{"name": "gpu","addresses":["5", "6"]}'""")
 
       val gpusAllocated =
-        ("name" -> "gpu") ~
+        ("id" ->
+          ("componentName" -> "spark.driver") ~
+          ("resourceName" -> "gpu")) ~
         ("addresses" -> Seq("0", "1", "8"))
       val ja = JArray(List(gpusAllocated))
       val resourcesFile = writeJsonFile(dir, ja)

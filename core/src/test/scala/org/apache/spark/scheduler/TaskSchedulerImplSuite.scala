@@ -1250,8 +1250,8 @@ class TaskSchedulerImplSuite extends SparkFunSuite with LocalSparkContext with B
     val taskGpus = 1
     val executorGpus = 4
     val executorCpus = 4
-    val gpuTaskResourceID = ResourceID(SPARK_TASK_RESOURCE_PREFIX, GPU)
-    val gpuExecResourceID = ResourceID(SPARK_EXECUTOR_RESOURCE_PREFIX, GPU)
+    val gpuTaskResourceID = ResourceID(SPARK_TASK_PREFIX, GPU)
+    val gpuExecResourceID = ResourceID(SPARK_EXECUTOR_PREFIX, GPU)
 
     val taskScheduler = setupScheduler(numCores = executorCpus,
       config.CPUS_PER_TASK.key -> taskCpus.toString,

@@ -190,8 +190,8 @@ class YarnAllocatorSuite extends SparkFunSuite with Matchers with BeforeAndAfter
     ResourceRequestTestHelper.initializeResourceTypes(yarnResources)
     val mockAmClient = mock(classOf[AMRMClient[ContainerRequest]])
     val sparkResources =
-      Map(resourceAmountConfigName(ResourceID(SPARK_EXECUTOR_RESOURCE_PREFIX, GPU)) -> "3",
-        resourceAmountConfigName(ResourceID(SPARK_EXECUTOR_RESOURCE_PREFIX, FPGA)) -> "2",
+      Map(resourceAmountConfigName(ResourceID(SPARK_EXECUTOR_PREFIX, GPU)) -> "3",
+        resourceAmountConfigName(ResourceID(SPARK_EXECUTOR_PREFIX, FPGA)) -> "2",
         s"${YARN_EXECUTOR_RESOURCE_TYPES_PREFIX}${yarnMadeupResource}" -> "5")
     val handler = createAllocator(1, mockAmClient, sparkResources)
 

@@ -70,13 +70,13 @@ private object ResourceRequestHelper extends Logging {
       (AM_CORES.key, YARN_AM_RESOURCE_TYPES_PREFIX + "cpu-vcores"),
       (DRIVER_CORES.key, YARN_DRIVER_RESOURCE_TYPES_PREFIX + "cpu-vcores"),
       (EXECUTOR_CORES.key, YARN_EXECUTOR_RESOURCE_TYPES_PREFIX + "cpu-vcores"),
-      (resourceAmountConfigName(ResourceID(SPARK_EXECUTOR_RESOURCE_PREFIX, "fpga")),
+      (resourceAmountConfigName(ResourceID(SPARK_EXECUTOR_PREFIX, "fpga")),
         s"${YARN_EXECUTOR_RESOURCE_TYPES_PREFIX}${YARN_FPGA_RESOURCE_CONFIG}"),
-      (resourceAmountConfigName(ResourceID(SPARK_DRIVER_RESOURCE_PREFIX, "fpga")),
+      (resourceAmountConfigName(ResourceID(SPARK_DRIVER_PREFIX, "fpga")),
         s"${YARN_DRIVER_RESOURCE_TYPES_PREFIX}${YARN_FPGA_RESOURCE_CONFIG}"),
-      (resourceAmountConfigName(ResourceID(SPARK_EXECUTOR_RESOURCE_PREFIX, "gpu")),
+      (resourceAmountConfigName(ResourceID(SPARK_EXECUTOR_PREFIX, "gpu")),
         s"${YARN_EXECUTOR_RESOURCE_TYPES_PREFIX}${YARN_GPU_RESOURCE_CONFIG}"),
-      (resourceAmountConfigName(ResourceID(SPARK_DRIVER_RESOURCE_PREFIX, "gpu")),
+      (resourceAmountConfigName(ResourceID(SPARK_DRIVER_PREFIX, "gpu")),
         s"${YARN_DRIVER_RESOURCE_TYPES_PREFIX}${YARN_GPU_RESOURCE_CONFIG}"))
 
     val errorMessage = new mutable.StringBuilder()

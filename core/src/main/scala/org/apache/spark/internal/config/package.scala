@@ -31,9 +31,9 @@ import org.apache.spark.util.collection.unsafe.sort.UnsafeSorterSpillReader.MAX_
 
 package object config {
 
-  private[spark] val SPARK_DRIVER_RESOURCE_PREFIX = "spark.driver.resource."
-  private[spark] val SPARK_EXECUTOR_RESOURCE_PREFIX = "spark.executor.resource."
-  private[spark] val SPARK_TASK_RESOURCE_PREFIX = "spark.task.resource."
+  private[spark] val SPARK_DRIVER_PREFIX = "spark.driver"
+  private[spark] val SPARK_EXECUTOR_PREFIX = "spark.executor"
+  private[spark] val SPARK_TASK_PREFIX = "spark.task"
 
   private[spark] val DRIVER_RESOURCES_FILE =
     ConfigBuilder("spark.driver.resourcesFile")

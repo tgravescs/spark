@@ -90,16 +90,16 @@ private[spark] class CoarseGrainedExecutorBackend(
   def parseOrFindResources(resourcesFileOpt: Option[String]): Map[String, ResourceInformation] = {
     // only parse the resources if a task requires them
     val resourceInfo = if (hasTaskResourceRequirements(env.conf)) {
-      val resources = getAllResources(env.conf, SPARK_EXECUTOR_RESOURCE_PREFIX, resourcesFileOpt)
+      val resources = getAllResources(env.conf, SPARK_EXECUTOR_PREFIX, resourcesFileOpt)
       if (resources.isEmpty) {
         throw new SparkException("User specified resources per task via: " +
-          s"$SPARK_TASK_RESOURCE_PREFIX, but can't find any resources available on the executor.")
+          s"$SPARK_TASK_PREFIX, but can't find any resources available on the executor.")
       }
       resources
     } else {
       if (resourcesFileOpt.nonEmpty) {
         logWarning("A resources file was specified but the application is not configured " +
-          s"to use any resources, see the configs with prefix: ${SPARK_TASK_RESOURCE_PREFIX}")
+          s"to use any resources, see the configs with prefix: ${SPARK_TASK_PREFIX}")
       }
       Map.empty[String, ResourceInformation]
     }
