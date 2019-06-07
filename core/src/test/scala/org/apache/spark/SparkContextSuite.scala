@@ -34,7 +34,6 @@ import org.apache.hadoop.io.{BytesWritable, LongWritable, Text}
 import org.apache.hadoop.mapred.TextInputFormat
 import org.apache.hadoop.mapreduce.lib.input.{TextInputFormat => NewTextInputFormat}
 import org.json4s.JsonAST.JArray
-import org.json4s.JsonDSL._
 import org.scalatest.Matchers._
 import org.scalatest.concurrent.Eventually
 
@@ -768,11 +767,8 @@ class SparkContextSuite extends SparkFunSuite with LocalSparkContext with Eventu
         """'{"name": "gpu","addresses":["5", "6"]}'""")
 
       val gpusAllocated =
-        ("id" ->
-          ("componentName" -> "spark.driver") ~
-          ("resourceName" -> "gpu")) ~
-        ("addresses" -> Seq("0", "1", "8"))
-      val ja = JArray(List(gpusAllocated))
+        ResourceAllocation(ResourceID(SPARK_DRIVER_PREFIX, GPU), Seq("0", "1", "8"))
+      val ja = JArray(List(gpusAllocated.toJson))
       val resourcesFile = writeJsonFile(dir, ja)
 
       val conf = new SparkConf()
@@ -849,11 +845,8 @@ class SparkContextSuite extends SparkFunSuite with LocalSparkContext with Eventu
     assume(!(Utils.isWindows))
     withTempDir { dir =>
       val resourceFile = new File(dir, "resourceDiscoverScript")
-      val resources = """'{"name": "gpu", "addresses": ["0", "1", "2"]}'"""
-      Files.write(s"echo $resources", resourceFile, StandardCharsets.UTF_8)
-      JavaFiles.setPosixFilePermissions(resourceFile.toPath(),
-        EnumSet.of(OWNER_READ, OWNER_EXECUTE, OWNER_WRITE))
-      val discoveryScript = resourceFile.getPath()
+      val discoveryScript = mockDiscoveryScript(resourceFile,
+        """'{"name": "gpu","addresses":["0", "1", "2"]}'""")
 
       val conf = new SparkConf()
         .setMaster("local-cluster[3, 3, 1024]")

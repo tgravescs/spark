@@ -26,7 +26,8 @@ import java.util.EnumSet
 import com.fasterxml.jackson.databind.exc.MismatchedInputException
 import com.google.common.io.Files
 import org.json4s.{DefaultFormats, MappingException}
-import org.json4s.JsonAST.JArray
+import org.json4s.JsonAST.{JArray, JObject}
+import org.json4s.JsonDSL._
 import org.json4s.jackson.JsonMethods._
 
 import org.apache.spark.internal.Logging
@@ -52,8 +53,15 @@ private[spark] case class ResourceRequest(
 private[spark] case class TaskResourceRequirements(resourceName: String, count: Int)
 
 private[spark] case class ResourceAllocation(id: ResourceID, addresses: Seq[String]) {
-  def toResourceInfo(): ResourceInformation = {
+  def toResourceInfo: ResourceInformation = {
     new ResourceInformation(id.resourceName, addresses.toArray)
+  }
+
+  def toJson: JObject = {
+    ("id" ->
+      ("componentName" -> id.componentName) ~
+      ("resourceName" -> id.resourceName)) ~
+    ("addresses" -> addresses)
   }
 }
 
@@ -179,7 +187,7 @@ private[spark] object ResourceUtils extends Logging {
     val requests = parseAllResourceRequests(sparkConf, componentName)
     val allocations = parseAllocatedAndDiscoverResources(sparkConf, componentName, resourcesFileOpt)
     assertAllResourceAllocationsMeetRequests(allocations, requests)
-    val resourceInfoMap = allocations.map(a => (a.id.resourceName, a.toResourceInfo())).toMap
+    val resourceInfoMap = allocations.map(a => (a.id.resourceName, a.toResourceInfo)).toMap
     logInfo("==============================================================")
     logInfo("Resources:")
     resourceInfoMap.foreach { case (k, v) => logInfo(s"$k -> $v") }

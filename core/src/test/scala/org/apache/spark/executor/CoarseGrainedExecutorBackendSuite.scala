@@ -20,15 +20,11 @@ package org.apache.spark.executor
 import java.io.File
 import java.net.URL
 import java.nio.ByteBuffer
-import java.nio.charset.StandardCharsets
-import java.nio.file.{Files => JavaFiles}
-import java.nio.file.attribute.PosixFilePermission.{OWNER_EXECUTE, OWNER_READ, OWNER_WRITE}
-import java.util.{EnumSet, Properties}
+import java.util.Properties
 
 import scala.collection.mutable
 import scala.concurrent.duration._
 
-import com.google.common.io.Files
 import org.json4s.JsonAST.{JArray, JObject}
 import org.json4s.JsonDSL._
 import org.mockito.Mockito.when
@@ -80,18 +76,14 @@ class CoarseGrainedExecutorBackendSuite extends SparkFunSuite
     val backend = new CoarseGrainedExecutorBackend( env.rpcEnv, "driverurl", "1", "host1",
       4, Seq.empty[URL], env, None)
     withTempDir { tmpDir =>
-      val testResourceArgs =
-        ("id" ->
-          ("componentName" -> "spark.executor") ~
-          ("resourceName" -> "gpu")) ~
-        ("addresses" -> Seq("0", "1"))
-      val ja = JArray(List(testResourceArgs))
+      val ra = ResourceAllocation(ResourceID(SPARK_EXECUTOR_PREFIX, GPU), Seq("0", "1"))
+      val ja = JArray(List(ra.toJson))
       val f1 = writeJsonFile(tmpDir, ja)
       val parsedResources = backend.parseOrFindResources(Some(f1))
 
       assert(parsedResources.size === 1)
       assert(parsedResources.get(GPU).nonEmpty)
-      assert(parsedResources.get(GPU).get.name === "gpu")
+      assert(parsedResources.get(GPU).get.name === GPU)
       assert(parsedResources.get(GPU).get.addresses.deep === Array("0", "1").deep)
     }
   }
@@ -110,26 +102,19 @@ class CoarseGrainedExecutorBackendSuite extends SparkFunSuite
       4, Seq.empty[URL], env, None)
 
     withTempDir { tmpDir =>
-      val gpuArgs =
-        ("id" ->
-          ("componentName" -> "spark.executor") ~
-          ("resourceName" -> "gpu")) ~
-        ("addresses" -> Seq("0", "1"))
+      val gpuArgs = ResourceAllocation(ResourceID(SPARK_EXECUTOR_PREFIX, GPU), Seq("0", "1"))
       val fpgaArgs =
-        ("id" ->
-          ("componentName" -> "spark.executor") ~
-          ("resourceName" -> "fpga")) ~
-        ("addresses" -> Seq("f1", "f2", "f3"))
-      val ja = JArray(List(gpuArgs, fpgaArgs))
+        ResourceAllocation(ResourceID(SPARK_EXECUTOR_PREFIX, FPGA), Seq("f1", "f2", "f3"))
+      val ja = JArray(List(gpuArgs.toJson, fpgaArgs.toJson))
       val f1 = writeJsonFile(tmpDir, ja)
       val parsedResources = backend.parseOrFindResources(Some(f1))
 
       assert(parsedResources.size === 2)
       assert(parsedResources.get(GPU).nonEmpty)
-      assert(parsedResources.get(GPU).get.name === "gpu")
+      assert(parsedResources.get(GPU).get.name === GPU)
       assert(parsedResources.get(GPU).get.addresses.deep === Array("0", "1").deep)
       assert(parsedResources.get(FPGA).nonEmpty)
-      assert(parsedResources.get(FPGA).get.name === "fpga")
+      assert(parsedResources.get(FPGA).get.name === FPGA)
       assert(parsedResources.get(FPGA).get.addresses.deep === Array("f1", "f2", "f3").deep)
     }
   }
@@ -146,12 +131,8 @@ class CoarseGrainedExecutorBackendSuite extends SparkFunSuite
 
     // not enough gpu's on the executor
     withTempDir { tmpDir =>
-      val gpuArgs =
-        ("id" ->
-          ("componentName" -> "spark.executor") ~
-          ("resourceName" -> "gpu")) ~
-        ("addresses" -> Seq("0"))
-      val ja = JArray(List(gpuArgs))
+      val gpuArgs = ResourceAllocation(ResourceID(SPARK_EXECUTOR_PREFIX, GPU), Seq("0"))
+      val ja = JArray(List(gpuArgs.toJson))
       val f1 = writeJsonFile(tmpDir, ja)
 
       var error = intercept[IllegalArgumentException] {
@@ -164,12 +145,8 @@ class CoarseGrainedExecutorBackendSuite extends SparkFunSuite
 
     // missing resource on the executor
     withTempDir { tmpDir =>
-      val gpuArgs =
-        ("id" ->
-          ("componentName" -> "spark.executor") ~
-          ("resourceName" -> "fpga")) ~
-        ("addresses" -> Seq("0"))
-      val ja = JArray(List(gpuArgs))
+      val fpga = ResourceAllocation(ResourceID(SPARK_EXECUTOR_PREFIX, FPGA), Seq("0"))
+      val ja = JArray(List(fpga.toJson))
       val f1 = writeJsonFile(tmpDir, ja)
 
       var error = intercept[SparkException] {
@@ -193,12 +170,8 @@ class CoarseGrainedExecutorBackendSuite extends SparkFunSuite
 
     // executor resources < required
     withTempDir { tmpDir =>
-      val gpuArgs =
-        ("id" ->
-          ("componentName" -> "spark.executor") ~
-          ("resourceName" -> "gpu")) ~
-        ("addresses" -> Seq("0", "1"))
-      val ja = JArray(List(gpuArgs))
+      val gpuArgs = ResourceAllocation(ResourceID(SPARK_EXECUTOR_PREFIX, GPU), Seq("0", "1"))
+      val ja = JArray(List(gpuArgs.toJson))
       val f1 = writeJsonFile(tmpDir, ja)
 
       var error = intercept[IllegalArgumentException] {
@@ -234,7 +207,7 @@ class CoarseGrainedExecutorBackendSuite extends SparkFunSuite
 
       assert(parsedResources.size === 1)
       assert(parsedResources.get(FPGA).nonEmpty)
-      assert(parsedResources.get(FPGA).get.name === "fpga")
+      assert(parsedResources.get(FPGA).get.name === FPGA)
       assert(parsedResources.get(FPGA).get.addresses.deep === Array("f1", "f2", "f3").deep)
     }
   }
@@ -257,13 +230,8 @@ class CoarseGrainedExecutorBackendSuite extends SparkFunSuite
       // we don't really use this, just need it to get at the parser function
       val backend = new CoarseGrainedExecutorBackend(env.rpcEnv, "driverurl", "1", "host1",
         4, Seq.empty[URL], env, None)
-
-      val testResourceArgs =
-        ("id" ->
-          ("componentName" -> "spark.executor") ~
-          ("resourceName" -> "gpu")) ~
-        ("addresses" -> Seq("0", "1"))
-      val ja = JArray(List(testResourceArgs))
+      val gpuArgs = ResourceAllocation(ResourceID(SPARK_EXECUTOR_PREFIX, GPU), Seq("0", "1"))
+      val ja = JArray(List(gpuArgs.toJson))
       val f1 = writeJsonFile(dir, ja)
       val parsedResources = backend.parseOrFindResources(Some(f1))
 
