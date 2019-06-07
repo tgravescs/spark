@@ -47,10 +47,9 @@ private[spark] case class ResourceRequest(
     id: ResourceID,
     count: Int,
     discoveryScript: Option[String],
-    vendor: Option[String]) {
-}
+    vendor: Option[String])
 
-private[spark] case class TaskResourceRequirements(resourceName: String, count: Int)
+private[spark] case class TaskResourceRequirement(resourceName: String, count: Int)
 
 private[spark] case class ResourceAllocation(id: ResourceID, addresses: Seq[String]) {
   def toResourceInfo: ResourceInformation = {
@@ -100,12 +99,12 @@ private[spark] object ResourceUtils extends Logging {
     }
   }
 
-  def parseTaskResourceRequirements(sparkConf: SparkConf): Seq[TaskResourceRequirements] = {
+  def parseTaskResourceRequirements(sparkConf: SparkConf): Seq[TaskResourceRequirement] = {
     listResourceIds(sparkConf, SPARK_TASK_PREFIX).map { id =>
       val settings = sparkConf.getAllWithPrefix(id.confPrefix).toMap
       val amount = settings.get(AMOUNT).getOrElse(
         throw new SparkException(s"You must specify an amount for ${id.resourceName}")).toInt
-      TaskResourceRequirements(id.resourceName, amount)
+      TaskResourceRequirement(id.resourceName, amount)
     }
   }
 
@@ -116,20 +115,14 @@ private[spark] object ResourceUtils extends Logging {
   def parseAllocatedFromJsonFile(resourcesFile: String): Seq[ResourceAllocation] = {
     implicit val formats = DefaultFormats
     val resourceInput = new BufferedInputStream(new FileInputStream(resourcesFile))
-    val result = try {
-      logInfo("in parsing allocate from json")
-      val foo = parse(resourceInput).extract[Seq[ResourceAllocation]]
-      logInfo("in parsing allocate from json: " + foo)
-      foo
+    try {
+      parse(resourceInput).extract[Seq[ResourceAllocation]]
     } catch {
       case e@(_: MappingException | _: MismatchedInputException | _: ClassCastException) =>
         throw new SparkException(s"Exception parsing the resources in $resourcesFile", e)
     } finally {
       resourceInput.close()
     }
-    logInfo("in parsing allocate from json: " + result)
-
-    result
   }
 
   def parseResourceInformationFromJson(resourcesJson: String): JsonResourceInformation = {
@@ -146,16 +139,11 @@ private[spark] object ResourceUtils extends Logging {
       sparkConf: SparkConf,
       componentName: String,
       resourcesFileOpt: Option[String]): Seq[ResourceAllocation] = {
-    logInfo("component Name is: " + componentName)
-    logInfo("resources file ops: " + resourcesFileOpt)
     val allocated1 = resourcesFileOpt.map(parseAllocatedFromJsonFile(_))
-    logInfo(" allocated is: " + allocated1)
     val allocated = allocated1
       .getOrElse(Seq.empty[ResourceAllocation])
       .filter(_.id.componentName == componentName)
-    logInfo(" allocated is: " + allocated)
     val otherResourceIds = listResourceIds(sparkConf, componentName).diff(allocated.map(_.id))
-    logInfo("other ids is: " + otherResourceIds)
     allocated ++ otherResourceIds.map { id =>
       val request = parseResourceRequest(sparkConf, id)
       ResourceAllocation(id, discoverResource(request).addresses)
