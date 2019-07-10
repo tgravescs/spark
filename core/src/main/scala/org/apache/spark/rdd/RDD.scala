@@ -1671,6 +1671,15 @@ abstract class RDD[T: ClassTag](
   @Since("2.4.0")
   def barrier(): RDDBarrier[T] = withScope(new RDDBarrier[T](this))
 
+  // @Experimental
+  // @Since("3.0.0")
+  // def withResources(): RDD[T] = withScope(new RDDBarrier[T](this))
+  /* def withResources(StageResources): this.type = {
+     this
+   } */
+
+
+
   // =======================================================================
   // Other internal methods and fields
   // =======================================================================
