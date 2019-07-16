@@ -31,7 +31,7 @@ import org.apache.hadoop.io.{BytesWritable, NullWritable, Text}
 import org.apache.hadoop.io.compress.CompressionCodec
 import org.apache.hadoop.mapred.TextOutputFormat
 
-import org.apache.spark._
+import org.apache.spark. _
 import org.apache.spark.Partitioner._
 import org.apache.spark.annotation.{DeveloperApi, Experimental, Since}
 import org.apache.spark.api.java.JavaRDD
@@ -42,12 +42,13 @@ import org.apache.spark.partial.BoundedDouble
 import org.apache.spark.partial.CountEvaluator
 import org.apache.spark.partial.GroupedCountEvaluator
 import org.apache.spark.partial.PartialResult
+import org.apache.spark.resource.ResourceRequest
 import org.apache.spark.storage.{RDDBlockId, StorageLevel}
 import org.apache.spark.util.{BoundedPriorityQueue, Utils}
 import org.apache.spark.util.collection.{ExternalAppendOnlyMap, OpenHashMap,
   Utils => collectionUtils}
-import org.apache.spark.util.random.{BernoulliCellSampler, BernoulliSampler, PoissonSampler,
-  SamplingUtils}
+import org.apache.spark.util.random.{BernoulliCellSampler, BernoulliSampler,
+  PoissonSampler, SamplingUtils}
 
 /**
  * A Resilient Distributed Dataset (RDD), the basic abstraction in Spark. Represents an immutable,
@@ -1673,18 +1674,25 @@ abstract class RDD[T: ClassTag](
 
   // @Experimental
   // @Since("3.0.0")
-  // def withResources(): RDD[T] = withScope(new RDDBarrier[T](this))
-  /* def withResources(StageResources): this.type = {
-     this
-   } */
+  // if withResources gives you need RDD we wouldn't return this.type
+  def withResources(stageResources: Map[String, ResourceRequest]): this.type = {
+    // TODO - need to merge
+    resourceInfo = stageResources
+    this
+  }
 
-
+  def getResources(): Option[ResourceProfile] = resourceProfile
 
   // =======================================================================
   // Other internal methods and fields
   // =======================================================================
 
   private var storageLevel: StorageLevel = StorageLevel.NONE
+
+  private var resourceInfo: Map[String, ResourceRequest] =
+    Map.empty[String, ResourceRequest]
+
+  private var resourceProfile: Option[ResourceProfile] = None
 
   /** User code that created this RDD (e.g. `textFile`, `parallelize`). */
   @transient private[spark] val creationSite = sc.getCallSite()

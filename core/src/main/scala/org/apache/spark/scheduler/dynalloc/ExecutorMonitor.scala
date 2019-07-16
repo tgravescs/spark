@@ -45,7 +45,11 @@ private[spark] class ExecutorMonitor(
   private val fetchFromShuffleSvcEnabled = conf.get(SHUFFLE_SERVICE_ENABLED) &&
     conf.get(SHUFFLE_SERVICE_FETCH_RDD_ENABLED)
 
-  private val executors = new ConcurrentHashMap[String, Tracker]()
+  // private case class ExecutorTrackingInfo(tracker: Tracker, rProfId: Int)
+  private case class ExecutorTrackingInfo(tracker: Tracker)
+
+
+  private val executors = new ConcurrentHashMap[String, ExecutorTrackingInfo]()
 
   // The following fields are an optimization to avoid having to scan all executors on every EAM
   // schedule interval to find out which ones are timed out. They keep track of when the next
@@ -85,15 +89,15 @@ private[spark] class ExecutorMonitor(
 
       var newNextTimeout = Long.MaxValue
       timedOutExecs = executors.asScala
-        .filter { case (_, exec) => !exec.pendingRemoval }
+        .filter { case (_, exec) => !exec.tracker.pendingRemoval }
         .filter { case (_, exec) =>
-          val deadline = exec.timeoutAt
+          val deadline = exec.tracker.timeoutAt
           if (deadline > now) {
             newNextTimeout = math.min(newNextTimeout, deadline)
-            exec.timedOut = false
+            exec.tracker.timedOut = false
             false
           } else {
-            exec.timedOut = true
+            exec.tracker.timedOut = true
             true
           }
         }
@@ -111,7 +115,7 @@ private[spark] class ExecutorMonitor(
     ids.foreach { id =>
       val tracker = executors.get(id)
       if (tracker != null) {
-        tracker.pendingRemoval = true
+        tracker.tracker.pendingRemoval = true
       }
     }
 
@@ -122,7 +126,10 @@ private[spark] class ExecutorMonitor(
 
   def executorCount: Int = executors.size()
 
-  def pendingRemovalCount: Int = executors.asScala.count { case (_, exec) => exec.pendingRemoval }
+  // def executorProfile(id: String): ResourceProfile = executors.get(id).rp
+  def pendingRemovalCount: Int = executors.asScala.count {
+    case (_, exec) => exec.tracker.pendingRemoval
+  }
 
   override def onTaskStart(event: SparkListenerTaskStart): Unit = {
     val executorId = event.taskInfo.executorId
@@ -137,11 +144,12 @@ private[spark] class ExecutorMonitor(
     val executorId = event.taskInfo.executorId
     val exec = executors.get(executorId)
     if (exec != null) {
-      exec.updateRunningTasks(-1)
+      exec.tracker.updateRunningTasks(-1)
     }
   }
 
   override def onExecutorAdded(event: SparkListenerExecutorAdded): Unit = {
+   //  val rp = new ResourceProfile(Map.empty).require()
     val exec = ensureExecutorIsTracked(event.executorId)
     exec.updateRunningTasks(0)
     logInfo(s"New executor ${event.executorId} has registered (new total is ${executors.size()})")
@@ -151,7 +159,7 @@ private[spark] class ExecutorMonitor(
     val removed = executors.remove(event.executorId)
     if (removed != null) {
       logInfo(s"Executor ${event.executorId} removed (new total is ${executors.size()})")
-      if (!removed.pendingRemoval) {
+      if (!removed.tracker.pendingRemoval) {
         nextTimeout.set(Long.MinValue)
       }
     }
@@ -194,28 +202,28 @@ private[spark] class ExecutorMonitor(
 
   override def onUnpersistRDD(event: SparkListenerUnpersistRDD): Unit = {
     executors.values().asScala.foreach { exec =>
-      exec.cachedBlocks -= event.rddId
-      if (exec.cachedBlocks.isEmpty) {
-        exec.updateTimeout()
+      exec.tracker.cachedBlocks -= event.rddId
+      if (exec.tracker.cachedBlocks.isEmpty) {
+        exec.tracker.updateTimeout()
       }
     }
   }
 
   // Visible for testing.
   private[dynalloc] def isExecutorIdle(id: String): Boolean = {
-    Option(executors.get(id)).map(_.isIdle).getOrElse(throw new NoSuchElementException(id))
+    Option(executors.get(id)).map(_.tracker.isIdle).getOrElse(throw new NoSuchElementException(id))
   }
 
   // Visible for testing
   private[dynalloc] def timedOutExecutors(when: Long): Seq[String] = {
     executors.asScala.flatMap { case (id, tracker) =>
-      if (tracker.timeoutAt <= when) Some(id) else None
+      if (tracker.tracker.timeoutAt <= when) Some(id) else None
     }.toSeq
   }
 
   // Visible for testing
   def executorsPendingToRemove(): Set[String] = {
-    executors.asScala.filter { case (_, exec) => exec.pendingRemoval }.keys.toSet
+    executors.asScala.filter { case (_, exec) => exec.tracker.pendingRemoval }.keys.toSet
   }
 
   /**
@@ -224,7 +232,8 @@ private[spark] class ExecutorMonitor(
    * event, which is possible because these events are posted in different threads. (see SPARK-4951)
    */
   private def ensureExecutorIsTracked(id: String): Tracker = {
-    executors.computeIfAbsent(id, _ => new Tracker())
+    val foo = executors.computeIfAbsent(id, _ => ExecutorTrackingInfo(new Tracker()))
+    foo.tracker
   }
 
   private def updateNextTimeout(newValue: Long): Unit = {

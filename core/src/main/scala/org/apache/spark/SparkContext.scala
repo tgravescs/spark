@@ -51,7 +51,7 @@ import org.apache.spark.io.CompressionCodec
 import org.apache.spark.metrics.source.JVMCPUSource
 import org.apache.spark.partial.{ApproximateEvaluator, PartialResult}
 import org.apache.spark.rdd._
-import org.apache.spark.resource.{ResourceID, ResourceInformation}
+import org.apache.spark.resource.{ResourceID, ResourceInformation, ResourceRequest}
 import org.apache.spark.resource.ResourceUtils._
 import org.apache.spark.rpc.RpcEndpointRef
 import org.apache.spark.scheduler._
@@ -1063,6 +1063,7 @@ class SparkContext(config: SparkConf) extends Logging {
     // A Hadoop configuration can be about 10 KiB, which is pretty big, so broadcast it.
     val confBroadcast = broadcast(new SerializableConfiguration(hadoopConfiguration))
     val setInputPathsFunc = (jobConf: JobConf) => FileInputFormat.setInputPaths(jobConf, path)
+    logInfo("creating hadoop rdd")
     new HadoopRDD(
       this,
       confBroadcast,
@@ -1588,11 +1589,13 @@ class SparkContext(config: SparkConf) extends Logging {
   def requestTotalExecutors(
       numExecutors: Int,
       localityAwareTasks: Int,
-      hostToLocalTaskCount: scala.collection.immutable.Map[String, Int]
+      hostToLocalTaskCount: scala.collection.immutable.Map[String, Int],
+      resources: Option[Map[String, ResourceProfile]] = None
     ): Boolean = {
     schedulerBackend match {
+        // TODO - fix type mismatch and pass resources
       case b: ExecutorAllocationClient =>
-        b.requestTotalExecutors(numExecutors, localityAwareTasks, hostToLocalTaskCount)
+        b.requestTotalExecutors(numExecutors, localityAwareTasks, hostToLocalTaskCount, None)
       case _ =>
         logWarning("Requesting executors is not supported by current scheduler.")
         false
@@ -1605,10 +1608,12 @@ class SparkContext(config: SparkConf) extends Logging {
    * @return whether the request is received.
    */
   @DeveloperApi
-  def requestExecutors(numAdditionalExecutors: Int): Boolean = {
+  def requestExecutors(numAdditionalExecutors: Int,
+      resources: Option[Map[Int, ResourceProfile]] = None): Boolean = {
     schedulerBackend match {
+        // TODO fix resources tyep mismatch
       case b: ExecutorAllocationClient =>
-        b.requestExecutors(numAdditionalExecutors)
+        b.requestExecutors(numAdditionalExecutors, None)
       case _ =>
         logWarning("Requesting executors is not supported by current scheduler.")
         false

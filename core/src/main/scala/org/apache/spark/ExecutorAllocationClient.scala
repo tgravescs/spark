@@ -49,15 +49,17 @@ private[spark] trait ExecutorAllocationClient {
    * @return whether the request is acknowledged by the cluster manager.
    */
   private[spark] def requestTotalExecutors(
-      numExecutors: Int,
+      numExecutors: Int,  // TODO - do we need anymore if resources below has it???
       localityAwareTasks: Int,
-      hostToLocalTaskCount: Map[String, Int]): Boolean
+      hostToLocalTaskCount: Map[String, Int],
+      resources: Option[Map[ResourceProfile, Int]] = None): Boolean
 
   /**
    * Request an additional number of executors from the cluster manager.
    * @return whether the request is acknowledged by the cluster manager.
    */
-  def requestExecutors(numAdditionalExecutors: Int): Boolean
+  def requestExecutors(numAdditionalExecutors: Int,
+      resources: Option[Map[ResourceProfile, Int]] = None): Boolean
 
   /**
    * Request that the cluster manager kill the specified executors.

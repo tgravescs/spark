@@ -275,7 +275,8 @@ private class FakeSchedulerBackend(
     clusterManagerEndpoint: RpcEndpointRef)
   extends CoarseGrainedSchedulerBackend(scheduler, rpcEnv) {
 
-  protected override def doRequestTotalExecutors(requestedTotal: Int): Future[Boolean] = {
+  protected override def doRequestTotalExecutors(requestedTotal: Int,
+      resource: Option[Map[ResourceProfile, Int]]): Future[Boolean] = {
     clusterManagerEndpoint.ask[Boolean](
       RequestExecutors(requestedTotal, localityAwareTasks, hostToLocalTaskCount, Set.empty))
   }
@@ -296,7 +297,7 @@ private class FakeClusterManager(override val rpcEnv: RpcEnv) extends RpcEndpoin
   def getExecutorIdsToKill: Set[String] = executorIdsToKill.toSet
 
   override def receiveAndReply(context: RpcCallContext): PartialFunction[Any, Unit] = {
-    case RequestExecutors(requestedTotal, _, _, _) =>
+    case RequestExecutors(requestedTotal, _, _, _, _) =>
       targetNumExecutors = requestedTotal
       context.reply(true)
     case KillExecutors(executorIds) =>

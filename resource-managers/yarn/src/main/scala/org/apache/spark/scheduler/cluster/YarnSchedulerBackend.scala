@@ -18,7 +18,7 @@
 package org.apache.spark.scheduler.cluster
 
 import java.util.EnumSet
-import java.util.concurrent.atomic.{AtomicBoolean}
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.servlet.DispatcherType
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -28,8 +28,8 @@ import scala.util.control.NonFatal
 
 import org.apache.hadoop.yarn.api.records.{ApplicationAttemptId, ApplicationId}
 import org.eclipse.jetty.servlet.{FilterHolder, FilterMapping}
+import org.apache.spark.{ResourceProfile, SparkContext}
 
-import org.apache.spark.SparkContext
 import org.apache.spark.deploy.security.HadoopDelegationTokenManager
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config
@@ -92,7 +92,7 @@ private[spark] abstract class YarnSchedulerBackend(
     try {
       // SPARK-12009: To prevent Yarn allocator from requesting backup for the executors which
       // was Stopped by SchedulerBackend.
-      requestTotalExecutors(0, 0, Map.empty)
+      requestTotalExecutors(0, 0, Map.empty, None)
       super.stop()
     } finally {
       stopped.set(true)
@@ -123,21 +123,23 @@ private[spark] abstract class YarnSchedulerBackend(
     }
   }
 
-  private[cluster] def prepareRequestExecutors(requestedTotal: Int): RequestExecutors = {
+  private[cluster] def prepareRequestExecutors(requestedTotal: Int,
+      resources: Option[Map[ResourceProfile, Int]] = None): RequestExecutors = {
     val nodeBlacklist: Set[String] = scheduler.nodeBlacklist()
     // For locality preferences, ignore preferences for nodes that are blacklisted
     val filteredHostToLocalTaskCount =
       hostToLocalTaskCount.filter { case (k, v) => !nodeBlacklist.contains(k) }
     RequestExecutors(requestedTotal, localityAwareTasks, filteredHostToLocalTaskCount,
-      nodeBlacklist)
+      nodeBlacklist, resources)
   }
 
   /**
    * Request executors from the ApplicationMaster by specifying the total number desired.
    * This includes executors already pending or running.
    */
-  override def doRequestTotalExecutors(requestedTotal: Int): Future[Boolean] = {
-    yarnSchedulerEndpointRef.ask[Boolean](prepareRequestExecutors(requestedTotal))
+  override def doRequestTotalExecutors(requestedTotal: Int,
+      resources: Option[Map[ResourceProfile, Int]]): Future[Boolean] = {
+    yarnSchedulerEndpointRef.ask[Boolean](prepareRequestExecutors(requestedTotal, resources))
   }
 
   /**

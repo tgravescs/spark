@@ -30,7 +30,7 @@ import org.apache.spark.TaskState.TaskState
 import org.apache.spark.executor.ExecutorMetrics
 import org.apache.spark.internal.{config, Logging}
 import org.apache.spark.internal.config._
-import org.apache.spark.resource.ResourceUtils
+import org.apache.spark.resource.{ResourceInformation, ResourceUtils}
 import org.apache.spark.rpc.RpcEndpoint
 import org.apache.spark.scheduler.SchedulingMode.SchedulingMode
 import org.apache.spark.scheduler.TaskLocality.TaskLocality
@@ -339,8 +339,12 @@ private[spark] class TaskSchedulerImpl(
     for (i <- 0 until shuffledOffers.size) {
       val execId = shuffledOffers(i).executorId
       val host = shuffledOffers(i).host
+      // the specific resource assignments that would be given to a task
+      val taskResourceAssignments = HashMap[String, ResourceInformation]()
+      // need to check all resources available against what the taskset wants
+      // TODO - need to change this cpu check if specified in stage level
       if (availableCpus(i) >= CPUS_PER_TASK &&
-        resourcesMeetTaskRequirements(availableResources(i))) {
+        resourcesMeetTaskRequirements(taskSet, availableResources(i), taskResourceAssignments)) {
         try {
           for (task <- taskSet.resourceOffer(execId, host, maxLocality, availableResources(i))) {
             tasks(i) += task
@@ -378,13 +382,70 @@ private[spark] class TaskSchedulerImpl(
     launchedTask
   }
 
+  // pass offer in here if we need it for plugin???
+  // visible for testing
+  def checkResourcesSchedulable(taskSet: TaskSetManager,
+      availWorkerResources: Map[String, Buffer[String]],
+      taskResourceAssignments: HashMap[String, ResourceInformation]): Boolean = {
+
+    val localTaskReqAssign = HashMap[String, ResourceInformation]()
+    // SPARK internal scheduler will only base it off the counts and known byte units, if
+    // user is trying to use something else they will have to write their own plugin
+
+    logInfo("task set resources is: " + taskSet.taskSet.resources)
+    // combine app level requirements with the stage level requirements
+    // TODO - do we want this or have stage level be able to override?
+    // todo - don't convert to map
+    taskSet.taskSet.resources match {
+      case Some(rp) =>
+        val stageTaskResources = rp.getTaskResources
+        val globalReqsPerTaskMap = resourcesReqsPerTask.map( x => (x.resourceName, x)).toMap
+        val tsResources = globalReqsPerTaskMap // ++ stageTaskResources
+        logInfo("all resources is: " + tsResources)
+
+        for (rName <- tsResources.keys) {
+          val resourceReqs = tsResources.get(rName).get
+          val actualCount = resourceReqs.amount
+          logInfo("actualCount is: " + actualCount + " " + resourceReqs)
+
+          // for debugging - if leaving need to check is not there
+          val rInfo = availWorkerResources.get(rName).get
+          val workerAv = rInfo.size
+          logInfo(s"available type is: $rName, count is: $workerAv")
+
+          val offerSatisfies = availWorkerResources.get(rName).map(r => {
+            val availCount = availWorkerResources.get(rName).get.size
+            availCount >= actualCount
+          }).reduceLeft(_ && _)
+
+          // choose specific resources to give to next task
+          if (offerSatisfies) {
+            logInfo(s"good to go for $rName")
+            // TODO - do we want to try to take addresses if have units??
+            localTaskReqAssign.put(rName, new ResourceInformation(rName,
+              rInfo.take(actualCount.toInt).toArray))
+          } else {
+            return false
+          }
+        }
+      case None => return true // no extra resources
+    }
+
+    taskResourceAssignments ++= localTaskReqAssign
+    true
+  }
+
   /**
    * Check whether the resources from the WorkerOffer are enough to run at least one task.
    */
-  private def resourcesMeetTaskRequirements(resources: Map[String, Buffer[String]]): Boolean = {
-    resourcesReqsPerTask.forall { req =>
-      resources.contains(req.resourceName) && resources(req.resourceName).size >= req.amount
-    }
+  private def resourcesMeetTaskRequirements(
+      taskSetManager: TaskSetManager,
+      resources: Map[String, Buffer[String]],
+      taskResourceAssignments: HashMap[String, ResourceInformation]): Boolean = {
+
+    // TODO - need to add in stage level resource check here
+    checkResourcesSchedulable(taskSetManager, resources, taskResourceAssignments)
+
   }
 
   /**

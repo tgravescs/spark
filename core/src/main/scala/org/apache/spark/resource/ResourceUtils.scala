@@ -35,20 +35,23 @@ import org.apache.spark.util.Utils.executeAndGetOutput
  * @param componentName spark.driver / spark.executor / spark.task
  * @param resourceName  gpu, fpga, etc
  */
-private[spark] case class ResourceID(componentName: String, resourceName: String) {
+case class ResourceID(componentName: String, resourceName: String) {
   def confPrefix: String = s"$componentName.resource.$resourceName." // with ending dot
   def amountConf: String = s"$confPrefix${ResourceUtils.AMOUNT}"
   def discoveryScriptConf: String = s"$confPrefix${ResourceUtils.DISCOVERY_SCRIPT}"
   def vendorConf: String = s"$confPrefix${ResourceUtils.VENDOR}"
 }
 
-private[spark] case class ResourceRequest(
+case class ResourceRequest(
     id: ResourceID,
     amount: Int,
     discoveryScript: Option[String],
     vendor: Option[String])
 
 private[spark] case class TaskResourceRequirement(resourceName: String, amount: Int)
+
+private[spark] case class ExecutorResourceRequirement(resourceName: String, amount: Int)
+
 
 /**
  * Case class representing allocated resource addresses for a specific resource.
@@ -118,6 +121,7 @@ private[spark] object ResourceUtils extends Logging {
     val allocated = resourcesFileOpt.toSeq.flatMap(parseAllocatedFromJsonFile)
       .filter(_.id.componentName == componentName)
     val otherResourceIds = listResourceIds(sparkConf, componentName).diff(allocated.map(_.id))
+    // TODO - how to handle stage level resource profile?????
     allocated ++ otherResourceIds.map { id =>
       val request = parseResourceRequest(sparkConf, id)
       ResourceAllocation(id, discoverResource(request).addresses)

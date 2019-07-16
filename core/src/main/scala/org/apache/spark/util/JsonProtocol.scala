@@ -642,7 +642,8 @@ private[spark] object JsonProtocol {
     val stageInfos = jsonOption(json \ "Stage Infos")
       .map(_.extract[Seq[JValue]].map(stageInfoFromJson)).getOrElse {
         stageIds.map { id =>
-          new StageInfo(id, 0, "unknown", 0, Seq.empty, Seq.empty, "unknown")
+          new StageInfo(id, 0, "unknown", 0, Seq.empty, Seq.empty,
+            "unknown")
         }
       }
     SparkListenerJobStart(jobId, submissionTime, stageInfos, properties)

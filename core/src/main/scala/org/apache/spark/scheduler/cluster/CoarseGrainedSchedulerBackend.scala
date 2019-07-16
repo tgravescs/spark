@@ -25,8 +25,8 @@ import scala.collection.mutable.{HashMap, HashSet}
 import scala.concurrent.Future
 
 import org.apache.hadoop.security.UserGroupInformation
+import org.apache.spark._
 
-import org.apache.spark.{ExecutorAllocationClient, SparkEnv, SparkException, TaskState}
 import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.deploy.security.HadoopDelegationTokenManager
 import org.apache.spark.executor.ExecutorLogUrlHandler
@@ -558,7 +558,8 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
    * Request an additional number of executors from the cluster manager.
    * @return whether the request is acknowledged.
    */
-  final override def requestExecutors(numAdditionalExecutors: Int): Boolean = {
+  final override def requestExecutors(numAdditionalExecutors: Int,
+      resources: Option[Map[ResourceProfile, Int]]): Boolean = {
     if (numAdditionalExecutors < 0) {
       throw new IllegalArgumentException(
         "Attempted to request a negative number of additional executor(s) " +
@@ -581,7 +582,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
       }
 
       // Account for executors pending to be added or removed
-      doRequestTotalExecutors(requestedTotalExecutors)
+      doRequestTotalExecutors(requestedTotalExecutors, resources)
     }
 
     defaultAskTimeout.awaitResult(response)
@@ -604,7 +605,8 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
   final override def requestTotalExecutors(
       numExecutors: Int,
       localityAwareTasks: Int,
-      hostToLocalTaskCount: Map[String, Int]
+      hostToLocalTaskCount: Map[String, Int],
+      resources: Option[Map[ResourceProfile, Int]]
     ): Boolean = {
     if (numExecutors < 0) {
       throw new IllegalArgumentException(
@@ -620,7 +622,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
       numPendingExecutors =
         math.max(numExecutors - numExistingExecutors + executorsPendingToRemove.size, 0)
 
-      doRequestTotalExecutors(numExecutors)
+      doRequestTotalExecutors(numExecutors, resources)
     }
 
     defaultAskTimeout.awaitResult(response)
@@ -638,7 +640,8 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
    *
    * @return a future whose evaluation indicates whether the request is acknowledged.
    */
-  protected def doRequestTotalExecutors(requestedTotal: Int): Future[Boolean] =
+  protected def doRequestTotalExecutors(requestedTotal: Int,
+      resources: Option[Map[ResourceProfile, Int]]): Future[Boolean] =
     Future.successful(false)
 
   /**
@@ -690,7 +693,8 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
                  |numPendingExecutors      = $numPendingExecutors
                  |executorsPendingToRemove = ${executorsPendingToRemove.size}""".stripMargin)
           }
-          doRequestTotalExecutors(requestedTotalExecutors)
+          // TODO - add support resources here?
+          doRequestTotalExecutors(requestedTotalExecutors, None)
         } else {
           numPendingExecutors += executorsToKill.size
           Future.successful(true)

@@ -375,6 +375,25 @@ private[spark] class DAGScheduler(
     }
   }
 
+  def mergeResourceProfiles(r1: ResourceProfile, r2: ResourceProfile): ResourceProfile = {
+    val mergedKeys = r1.getResources.keySet ++ r2.getResources.keySet
+    val merged = mergedKeys.map { rName =>
+      if (r2.getResources.contains(rName) && r1.getResources.contains(rName)) {
+        val r2ri = r2.getResources(rName)
+        val r1ri = r1.getResources(rName)
+        // TODO - need to handle units here
+        // TODO - do we want to sum things like Memory?
+        if (r2ri.amount > r1ri.amount) (rName, r2ri) else (rName, r1ri)
+      } else if (r2.getResources.contains(rName)) {
+        (rName, r2.getResources(rName))
+      } else {
+        (rName, r1.getResources(rName))
+      }
+    }.toMap
+    new ResourceProfile(merged)
+  }
+
+
   /**
    * Creates a ShuffleMapStage that generates the given shuffle dependency's partitions. If a
    * previously run stage generated the same shuffle data, this function will copy the output
@@ -387,11 +406,26 @@ private[spark] class DAGScheduler(
     checkBarrierStageWithDynamicAllocation(rdd)
     checkBarrierStageWithNumSlots(rdd)
     checkBarrierStageWithRDDChainPattern(rdd, rdd.getNumPartitions)
+
+    // TODO - do we need logic here for the withResources???  to resolve multiple requirements, etc
+    val stageResourceProfiles = getStageResourceProfiles(rdd)
+    // need to resolve conflicts if multiple
+    var resourceProfile: Option[ResourceProfile] = None
+    logInfo("create shuffle map stage, resource profiles: " + stageResourceProfiles)
+    for (profile <- stageResourceProfiles) {
+      if (resourceProfile.isEmpty) {
+        resourceProfile = Some(profile)
+      } else {
+        resourceProfile = Some(mergeResourceProfiles(resourceProfile.get, profile))
+      }
+    }
+
     val numTasks = rdd.partitions.length
     val parents = getOrCreateParentStages(rdd, jobId)
     val id = nextStageId.getAndIncrement()
     val stage = new ShuffleMapStage(
-      id, rdd, numTasks, parents, jobId, rdd.creationSite, shuffleDep, mapOutputTracker)
+      id, rdd, numTasks, parents, jobId, rdd.creationSite, shuffleDep, mapOutputTracker,
+      resourceProfile)
 
     stageIdToStage(id) = stage
     shuffleIdToMapStage(shuffleDep.shuffleId) = stage
@@ -448,9 +482,23 @@ private[spark] class DAGScheduler(
     checkBarrierStageWithDynamicAllocation(rdd)
     checkBarrierStageWithNumSlots(rdd)
     checkBarrierStageWithRDDChainPattern(rdd, partitions.toSet.size)
+
+    // TODO - do we need logic here for the withResources???
+    val stageResourceProfiles = getStageResourceProfiles(rdd)
+    // need to resolve conflicts if multiple
+    var resourceProfile: Option[ResourceProfile] = None
+    for (profile <- stageResourceProfiles) {
+      if (resourceProfile.isEmpty) {
+        resourceProfile = Some(profile)
+      } else {
+        resourceProfile = Some(mergeResourceProfiles(resourceProfile.get, profile))
+      }
+    }
+
     val parents = getOrCreateParentStages(rdd, jobId)
     val id = nextStageId.getAndIncrement()
-    val stage = new ResultStage(id, rdd, func, partitions, parents, jobId, callSite)
+    val stage = new ResultStage(id, rdd, func, partitions, parents, jobId, callSite,
+      resourceProfile)
     stageIdToStage(id) = stage
     updateJobIdStageIdMaps(jobId, stage)
     stage
@@ -521,6 +569,28 @@ private[spark] class DAGScheduler(
       }
     }
     parents
+  }
+
+  private[scheduler] def getStageResourceProfiles(rdd: RDD[_]): HashSet[ResourceProfile] = {
+    val resourceProfiles = new HashSet[ResourceProfile]
+    val visited = new HashSet[RDD[_]]
+    val waitingForVisit = new ListBuffer[RDD[_]]
+    waitingForVisit += rdd
+    while (waitingForVisit.nonEmpty) {
+      val toVisit = waitingForVisit.remove(0)
+      if (!visited(toVisit)) {
+        visited += toVisit
+        toVisit.dependencies.foreach {
+          case _: ShuffleDependency[_, _, _] =>
+          // Not within the same stage with current rdd, do nothing.
+          // TODO - need to handle operations that cross stage boundaries like groupby, join, etc!!
+          case dependency =>
+            rdd.getResources().foreach(resourceProfiles += _)
+            waitingForVisit.prepend(dependency.rdd)
+        }
+      }
+    }
+    resourceProfiles
   }
 
   /**
@@ -1117,6 +1187,7 @@ private[spark] class DAGScheduler(
         outputCommitCoordinator.stageStart(
           stage = s.id, maxPartitionId = s.rdd.partitions.length - 1)
     }
+    // TODO - do we need anything here for resource requests dealing with locality?
     val taskIdToLocations: Map[Int, Seq[TaskLocation]] = try {
       stage match {
         case s: ShuffleMapStage =>
@@ -1230,7 +1301,8 @@ private[spark] class DAGScheduler(
       logInfo(s"Submitting ${tasks.size} missing tasks from $stage (${stage.rdd}) (first 15 " +
         s"tasks are for partitions ${tasks.take(15).map(_.partitionId)})")
       taskScheduler.submitTasks(new TaskSet(
-        tasks.toArray, stage.id, stage.latestInfo.attemptNumber, jobId, properties))
+        tasks.toArray, stage.id, stage.latestInfo.attemptNumber, jobId, properties,
+        stage.rdd.getResources()))
     } else {
       // Because we posted SparkListenerStageSubmitted earlier, we should mark
       // the stage as completed here in case there are no tasks to run

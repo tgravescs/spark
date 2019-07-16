@@ -22,7 +22,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 import scala.concurrent.Future
 
-import org.apache.spark.{SparkConf, SparkContext}
+import org.apache.spark.{ResourceProfile, SparkConf, SparkContext}
+
 import org.apache.spark.deploy.{ApplicationDescription, Command}
 import org.apache.spark.deploy.client.{StandaloneAppClient, StandaloneAppClientListener}
 import org.apache.spark.internal.{config, Logging}
@@ -190,7 +191,9 @@ private[spark] class StandaloneSchedulerBackend(
    *
    * @return whether the request is acknowledged.
    */
-  protected override def doRequestTotalExecutors(requestedTotal: Int): Future[Boolean] = {
+  protected override def doRequestTotalExecutors(requestedTotal: Int,
+      resources: Option[Map[ResourceProfile, Int]]): Future[Boolean] = {
+    // TODO - support resourceProfile allocation
     Option(client) match {
       case Some(c) => c.requestTotalExecutors(requestedTotal)
       case None =>

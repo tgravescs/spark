@@ -30,8 +30,8 @@ import org.apache.hadoop.yarn.api.records._
 import org.apache.hadoop.yarn.client.api.AMRMClient
 import org.apache.hadoop.yarn.client.api.AMRMClient.ContainerRequest
 import org.apache.hadoop.yarn.conf.YarnConfiguration
+import org.apache.spark.{ResourceProfile, SecurityManager, SparkConf, SparkException}
 
-import org.apache.spark.{SecurityManager, SparkConf, SparkException}
 import org.apache.spark.deploy.yarn.YarnSparkHadoopUtil._
 import org.apache.spark.deploy.yarn.config._
 import org.apache.spark.internal.Logging
@@ -146,6 +146,7 @@ private[yarn] class YarnAllocator(
       getYarnResourcesFromSparkResources(SPARK_EXECUTOR_PREFIX, sparkConf)
 
   // Resource capability requested for each executor
+  // TODO - have to change resource to be per stage
   private[yarn] val resource: Resource = {
     val resource = Resource.newInstance(
       executorMemory + memoryOverhead + pysparkWorkerMemory, executorCores)
@@ -213,7 +214,8 @@ private[yarn] class YarnAllocator(
       requestedTotal: Int,
       localityAwareTasks: Int,
       hostToLocalTaskCount: Map[String, Int],
-      nodeBlacklist: Set[String]): Boolean = synchronized {
+      nodeBlacklist: Set[String],
+      resources: Option[Map[ResourceProfile, Int]] = None): Boolean = synchronized {
     this.numLocalityAwareTasks = localityAwareTasks
     this.hostToLocalTaskCounts = hostToLocalTaskCount
 
@@ -546,6 +548,8 @@ private[yarn] class YarnAllocator(
         allocatedContainerToHostMap.put(containerId, executorHostname)
       }
 
+      // TODO - we need to map container to resource profile to pass the id into
+      // ExecutorBackend on startup
       if (runningExecutors.size() < targetNumExecutors) {
         numExecutorsStarting.incrementAndGet()
         if (launchContainers) {

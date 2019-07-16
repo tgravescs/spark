@@ -194,6 +194,7 @@ private[spark] class Client(
       val containerContext = createContainerLaunchContext(newAppResponse)
       val appContext = createApplicationSubmissionContext(newApp, containerContext)
 
+
       // Finally, submit and monitor the application
       logInfo(s"Submitting application $appId to ResourceManager")
       yarnClient.submitApplication(appContext)
