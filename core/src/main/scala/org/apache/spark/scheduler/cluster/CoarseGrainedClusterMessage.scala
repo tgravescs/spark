@@ -67,7 +67,8 @@ private[spark] object CoarseGrainedClusterMessages {
       cores: Int,
       logUrls: Map[String, String],
       attributes: Map[String, String],
-      resources: Map[String, ResourceInformation])
+      resources: Map[String, ResourceInformation],
+      resourceProfileId: Int)
     extends CoarseGrainedClusterMessage
 
   case class StatusUpdate(
@@ -121,7 +122,7 @@ private[spark] object CoarseGrainedClusterMessages {
   case class RequestExecutors(
       requestedTotal: Int,
       localityAwareTasks: Int,
-      hostToLocalTaskCount: Map[String, Int],
+      hostToLocalTaskCount: Map[(String, ResourceProfile), Int],
       nodeBlacklist: Set[String],
       resources: Option[Map[ResourceProfile, Int]] = None)
     extends CoarseGrainedClusterMessage

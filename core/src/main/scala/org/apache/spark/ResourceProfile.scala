@@ -147,7 +147,21 @@ class ResourceProfile(taskReqs: Map[String, ResourceRequest]) extends Serializab
 }
 
 private[spark] object ResourceProfile {
+  val UNKNOWN_RESOURCE_PROFILE_ID = -1
+  val DEFAULT_RESOURCE_PROFILE_ID = 0
+
   private val nextProfileId = new AtomicInteger(0)
+
+  def createDefaultProfile(conf: SparkConf): ResourceProfile = {
+    val rp = new ResourceProfile(Map.empty).
+      require(ResourceRequest(ResourceID(SPARK_EXECUTOR_PREFIX, "cores"),
+        conf.get(EXECUTOR_CORES), None, None)).
+      require(ResourceRequest(ResourceID(SPARK_EXECUTOR_PREFIX, "memory"),
+        conf.get(EXECUTOR_MEMORY).toInt, None, None))
+    assert(rp.getId == DEFAULT_RESOURCE_PROFILE_ID,
+      s"Default Profile must have the default profile id: $DEFAULT_RESOURCE_PROFILE_ID")
+    rp
+  }
 
   def getNextProfileId: Int = nextProfileId.getAndIncrement()
 

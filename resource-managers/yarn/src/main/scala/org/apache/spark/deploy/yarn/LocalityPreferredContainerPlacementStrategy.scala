@@ -157,6 +157,8 @@ private[yarn] class LocalityPreferredContainerPlacementStrategy(
   private def numExecutorsPending(numTasksPending: Int): Int = {
     // TODO - this would need to be stage level
     val coresPerExecutor = resource.getVirtualCores
+    // val tasksPerExecutorLimit = // based on available resource per executor
+    // todo this we need to know what each task needs - ie per stage resources
     (numTasksPending * sparkConf.get(CPUS_PER_TASK) + coresPerExecutor - 1) / coresPerExecutor
   }
 

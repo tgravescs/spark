@@ -145,7 +145,7 @@ class KubernetesClusterSchedulerBackendSuite extends SparkFunSuite with BeforeAn
 
   test("Request total executors") {
     schedulerBackendUnderTest.start()
-    schedulerBackendUnderTest.doRequestTotalExecutors(5)
+    schedulerBackendUnderTest.doRequestTotalExecutors(5, None)
     verify(podAllocator).setTotalExpectedExecutors(3)
     verify(podAllocator, never()).setTotalExpectedExecutors(5)
     requestExecutorsService.runNextPendingCommand()

@@ -24,6 +24,7 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable
 
 import org.apache.spark._
+import org.apache.spark.ResourceProfile.UNKNOWN_RESOURCE_PROFILE_ID
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config._
 import org.apache.spark.scheduler._
@@ -45,8 +46,8 @@ private[spark] class ExecutorMonitor(
   private val fetchFromShuffleSvcEnabled = conf.get(SHUFFLE_SERVICE_ENABLED) &&
     conf.get(SHUFFLE_SERVICE_FETCH_RDD_ENABLED)
 
-  // private case class ExecutorTrackingInfo(tracker: Tracker, rProfId: Int)
-  private case class ExecutorTrackingInfo(tracker: Tracker)
+  private case class ExecutorTrackingInfo(tracker: Tracker, rProfId: Int)
+  // private case class ExecutorTrackingInfo(tracker: Tracker)
 
 
   private val executors = new ConcurrentHashMap[String, ExecutorTrackingInfo]()
@@ -126,7 +127,23 @@ private[spark] class ExecutorMonitor(
 
   def executorCount: Int = executors.size()
 
+  // TODO - performance?
+  def executorCountWithResourceProfile(id: Int): Int = {
+    var count = 0
+    executors.forEachValue(1, (trackingInfo) => {
+      if (trackingInfo.rProfId == id) {
+        count += 1
+      }
+    })
+    count
+  }
+
+  def getResourceProfileId(executorId: String): Int = {
+    executors.get(executorId).rProfId
+  }
+
   // def executorProfile(id: String): ResourceProfile = executors.get(id).rp
+
   def pendingRemovalCount: Int = executors.asScala.count {
     case (_, exec) => exec.tracker.pendingRemoval
   }
@@ -135,7 +152,8 @@ private[spark] class ExecutorMonitor(
     val executorId = event.taskInfo.executorId
     // Guard against a late arriving task start event (SPARK-26927).
     if (client.isExecutorActive(executorId)) {
-      val exec = ensureExecutorIsTracked(executorId)
+      // TODO - what to put here?? shoudln't happen
+      val exec = ensureExecutorIsTracked(executorId, UNKNOWN_RESOURCE_PROFILE_ID)
       exec.updateRunningTasks(1)
     }
   }
@@ -150,7 +168,7 @@ private[spark] class ExecutorMonitor(
 
   override def onExecutorAdded(event: SparkListenerExecutorAdded): Unit = {
    //  val rp = new ResourceProfile(Map.empty).require()
-    val exec = ensureExecutorIsTracked(event.executorId)
+    val exec = ensureExecutorIsTracked(event.executorId, event.executorInfo.resourceProfileId)
     exec.updateRunningTasks(0)
     logInfo(s"New executor ${event.executorId} has registered (new total is ${executors.size()})")
   }
@@ -170,7 +188,9 @@ private[spark] class ExecutorMonitor(
       return
     }
 
-    val exec = ensureExecutorIsTracked(event.blockUpdatedInfo.blockManagerId.executorId)
+    // todo -WHAT TO PASS HERE for resource profile id?
+    val exec = ensureExecutorIsTracked(event.blockUpdatedInfo.blockManagerId.executorId,
+      UNKNOWN_RESOURCE_PROFILE_ID)
     val storageLevel = event.blockUpdatedInfo.storageLevel
     val blockId = event.blockUpdatedInfo.blockId.asInstanceOf[RDDBlockId]
 
@@ -231,9 +251,14 @@ private[spark] class ExecutorMonitor(
    * which the `SparkListenerTaskStart` event is posted before the `SparkListenerBlockManagerAdded`
    * event, which is possible because these events are posted in different threads. (see SPARK-4951)
    */
-  private def ensureExecutorIsTracked(id: String): Tracker = {
-    val foo = executors.computeIfAbsent(id, _ => ExecutorTrackingInfo(new Tracker()))
-    foo.tracker
+  private def ensureExecutorIsTracked(id: String, resourceProfileId: Int): Tracker = {
+    val exec =
+      executors.computeIfAbsent(id, _ => ExecutorTrackingInfo(new Tracker(), resourceProfileId))
+    if (resourceProfileId != UNKNOWN_RESOURCE_PROFILE_ID && exec.rProfId != resourceProfileId) {
+      logInfo("resource profile Ids don't match, updating")
+      executors.put(id, ExecutorTrackingInfo(exec.tracker, resourceProfileId))
+    }
+    exec.tracker
   }
 
   private def updateNextTimeout(newValue: Long): Unit = {

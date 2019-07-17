@@ -27,9 +27,8 @@ import scala.util.{Failure, Success}
 import scala.util.control.NonFatal
 
 import org.apache.hadoop.yarn.api.records.{ApplicationAttemptId, ApplicationId}
-import org.eclipse.jetty.servlet.{FilterHolder, FilterMapping}
-import org.apache.spark.{ResourceProfile, SparkContext}
 
+import org.apache.spark.{ResourceProfile, SparkContext}
 import org.apache.spark.deploy.security.HadoopDelegationTokenManager
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config
@@ -128,7 +127,7 @@ private[spark] abstract class YarnSchedulerBackend(
     val nodeBlacklist: Set[String] = scheduler.nodeBlacklist()
     // For locality preferences, ignore preferences for nodes that are blacklisted
     val filteredHostToLocalTaskCount =
-      hostToLocalTaskCount.filter { case (k, v) => !nodeBlacklist.contains(k) }
+      hostToLocalTaskCount.filter { case (k, v) => !nodeBlacklist.contains(k._1) }
     RequestExecutors(requestedTotal, localityAwareTasks, filteredHostToLocalTaskCount,
       nodeBlacklist, resources)
   }

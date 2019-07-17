@@ -93,7 +93,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
 
   // A map to store hostname with its possible task number running on it
   @GuardedBy("CoarseGrainedSchedulerBackend.this")
-  protected var hostToLocalTaskCount: Map[String, Int] = Map.empty
+  protected var hostToLocalTaskCount: Map[(String, ResourceProfile), Int] = Map.empty
 
   // The number of pending tasks which is locality required
   @GuardedBy("CoarseGrainedSchedulerBackend.this")
@@ -191,7 +191,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
     override def receiveAndReply(context: RpcCallContext): PartialFunction[Any, Unit] = {
 
       case RegisterExecutor(executorId, executorRef, hostname, cores, logUrls,
-          attributes, resources) =>
+          attributes, resources, resourceProfileId) =>
         if (executorDataMap.contains(executorId)) {
           executorRef.send(RegisterExecutorFailed("Duplicate executor ID: " + executorId))
           context.reply(true)
@@ -218,7 +218,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
             (v.name, new ExecutorResourceInfo(v.name, v.addresses))}
           val data = new ExecutorData(executorRef, executorAddress, hostname,
             cores, cores, logUrlHandler.applyPattern(logUrls, attributes), attributes,
-            resourcesInfo)
+            resourcesInfo, resourceProfileId)
           // This must be synchronized because variables mutated
           // in this block are read when requesting executors
           CoarseGrainedSchedulerBackend.this.synchronized {
@@ -605,7 +605,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
   final override def requestTotalExecutors(
       numExecutors: Int,
       localityAwareTasks: Int,
-      hostToLocalTaskCount: Map[String, Int],
+      hostToLocalTaskCount: Map[(String, ResourceProfile), Int],
       resources: Option[Map[ResourceProfile, Int]]
     ): Boolean = {
     if (numExecutors < 0) {
