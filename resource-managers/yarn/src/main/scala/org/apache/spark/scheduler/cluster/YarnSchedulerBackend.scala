@@ -91,7 +91,8 @@ private[spark] abstract class YarnSchedulerBackend(
     try {
       // SPARK-12009: To prevent Yarn allocator from requesting backup for the executors which
       // was Stopped by SchedulerBackend.
-      requestTotalExecutors(0, 0, Map.empty, None)
+      // TODO - need to update for resourceprofiles
+      requestTotalExecutors(0, Map.empty, Map.empty, None)
       super.stop()
     } finally {
       stopped.set(true)
@@ -128,8 +129,8 @@ private[spark] abstract class YarnSchedulerBackend(
     // For locality preferences, ignore preferences for nodes that are blacklisted
     val filteredHostToLocalTaskCount =
       hostToLocalTaskCount.filter { case (k, v) => !nodeBlacklist.contains(k._1) }
-    RequestExecutors(requestedTotal, localityAwareTasks, filteredHostToLocalTaskCount,
-      nodeBlacklist, resources)
+    RequestExecutors(requestedTotal, numLocalityAwareTasksPerResourceProfileId,
+      filteredHostToLocalTaskCount, nodeBlacklist, resources)
   }
 
   /**

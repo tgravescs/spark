@@ -31,6 +31,7 @@ private[spark] class ApplicationMasterSource(prefix: String, yarnAllocator: Yarn
     override def getValue: Int = yarnAllocator.getNumExecutorsFailed
   })
 
+  // TODO - update metrics for per resource profile id
   metricRegistry.register(MetricRegistry.name("numExecutorsRunning"), new Gauge[Int] {
     override def getValue: Int = yarnAllocator.getNumExecutorsRunning
   })
@@ -39,9 +40,9 @@ private[spark] class ApplicationMasterSource(prefix: String, yarnAllocator: Yarn
     override def getValue: Int = yarnAllocator.getNumReleasedContainers
   })
 
-  metricRegistry.register(MetricRegistry.name("numLocalityAwareTasks"), new Gauge[Int] {
+ /* metricRegistry.register(MetricRegistry.name("numLocalityAwareTasks"), new Gauge[Int] {
     override def getValue: Int = yarnAllocator.numLocalityAwareTasks
-  })
+  }) */
 
   metricRegistry.register(MetricRegistry.name("numContainersPendingAllocate"), new Gauge[Int] {
     override def getValue: Int = yarnAllocator.numContainersPendingAllocate

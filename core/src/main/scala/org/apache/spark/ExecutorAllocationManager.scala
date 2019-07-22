@@ -173,6 +173,7 @@ private[spark] class ExecutorAllocationManager(
 
   // Number of locality aware tasks, used for executor placement.
   private var localityAwareTasks = 0
+  private var numLocalityAwareTasksPerResourceProfileId = new mutable.HashMap[Int, Int]
 
   // Host to possible task running on it, used for executor placement.
   private var hostToLocalTaskCount: Map[(String, ResourceProfile), Int] = Map.empty
@@ -236,8 +237,8 @@ private[spark] class ExecutorAllocationManager(
     }
     executor.scheduleWithFixedDelay(scheduleTask, 0, intervalMillis, TimeUnit.MILLISECONDS)
 
-    client.requestTotalExecutors(0, localityAwareTasks, hostToLocalTaskCount,
-      Some(numExecutorsTargetPerResourceProfile.toMap))
+    client.requestTotalExecutors(0, numLocalityAwareTasksPerResourceProfileId.toMap,
+      hostToLocalTaskCount, Some(numExecutorsTargetPerResourceProfile.toMap))
   }
 
   /**
@@ -384,7 +385,7 @@ private[spark] class ExecutorAllocationManager(
         logInfo("requesting updates: " + updates)
         testing ||
           client.requestTotalExecutors(0,
-            localityAwareTasks, hostToLocalTaskCount,
+            numLocalityAwareTasksPerResourceProfileId.toMap, hostToLocalTaskCount,
             Some(numExecutorsTargetPerResourceProfile.toMap))
       } catch {
         case NonFatal(e) =>
@@ -531,8 +532,8 @@ private[spark] class ExecutorAllocationManager(
 
     // [SPARK-21834] killExecutors api reduces the target number of executors.
     // So we need to update the target with desired value.
-    client.requestTotalExecutors(0, localityAwareTasks, hostToLocalTaskCount,
-      Some(numExecutorsTargetPerResourceProfile.toMap))
+    client.requestTotalExecutors(0, numLocalityAwareTasksPerResourceProfileId.toMap,
+      hostToLocalTaskCount, Some(numExecutorsTargetPerResourceProfile.toMap))
     // reset the newExecutorTotal to the existing number of executors
     newExecutorTotal = numExistingExecutors
     if (testing || executorsRemoved.nonEmpty) {
@@ -825,13 +826,14 @@ private[spark] class ExecutorAllocationManager(
      */
     def updateExecutorPlacementHints(): Unit = {
       var localityAwareTasks = 0
+      var localityAwareTasksPerResourceProfileId = new mutable.HashMap[Int, Int]
       val localityToCount = new mutable.HashMap[(String, ResourceProfile), Int]()
       val hostToRProfile = new mutable.HashMap[String, (Option[ResourceProfile], Int)]()
       stageAttemptToExecutorPlacementHints.values.foreach {
         case (numTasksPending, localities, rp) =>
           localityAwareTasks += numTasksPending
+          localityAwareTasksPerResourceProfileId(rp.getId) += numTasksPending
           localities.foreach { case (hostname, count) =>
-            // TODO - need to keep track per stage or per resource profile
             val updatedCount = localityToCount.getOrElse((hostname, rp), 0) + count
             localityToCount((hostname, rp)) = updatedCount
             // val rProfAndCount = hostToRProfile.getOrElseUpdate(hostname,
@@ -841,6 +843,8 @@ private[spark] class ExecutorAllocationManager(
       }
       // allocationManager.hostToResourceProfile =
       allocationManager.localityAwareTasks = localityAwareTasks
+      allocationManager.numLocalityAwareTasksPerResourceProfileId =
+        localityAwareTasksPerResourceProfileId
       allocationManager.hostToLocalTaskCount = localityToCount.toMap
     }
   }

@@ -50,7 +50,7 @@ private[spark] trait ExecutorAllocationClient {
    */
   private[spark] def requestTotalExecutors(
       numExecutors: Int,  // TODO - do we need anymore if resources below has it???
-      localityAwareTasks: Int,
+      numLocalityAwareTasksPerResourceProfileId: Map[Int, Int],
       hostToLocalTaskCount: Map[(String, ResourceProfile), Int],
       resources: Option[Map[ResourceProfile, Int]] = None): Boolean
 

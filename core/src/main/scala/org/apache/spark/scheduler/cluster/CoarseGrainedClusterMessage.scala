@@ -121,7 +121,7 @@ private[spark] object CoarseGrainedClusterMessages {
   // This includes executors already pending or running
   case class RequestExecutors(
       requestedTotal: Int,
-      localityAwareTasks: Int,
+      numLocalityAwareTasksPerResourceProfileId: Map[Int, Int],
       hostToLocalTaskCount: Map[(String, ResourceProfile), Int],
       nodeBlacklist: Set[String],
       resources: Option[Map[ResourceProfile, Int]] = None)

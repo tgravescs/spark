@@ -1593,9 +1593,18 @@ class SparkContext(config: SparkConf) extends Logging {
       resources: Option[Map[String, ResourceProfile]] = None
     ): Boolean = {
     schedulerBackend match {
-        // TODO - fix type mismatch and pass resources
       case b: ExecutorAllocationClient =>
-        b.requestTotalExecutors(numExecutors, localityAwareTasks, hostToLocalTaskCount, None)
+        // assume this is using the default resource profile, would need to add api to support
+        // others
+        val hostToLocalTaskCountWithResourceProfileId = hostToLocalTaskCount.map {
+          case (host, count) =>
+            // TODO - don't create default profile again?
+            ((host, ResourceProfile.createDefaultProfile(conf)), count)
+        }
+        val localityAwareTasksWithResourceProfileId =
+          Map[Int, Int](localityAwareTasks -> ResourceProfile.DEFAULT_RESOURCE_PROFILE_ID)
+        b.requestTotalExecutors(numExecutors, localityAwareTasksWithResourceProfileId.toMap,
+          hostToLocalTaskCountWithResourceProfileId, None)
       case _ =>
         logWarning("Requesting executors is not supported by current scheduler.")
         false

@@ -278,7 +278,8 @@ private class FakeSchedulerBackend(
   protected override def doRequestTotalExecutors(requestedTotal: Int,
       resource: Option[Map[ResourceProfile, Int]]): Future[Boolean] = {
     clusterManagerEndpoint.ask[Boolean](
-      RequestExecutors(requestedTotal, localityAwareTasks, hostToLocalTaskCount, Set.empty))
+      RequestExecutors(requestedTotal, numLocalityAwareTasksPerResourceProfileId,
+        hostToLocalTaskCount, Set.empty))
   }
 
   protected override def doKillExecutors(executorIds: Seq[String]): Future[Boolean] = {

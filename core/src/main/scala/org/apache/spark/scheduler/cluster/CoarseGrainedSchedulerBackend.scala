@@ -98,6 +98,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
   // The number of pending tasks which is locality required
   @GuardedBy("CoarseGrainedSchedulerBackend.this")
   protected var localityAwareTasks = 0
+  protected var numLocalityAwareTasksPerResourceProfileId = Map.empty[Int, Int]
 
   // The num of current max ExecutorId used to re-register appMaster
   @volatile protected var currentExecutorIdCounter = 0
@@ -604,7 +605,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
    */
   final override def requestTotalExecutors(
       numExecutors: Int,
-      localityAwareTasks: Int,
+      numLocalityAwareTasksPerResourceProfileId: Map[Int, Int],
       hostToLocalTaskCount: Map[(String, ResourceProfile), Int],
       resources: Option[Map[ResourceProfile, Int]]
     ): Boolean = {
@@ -616,7 +617,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
 
     val response = synchronized {
       this.requestedTotalExecutors = numExecutors
-      this.localityAwareTasks = localityAwareTasks
+      this.numLocalityAwareTasksPerResourceProfileId = numLocalityAwareTasksPerResourceProfileId
       this.hostToLocalTaskCount = hostToLocalTaskCount
 
       numPendingExecutors =
