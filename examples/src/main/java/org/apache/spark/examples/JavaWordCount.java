@@ -17,8 +17,11 @@
 
 package org.apache.spark.examples;
 
+import org.apache.spark.ExecutorPlugin;
 import scala.Tuple2;
 
+import org.apache.spark.SparkConf;
+import org.apache.spark.SparkEnv;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.SparkSession;
@@ -57,3 +60,4 @@ public final class JavaWordCount {
     spark.stop();
   }
 }
+

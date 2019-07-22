@@ -126,7 +126,7 @@ private[spark] class ExecutorAllocationManager(
   private val executorAllocationRatio =
     conf.get(DYN_ALLOCATION_EXECUTOR_ALLOCATION_RATIO)
 
-  private val defaultProfile = ResourceProfile.createDefaultProfile(conf)
+  private val defaultProfile = ResourceProfile.getOrCreateDefaultProfile(conf)
 
   validateSettings()
 

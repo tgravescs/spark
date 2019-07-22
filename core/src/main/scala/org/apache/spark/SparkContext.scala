@@ -1599,7 +1599,7 @@ class SparkContext(config: SparkConf) extends Logging {
         val hostToLocalTaskCountWithResourceProfileId = hostToLocalTaskCount.map {
           case (host, count) =>
             // TODO - don't create default profile again?
-            ((host, ResourceProfile.createDefaultProfile(conf)), count)
+            ((host, ResourceProfile.getOrCreateDefaultProfile(conf)), count)
         }
         val localityAwareTasksWithResourceProfileId =
           Map[Int, Int](localityAwareTasks -> ResourceProfile.DEFAULT_RESOURCE_PROFILE_ID)

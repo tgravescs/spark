@@ -20,6 +20,8 @@ package org.apache.spark.deploy.yarn
 import org.apache.hadoop.yarn.client.api.AMRMClient.ContainerRequest
 import org.scalatest.{BeforeAndAfterEach, Matchers}
 
+import org.apache.spark.ResourceProfile
+import org.apache.spark.SparkConf
 import org.apache.spark.SparkFunSuite
 
 class ContainerPlacementStrategySuite extends SparkFunSuite with Matchers with BeforeAndAfterEach {
@@ -47,9 +49,12 @@ class ContainerPlacementStrategySuite extends SparkFunSuite with Matchers with B
     handler.updateResourceRequests()
     handler.handleAllocatedContainers(Array(createContainer("host1"), createContainer("host2")))
 
+    val numLocalityTasks = Map[Int, Int](ResourceProfile.DEFAULT_RESOURCE_PROFILE_ID -> 15)
+    val rp = ResourceProfile.getOrCreateDefaultProfile(new SparkConf)
     val localities = handler.containerPlacementStrategy.localityOfRequestedContainers(
-      3, 15, Map("host3" -> 15, "host4" -> 15, "host5" -> 10),
-        handler.allocatedHostToContainersMap, Seq.empty)
+      3, numLocalityTasks, Map(("host3", rp) -> 15, ("host4", rp) -> 15, ("host5", rp) -> 10),
+        handler.allocatedHostToContainersMapPerRPId, Seq.empty,
+      ResourceProfile.DEFAULT_RESOURCE_PROFILE_ID)
 
     assert(localities.map(_.nodes) === Array(
       Array("host3", "host4", "host5"),
@@ -70,9 +75,12 @@ class ContainerPlacementStrategySuite extends SparkFunSuite with Matchers with B
       createContainer("host2")
     ))
 
+    val numLocalityTasks = Map[Int, Int](ResourceProfile.DEFAULT_RESOURCE_PROFILE_ID -> 15)
+    val rp = ResourceProfile.getOrCreateDefaultProfile(new SparkConf)
     val localities = handler.containerPlacementStrategy.localityOfRequestedContainers(
-      3, 15, Map("host1" -> 15, "host2" -> 15, "host3" -> 10),
-        handler.allocatedHostToContainersMap, Seq.empty)
+      3, numLocalityTasks, Map(("host1", rp) -> 15, ("host2", rp) -> 15, ("host3", rp) -> 10),
+      handler.allocatedHostToContainersMapPerRPId, Seq.empty,
+      ResourceProfile.DEFAULT_RESOURCE_PROFILE_ID)
 
     assert(localities.map(_.nodes) ===
       Array(null, Array("host2", "host3"), Array("host2", "host3")))
@@ -91,9 +99,12 @@ class ContainerPlacementStrategySuite extends SparkFunSuite with Matchers with B
       createContainer("host2")
     ))
 
+    val numLocalityTasks = Map[Int, Int](ResourceProfile.DEFAULT_RESOURCE_PROFILE_ID -> 15)
+    val rp = ResourceProfile.getOrCreateDefaultProfile(new SparkConf)
     val localities = handler.containerPlacementStrategy.localityOfRequestedContainers(
-      1, 15, Map("host1" -> 15, "host2" -> 15, "host3" -> 10),
-        handler.allocatedHostToContainersMap, Seq.empty)
+      1, numLocalityTasks, Map(("host1", rp) -> 15, ("host2", rp) -> 15, ("host3", rp) -> 10),
+      handler.allocatedHostToContainersMapPerRPId, Seq.empty,
+      ResourceProfile.DEFAULT_RESOURCE_PROFILE_ID)
 
     assert(localities.map(_.nodes) === Array(Array("host2", "host3")))
   }
@@ -111,9 +122,12 @@ class ContainerPlacementStrategySuite extends SparkFunSuite with Matchers with B
       createContainer("host3")
     ))
 
+    val numLocalityTasks = Map[Int, Int](ResourceProfile.DEFAULT_RESOURCE_PROFILE_ID -> 15)
+    val rp = ResourceProfile.getOrCreateDefaultProfile(new SparkConf)
     val localities = handler.containerPlacementStrategy.localityOfRequestedContainers(
-      3, 15, Map("host1" -> 15, "host2" -> 15, "host3" -> 10),
-        handler.allocatedHostToContainersMap, Seq.empty)
+      3, numLocalityTasks, Map(("host1", rp) -> 15, ("host2", rp) -> 15, ("host3", rp) -> 10),
+      handler.allocatedHostToContainersMapPerRPId, Seq.empty,
+      ResourceProfile.DEFAULT_RESOURCE_PROFILE_ID)
 
     assert(localities.map(_.nodes) === Array(null, null, null))
   }
@@ -125,8 +139,12 @@ class ContainerPlacementStrategySuite extends SparkFunSuite with Matchers with B
     handler.updateResourceRequests()
     handler.handleAllocatedContainers(Array(createContainer("host1"), createContainer("host2")))
 
+    val numLocalityTasks = Map[Int, Int](ResourceProfile.DEFAULT_RESOURCE_PROFILE_ID -> 0)
+    val rp = ResourceProfile.getOrCreateDefaultProfile(new SparkConf)
     val localities = handler.containerPlacementStrategy.localityOfRequestedContainers(
-      1, 0, Map.empty, handler.allocatedHostToContainersMap, Seq.empty)
+      1, numLocalityTasks, Map.empty,
+      handler.allocatedHostToContainersMapPerRPId, Seq.empty,
+      ResourceProfile.DEFAULT_RESOURCE_PROFILE_ID)
 
     assert(localities.map(_.nodes) === Array(null))
   }
@@ -144,9 +162,12 @@ class ContainerPlacementStrategySuite extends SparkFunSuite with Matchers with B
       createContainerRequest(Array("host2", "host3")),
       createContainerRequest(Array("host1", "host4")))
 
+    val numLocalityTasks = Map[Int, Int](ResourceProfile.DEFAULT_RESOURCE_PROFILE_ID -> 15)
+    val rp = ResourceProfile.getOrCreateDefaultProfile(new SparkConf)
     val localities = handler.containerPlacementStrategy.localityOfRequestedContainers(
-      1, 15, Map("host1" -> 15, "host2" -> 15, "host3" -> 10),
-        handler.allocatedHostToContainersMap, pendingAllocationRequests)
+      1, numLocalityTasks, Map(("host1", rp) -> 15, ("host2", rp) -> 15, ("host3", rp) -> 10),
+      handler.allocatedHostToContainersMapPerRPId, pendingAllocationRequests,
+      ResourceProfile.DEFAULT_RESOURCE_PROFILE_ID)
 
     assert(localities.map(_.nodes) === Array(Array("host3")))
   }

@@ -23,8 +23,7 @@ import scala.collection.mutable.{HashMap, HashSet, Set}
 import org.apache.hadoop.yarn.api.records._
 import org.apache.hadoop.yarn.conf.YarnConfiguration
 import org.mockito.Mockito._
-
-import org.apache.spark.{SparkConf, SparkFunSuite}
+import org.apache.spark.{ResourceProfile, SparkConf, SparkFunSuite}
 
 class LocalityPlacementStrategySuite extends SparkFunSuite {
 
@@ -65,19 +64,22 @@ class LocalityPlacementStrategySuite extends SparkFunSuite {
     val totalHosts = totalContainers / 16
 
     val mockId = mock(classOf[ContainerId])
-    val hosts = (1 to totalHosts).map { i => (s"host_$i", totalTasks % i) }.toMap
+    val rp = ResourceProfile.getOrCreateDefaultProfile(new SparkConf)
+    val hosts = (1 to totalHosts).map { i => ((s"host_$i", rp), totalTasks % i) }.toMap
     val containers = (1 to totalContainers).map { i => mockId }
     val count = containers.size / hosts.size / 2
 
-    val hostToContainerMap = new HashMap[String, Set[ContainerId]]()
-    hosts.keys.take(hosts.size / 2).zipWithIndex.foreach { case (host, i) =>
+    val hostToContainerMap = new HashMap[(String, Int), Set[ContainerId]]()
+    hosts.keys.take(hosts.size / 2).zipWithIndex.foreach { case ((host, rp), i) =>
       val hostContainers = new HashSet[ContainerId]()
       containers.drop(count * i).take(i).foreach { c => hostContainers += c }
-      hostToContainerMap(host) = hostContainers
+      val key = (host, rp.getId)
+      hostToContainerMap(key) = hostContainers
     }
 
-    strategy.localityOfRequestedContainers(containers.size * 2, totalTasks, hosts,
-      hostToContainerMap, Nil)
+    val numLocalityTasks = Map[Int, Int](rp.getId -> totalTasks)
+    strategy.localityOfRequestedContainers(containers.size * 2, numLocalityTasks, hosts,
+      hostToContainerMap, Nil, ResourceProfile.DEFAULT_RESOURCE_PROFILE_ID)
   }
 
 }
