@@ -188,18 +188,22 @@ private[yarn] class LocalityPreferredContainerPlacementStrategy(
       localityMatchedPendingAllocations: Seq[ContainerRequest],
       rpid: Int
   ): Map[String, Int] = {
-    val totalLocalTaskNum = hostToLocalTaskCount.filter { case ((string, rp), num) =>
-      rp == rpid
-    }.values.sum
-    val pendingHostToContainersMap = pendingHostToContainerCount(localityMatchedPendingAllocations)
     val filteredHostToLocalTaskCount = hostToLocalTaskCount.filter { case ((host, rp), num) =>
+      logInfo("trying filter: " + rp.getId + " against: " + rpid)
       rp.getId == rpid
     }
+    val totalLocalTaskNum = filteredHostToLocalTaskCount.values.sum
+    logInfo("total local tasks: " + totalLocalTaskNum)
+
+    val pendingHostToContainersMap =
+      pendingHostToContainerCount(localityMatchedPendingAllocations)
+    logInfo("pending host to containermap size: " + pendingHostToContainersMap.size)
     // TODO - do more efficiently
-    val allResourceProfiles = filteredHostToLocalTaskCount.keys.map { case(_, resourceProfile) =>
+    val allResourceProfiles = filteredHostToLocalTaskCount.keys.map { case (_, resourceProfile) =>
       resourceProfile
     }.toSeq
-    assert(allResourceProfiles.size == 1)
+    assert(allResourceProfiles.size == 0 || allResourceProfiles == 1,
+      s"should only have 0 or 1 resource profile, actual: ${allResourceProfiles.size}")
 
     filteredHostToLocalTaskCount.map { case ((host, rp), count) =>
       val numExecsNeededPendingTasks =
@@ -210,7 +214,7 @@ private[yarn] class LocalityPreferredContainerPlacementStrategy(
       // Take the locality of pending containers into consideration
       val existedCount =
         allocatedHostToContainersMapPerRPId.get((host, rpid)).map(_.size).getOrElse(0) +
-        pendingHostToContainersMap.getOrElse(host, 0.0)
+          pendingHostToContainersMap.getOrElse(host, 0.0)
 
       // If existing container can not fully satisfy the expected number of container,
       // the required container number is expected count minus existed count. Otherwise the

@@ -487,6 +487,7 @@ private[spark] class DAGScheduler(
     val stageResourceProfiles = getStageResourceProfiles(rdd)
     // need to resolve conflicts if multiple
     var resourceProfile: Option[ResourceProfile] = None
+    logInfo("create result stage, stage profiles: " + stageResourceProfiles)
     for (profile <- stageResourceProfiles) {
       if (resourceProfile.isEmpty) {
         resourceProfile = Some(profile)
@@ -497,6 +498,7 @@ private[spark] class DAGScheduler(
 
     val parents = getOrCreateParentStages(rdd, jobId)
     val id = nextStageId.getAndIncrement()
+    logInfo("creating result stage with profile: " + resourceProfile)
     val stage = new ResultStage(id, rdd, func, partitions, parents, jobId, callSite,
       resourceProfile)
     stageIdToStage(id) = stage
@@ -572,6 +574,7 @@ private[spark] class DAGScheduler(
   }
 
   private[scheduler] def getStageResourceProfiles(rdd: RDD[_]): HashSet[ResourceProfile] = {
+    logInfo("getting stage resource profiles for rdd: " + rdd + " profile: " + rdd.getResources())
     val resourceProfiles = new HashSet[ResourceProfile]
     val visited = new HashSet[RDD[_]]
     val waitingForVisit = new ListBuffer[RDD[_]]
@@ -580,12 +583,15 @@ private[spark] class DAGScheduler(
       val toVisit = waitingForVisit.remove(0)
       if (!visited(toVisit)) {
         visited += toVisit
+        logInfo("get resource profile normal dep, resource: " + rdd.getResources())
+        rdd.getResources().foreach(resourceProfiles += _)
+        logInfo("to visit deps are: " + toVisit)
         toVisit.dependencies.foreach {
           case _: ShuffleDependency[_, _, _] =>
+            logInfo("get resource profile shuffle dep")
           // Not within the same stage with current rdd, do nothing.
           // TODO - need to handle operations that cross stage boundaries like groupby, join, etc!!
           case dependency =>
-            rdd.getResources().foreach(resourceProfiles += _)
             waitingForVisit.prepend(dependency.rdd)
         }
       }

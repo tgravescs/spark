@@ -102,7 +102,7 @@ private object ResourceRequestHelper extends Logging {
       resource: Resource): Unit = {
     require(resource != null, "Resource parameter should not be null!")
 
-    logDebug(s"Custom resources requested: $resources")
+    logInfo(s"Custom resources requested: $resources")
     if (!isYarnResourceTypesAvailable()) {
       if (resources.nonEmpty) {
         logWarning("Ignoring custom resource requests because " +

@@ -133,6 +133,7 @@ private[spark] class ExecutorAllocationManager(
   // Number of executors to add in the next round
   // private var numExecutorsToAdd = 1
   private val numExecutorsToAddPerResourceProfileId = new mutable.HashMap[Int, Int]
+  numExecutorsToAddPerResourceProfileId(defaultProfile.getId) = 0
 
 
   // The desired number of executors at this moment in time. If all our executors were to die, this
@@ -470,7 +471,8 @@ private[spark] class ExecutorAllocationManager(
       math.max(numExecutorsTargetPerResourceProfile(rp),
         executorMonitor.executorCountWithResourceProfile(rp.getId))
     // Boost our target with the number to add for this round:
-    numExecutorsTargetPerResourceProfile(rp) += numExecutorsToAddPerResourceProfileId(rp.getId)
+    numExecutorsTargetPerResourceProfile(rp) +=
+      numExecutorsToAddPerResourceProfileId.getOrElseUpdate(rp.getId, 0)
     // Ensure that our target doesn't exceed what we need at the present moment:
     numExecutorsTargetPerResourceProfile(rp) =
       math.min(numExecutorsTargetPerResourceProfile(rp), maxNumExecutorsNeeded)
@@ -625,6 +627,7 @@ private[spark] class ExecutorAllocationManager(
         allocationManager.onSchedulerBacklogged()
         // need to keep stage task requirements to ask for the right containers
         val stageResourceProf = stageSubmitted.stageInfo.resourceProfile.getOrElse(defaultProfile)
+        logInfo("stage reosurce profile is: " + stageResourceProf)
         stageAttemptToResourceProfile(stageAttempt) = stageResourceProf
         val profId = stageResourceProf.getId
         resourceProfileIdToStageAttempt.getOrElseUpdate(
@@ -652,6 +655,8 @@ private[spark] class ExecutorAllocationManager(
               val count = hostToLocalTaskCountPerStage.getOrElse(location.host, 0) + 1
               hostToLocalTaskCountPerStage(location.host) = count
             }
+          } else {
+            logInfo("host to local task count is empty because no localities")
           }
         }
         stageAttemptToExecutorPlacementHints.put(stageAttempt,
@@ -832,13 +837,12 @@ private[spark] class ExecutorAllocationManager(
       stageAttemptToExecutorPlacementHints.values.foreach {
         case (numTasksPending, localities, rp) =>
           localityAwareTasks += numTasksPending
-          localityAwareTasksPerResourceProfileId(rp.getId) += numTasksPending
+          val rpNumPending =
+            localityAwareTasksPerResourceProfileId.getOrElse(rp.getId, 0)
+          localityAwareTasksPerResourceProfileId(rp.getId) = rpNumPending + numTasksPending
           localities.foreach { case (hostname, count) =>
             val updatedCount = localityToCount.getOrElse((hostname, rp), 0) + count
             localityToCount((hostname, rp)) = updatedCount
-            // val rProfAndCount = hostToRProfile.getOrElseUpdate(hostname,
-            //   (stageIdToResourceProfile(key), 0))
-            // hostToRProfile(hostname) = (rProfAndCount._1, rProfAndCount._2 + 1)
           }
       }
       // allocationManager.hostToResourceProfile =

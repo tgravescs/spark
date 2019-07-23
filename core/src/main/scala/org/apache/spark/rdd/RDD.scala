@@ -1675,9 +1675,10 @@ abstract class RDD[T: ClassTag](
   // @Experimental
   // @Since("3.0.0")
   // if withResources gives you need RDD we wouldn't return this.type
-  def withResources(stageResources: Map[String, ResourceRequest]): this.type = {
+  def withResources(stageResources: ResourceProfile): this.type = {
     // TODO - need to merge
-    resourceInfo = stageResources
+    resourceProfile = Some(stageResources)
+    logInfo("adding resource profile to rdd: " + resourceProfile)
     this
   }
 
@@ -1688,9 +1689,6 @@ abstract class RDD[T: ClassTag](
   // =======================================================================
 
   private var storageLevel: StorageLevel = StorageLevel.NONE
-
-  private var resourceInfo: Map[String, ResourceRequest] =
-    Map.empty[String, ResourceRequest]
 
   private var resourceProfile: Option[ResourceProfile] = None
 

@@ -170,6 +170,11 @@ private[yarn] class YarnAllocator(
 
   // resourceProfileId -> Resource
   private[yarn] val allResources = new mutable.HashMap[Int, Resource]
+  allResources(ResourceProfile.DEFAULT_RESOURCE_PROFILE_ID) = resource
+
+  // TODO - do we ever remove profiles?
+  private[yarn] val allResourceProfiles = new mutable.HashSet[ResourceProfile]
+  allResourceProfiles.add(ResourceProfile.getOrCreateDefaultProfile(sparkConf))
 
   private val launcherPool = ThreadUtils.newDaemonCachedThreadPool(
     "ContainerLauncher", sparkConf.get(CONTAINER_LAUNCH_MAX_THREADS))
@@ -256,7 +261,9 @@ private[yarn] class YarnAllocator(
       var cores = executorCores
       val otherResources = new mutable.HashMap[String, String]
       resources.get.foreach { case (rp, num) =>
+        logInfo("checking rp exists")
         if (!allResources.contains(rp.getId)) {
+          logInfo("resource profile doesn't exist")
           val execResources = rp.getExecutorResources
           execResources.foreach { case (r, execReq) =>
             r match {
@@ -283,6 +290,7 @@ private[yarn] class YarnAllocator(
           logDebug(s"Created resource capability: $resource")
           // this.resourceProfileIdToResourceProfile(rp.getId) = rp
           allResources(rp.getId) = resource
+          allResourceProfiles.add(rp)
         }
       }
     }
@@ -290,10 +298,14 @@ private[yarn] class YarnAllocator(
 
     val diff = if (resources.nonEmpty) {
       val res = resources.get.map { case (rp, requested) =>
-        if (requested != targetNumExecutorsPerResourceProfileId(rp.getId)) {
-          logInfo(s"Driver requested a total number of $requestedTotal executor(s) " +
+
+        logInfo(" resource non emtpy, target num: " +
+          targetNumExecutorsPerResourceProfileId.getOrElseUpdate(rp.getId, 0) +
+          " requested: " + requested)
+        if (requested != targetNumExecutorsPerResourceProfileId.getOrElseUpdate(rp.getId, 0)) {
+          logInfo(s"Driver requested a total number of $requested executor(s) " +
             s"for resource profile id: ${rp.getId}.")
-          targetNumExecutorsPerResourceProfileId(rp.getId) = requestedTotal
+          targetNumExecutorsPerResourceProfileId(rp.getId) = requested
           allocatorBlacklistTracker.setSchedulerBlacklistedNodes(nodeBlacklist)
           true
         } else {
@@ -398,11 +410,12 @@ private[yarn] class YarnAllocator(
         resourceProfileIdToRequestByLocalityMap(rpid)
       val request = allResources(rpid)
 
+      logInfo("resource profile si with id: " + rpid)
       if (missing > 0) {
         if (log.isInfoEnabled()) {
           var requestContainerMessage = s"Will request $missing executor container(s) for " +
-            s"resource profile id: $rpid, each with: "
-          s"${request.getVirtualCores} core(s) and " +
+            s"resource profile id: $rpid, each with: " +
+            s"${request.getVirtualCores} core(s) and " +
             s"${request.getMemory} MB memory "
           // TODO what what is printed below, also need
           //  overhead (including $memoryOverhead MB of overhead)"
@@ -596,12 +609,40 @@ private[yarn] class YarnAllocator(
     containerResources("memory") = ExecutorResourceRequirement("memory", memory)
     containerResources("cores") = ExecutorResourceRequirement("cores", cores)
     resources.foreach { case (r) =>
-      containerResources(r.getName()) = ExecutorResourceRequirement(r.getName, r.getValue.toInt)
+      logInfo("resource is: " + r)
+      if (r.getName() != "vcores" && r.getName() != "memory-mb" && r.getValue.toInt > 0) {
+        logInfo("adding resource is: " + r)
+        containerResources(r.getName()) = ExecutorResourceRequirement(r.getName, r.getValue.toInt)
+      }
     }
-    val allResourceProfiles = hostToLocalTaskCounts.keys.map { case (host, rp) => rp }.toSet
-    // filter { case (host, rp) => host == execHostName}.toMap.values
+    // TODO - need to handle case yarn resources come back with more entries with 0 value
+    // for instances can return gpu=0 even if not asked for
     val left = allResourceProfiles.filter { case(rp) =>
-      rp.getExecutorResources == containerResources
+      logInfo("container resources is: " + containerResources + " rp resources: "
+        + rp.getExecutorResources)
+      // have to fix up memory to match yarn request
+      val resourceProfileExecResource = rp.getExecutorResources
+      var heapMem = executorMemory
+      var overheadMem = memoryOverhead
+      var pysparkMem = pysparkWorkerMemory
+      var cores = executorCores
+      resourceProfileExecResource.get("memory").foreach(x => heapMem = x.amount)
+      resourceProfileExecResource.get("memoryOverhead").foreach(x => overheadMem = x.amount)
+      resourceProfileExecResource.get("pyspark.memory").foreach(x => pysparkMem = x.amount)
+      resourceProfileExecResource.get("cores").foreach(x => cores = x.amount)
+
+      // have to roundup to what yarn is going to do which is really
+      // yarn.scheduler.minimum-allocation-mb
+      // TODO - update to get yarn conf??? not really reliable
+      val yarnMinAllocationMB = 512
+      val totalMemory = (((heapMem + overheadMem + pysparkMem) + yarnMinAllocationMB - 1) /
+        yarnMinAllocationMB) * yarnMinAllocationMB
+      val finalMap = resourceProfileExecResource +
+        ("memory" -> ExecutorResourceRequirement("memory", totalMemory)) +
+        ("cores" -> ExecutorResourceRequirement("cores", cores))
+      logInfo("container resources after is: " + containerResources + " rp resources: " + finalMap)
+
+      finalMap == containerResources
     }
     if (left.size <= 0) {
       // must not have matched host locality??
@@ -614,7 +655,7 @@ private[yarn] class YarnAllocator(
       val rp = left.toSeq(0)
       val resourceMap = rp.getExecutorResources.map { case (name, req) =>
         (name, req.amount.toString)
-      }
+      }.filter { case(k, v) => k != "memory" && k != "cores" }
       (rp.getId, resourceMap)
     }
   }
@@ -683,7 +724,7 @@ private[yarn] class YarnAllocator(
       def updateInternalState(): Unit = synchronized {
         runningExecutors.add(executorId)
         runningExecutorsPerResourceProfileId.computeIfAbsent(rpid, _ =>
-            Collections.newSetFromMap[String](new ConcurrentHashMap[String, java.lang.Boolean]()))
+          Collections.newSetFromMap[String](new ConcurrentHashMap[String, java.lang.Boolean]()))
         runningExecutorsPerResourceProfileId.get(rpid).add(executorId)
         numExecutorsStarting.decrementAndGet()
         executorIdToContainer(executorId) = container
@@ -700,20 +741,41 @@ private[yarn] class YarnAllocator(
 
       // TODO - we need to map container to resource profile to pass the id into
       // need actual ResourceProfile here - fix up to make more efficient
-      val resourceProfile =
-        hostToLocalTaskCounts.keys.filter { case (host, rp) => rp.getId == rpid }.toSeq
+      // TODO - need to find resource profile even if not locality!!!
+      val resourceProfile = allResourceProfiles.filter(_.getId == rpid).toSeq
+      // hostToLocalTaskCounts.keys.filter { case (host, rp) => rp.getId == rpid }.toSeq
 
-      assert(resourceProfile.size == 1)
-      // big ugly but should only be 1
-      val rp = resourceProfile(0)._2
+      assert(resourceProfile.size == 1 || resourceProfile.size == 0,
+        s"profile size not == 1 || 0: ${resourceProfile.size}")
+
+      val rp = if (resourceProfile.size == 0) {
+        // TODo - should be able to remove now that we make sure allresourceprofiles has default
+        ResourceProfile.getOrCreateDefaultProfile(sparkConf)
+      } else {
+        // big ugly but should only be 1
+        resourceProfile(0)
+      }
 
       // TODO - do we guarantee these in resource profile?
+      logInfo("resource profile id: " + rp.getId)
+      rp.getExecutorResources.foreach(x => logInfo("contains resource: " + x))
       val execMemory = rp.getExecutorResources.get("memory").get.amount
       val execCores = rp.getExecutorResources.get("cores").get.amount
 
       // ExecutorBackend on startup
-      if (runningExecutorsPerResourceProfileId.get(rp.getId).size() <
-          targetNumExecutorsPerResourceProfileId(rp.getId)) {
+      val runningPerProfile = runningExecutorsPerResourceProfileId.get(rp.getId)
+
+      val numRunning = if (runningPerProfile == null) {
+        runningExecutorsPerResourceProfileId.computeIfAbsent(rpid, _ =>
+          Collections.newSetFromMap[String](new ConcurrentHashMap[String, java.lang.Boolean]()))
+        0
+      } else {
+        runningPerProfile.size()
+      }
+      logInfo("rpid: " + rp.getId + " num running is: " + numRunning + " target: " +
+
+        targetNumExecutorsPerResourceProfileId(rp.getId))
+      if (numRunning < targetNumExecutorsPerResourceProfileId(rp.getId)) {
         numExecutorsStarting.incrementAndGet()
         if (launchContainers) {
           launcherPool.execute(() => {

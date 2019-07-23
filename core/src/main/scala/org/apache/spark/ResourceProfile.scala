@@ -25,6 +25,7 @@ import scala.collection.mutable
 import org.apache.spark.annotation.Evolving
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config._
+import org.apache.spark.internal.config.Python.PYSPARK_EXECUTOR_MEMORY
 import org.apache.spark.resource._
 
 /**
@@ -71,7 +72,7 @@ class ResourceProfile(taskReqs: Map[String, ResourceRequest]) extends Serializab
   private val allowedExecutor = HashMap[String, Boolean](
     ("memory" -> true),
     ("cores" -> true),
-    ("memoryOverhead" -> true),
+    ("memoryOverhead" -> true), // yarn only?
     ("pyspark.memory" -> true),
     ("resource" -> true),
     ("instances" -> true))
@@ -140,6 +141,10 @@ class ResourceProfile(taskReqs: Map[String, ResourceRequest]) extends Serializab
   }
 
   override def hashCode(): Int = Seq(taskResources, executorResources).hashCode()
+
+  override def toString(): String = {
+    s"Profile: id = $id, executor resources: $executorResources, task resources: $taskResources"
+  }
 
 
   // def prefer(name: String, value: Long, units: String): Unit = {

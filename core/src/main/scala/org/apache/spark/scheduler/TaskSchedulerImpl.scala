@@ -400,7 +400,7 @@ private[spark] class TaskSchedulerImpl(
       case Some(rp) =>
         val stageTaskResources = rp.getTaskResources
         val globalReqsPerTaskMap = resourcesReqsPerTask.map( x => (x.resourceName, x)).toMap
-        val tsResources = globalReqsPerTaskMap // ++ stageTaskResources
+        val tsResources = globalReqsPerTaskMap  ++ stageTaskResources
         logInfo("all resources is: " + tsResources)
 
         for (rName <- tsResources.keys) {

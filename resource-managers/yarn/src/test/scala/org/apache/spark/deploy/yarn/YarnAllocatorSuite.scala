@@ -29,7 +29,7 @@ import org.mockito.ArgumentCaptor
 import org.mockito.Mockito._
 import org.scalatest.{BeforeAndAfterEach, Matchers}
 
-import org.apache.spark.{SecurityManager, SparkConf, SparkFunSuite}
+import org.apache.spark.{ResourceProfile, SecurityManager, SparkConf, SparkFunSuite}
 import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.deploy.yarn.YarnSparkHadoopUtil._
 import org.apache.spark.deploy.yarn.config._
@@ -271,7 +271,10 @@ class YarnAllocatorSuite extends SparkFunSuite with Matchers with BeforeAndAfter
     handler.getNumExecutorsRunning should be (0)
     handler.getPendingAllocate.size should be (4)
 
-    handler.requestTotalExecutorsWithPreferredLocalities(3, 0, Map.empty, Set.empty)
+    val numLocalityAwareTasksPerResourceProfileId =
+      Map[Int, Int](ResourceProfile.DEFAULT_RESOURCE_PROFILE_ID -> 0)
+    handler.requestTotalExecutorsWithPreferredLocalities(3,
+      numLocalityAwareTasksPerResourceProfileId, Map.empty, Set.empty)
     handler.updateResourceRequests()
     handler.getPendingAllocate.size should be (3)
 
@@ -282,7 +285,8 @@ class YarnAllocatorSuite extends SparkFunSuite with Matchers with BeforeAndAfter
     handler.allocatedContainerToHostMap.get(container.getId).get should be ("host1")
     handler.allocatedHostToContainersMap.get("host1").get should contain (container.getId)
 
-    handler.requestTotalExecutorsWithPreferredLocalities(2, 0, Map.empty, Set.empty)
+    handler.requestTotalExecutorsWithPreferredLocalities(2,
+      numLocalityAwareTasksPerResourceProfileId, Map.empty, Set.empty)
     handler.updateResourceRequests()
     handler.getPendingAllocate.size should be (1)
   }
@@ -293,7 +297,10 @@ class YarnAllocatorSuite extends SparkFunSuite with Matchers with BeforeAndAfter
     handler.getNumExecutorsRunning should be (0)
     handler.getPendingAllocate.size should be (4)
 
-    handler.requestTotalExecutorsWithPreferredLocalities(3, 0, Map.empty, Set.empty)
+    val numLocalityAwareTasksPerResourceProfileId =
+      Map[Int, Int](ResourceProfile.DEFAULT_RESOURCE_PROFILE_ID -> 0)
+    handler.requestTotalExecutorsWithPreferredLocalities(3,
+      numLocalityAwareTasksPerResourceProfileId, Map.empty, Set.empty)
     handler.updateResourceRequests()
     handler.getPendingAllocate.size should be (3)
 
@@ -303,7 +310,8 @@ class YarnAllocatorSuite extends SparkFunSuite with Matchers with BeforeAndAfter
 
     handler.getNumExecutorsRunning should be (2)
 
-    handler.requestTotalExecutorsWithPreferredLocalities(1, 0, Map.empty, Set.empty)
+    handler.requestTotalExecutorsWithPreferredLocalities(1,
+      numLocalityAwareTasksPerResourceProfileId, Map.empty, Set.empty)
     handler.updateResourceRequests()
     handler.getPendingAllocate.size should be (0)
     handler.getNumExecutorsRunning should be (2)
@@ -319,7 +327,10 @@ class YarnAllocatorSuite extends SparkFunSuite with Matchers with BeforeAndAfter
     val container2 = createContainer("host2")
     handler.handleAllocatedContainers(Array(container1, container2))
 
-    handler.requestTotalExecutorsWithPreferredLocalities(1, 0, Map.empty, Set.empty)
+    val numLocalityAwareTasksPerResourceProfileId =
+      Map[Int, Int](ResourceProfile.DEFAULT_RESOURCE_PROFILE_ID -> 0)
+    handler.requestTotalExecutorsWithPreferredLocalities(1,
+      numLocalityAwareTasksPerResourceProfileId, Map.empty, Set.empty)
     handler.executorIdToContainer.keys.foreach { id => handler.killExecutor(id ) }
 
     val statuses = Seq(container1, container2).map { c =>
@@ -350,7 +361,10 @@ class YarnAllocatorSuite extends SparkFunSuite with Matchers with BeforeAndAfter
     handler.killExecutor(executorToKill)
     handler.killExecutor(executorToKill)
     handler.getNumExecutorsRunning should be (1)
-    handler.requestTotalExecutorsWithPreferredLocalities(2, 0, Map.empty, Set.empty)
+    val numLocalityAwareTasksPerResourceProfileId =
+      Map[Int, Int](ResourceProfile.DEFAULT_RESOURCE_PROFILE_ID -> 0)
+    handler.requestTotalExecutorsWithPreferredLocalities(2,
+      numLocalityAwareTasksPerResourceProfileId, Map.empty, Set.empty)
     handler.updateResourceRequests()
     handler.getPendingAllocate.size should be (1)
   }
@@ -385,7 +399,10 @@ class YarnAllocatorSuite extends SparkFunSuite with Matchers with BeforeAndAfter
     val container2 = createContainer("host2")
     handler.handleAllocatedContainers(Array(container1, container2))
 
-    handler.requestTotalExecutorsWithPreferredLocalities(2, 0, Map(), Set.empty)
+    val numLocalityAwareTasksPerResourceProfileId =
+      Map[Int, Int](ResourceProfile.DEFAULT_RESOURCE_PROFILE_ID -> 0)
+    handler.requestTotalExecutorsWithPreferredLocalities(2,
+      numLocalityAwareTasksPerResourceProfileId, Map(), Set.empty)
 
     val statuses = Seq(container1, container2).map { c =>
       ContainerStatus.newInstance(c.getId(), ContainerState.COMPLETE, "Failed", -1)
@@ -404,17 +421,22 @@ class YarnAllocatorSuite extends SparkFunSuite with Matchers with BeforeAndAfter
     // to the blacklist.  This makes sure we are sending the right updates.
     val mockAmClient = mock(classOf[AMRMClient[ContainerRequest]])
     val handler = createAllocator(4, mockAmClient)
-    handler.requestTotalExecutorsWithPreferredLocalities(1, 0, Map(), Set("hostA"))
+    val numLocalityAwareTasksPerResourceProfileId =
+      Map[Int, Int](ResourceProfile.DEFAULT_RESOURCE_PROFILE_ID -> 0)
+    handler.requestTotalExecutorsWithPreferredLocalities(1,
+      numLocalityAwareTasksPerResourceProfileId, Map(), Set("hostA"))
     verify(mockAmClient).updateBlacklist(Seq("hostA").asJava, Seq[String]().asJava)
 
     val blacklistedNodes = Set(
       "hostA",
       "hostB"
     )
-    handler.requestTotalExecutorsWithPreferredLocalities(2, 0, Map(), blacklistedNodes)
+    handler.requestTotalExecutorsWithPreferredLocalities(2,
+      numLocalityAwareTasksPerResourceProfileId, Map(), blacklistedNodes)
     verify(mockAmClient).updateBlacklist(Seq("hostB").asJava, Seq[String]().asJava)
 
-    handler.requestTotalExecutorsWithPreferredLocalities(3, 0, Map(), Set.empty)
+    handler.requestTotalExecutorsWithPreferredLocalities(3,
+      numLocalityAwareTasksPerResourceProfileId, Map(), Set.empty)
     verify(mockAmClient).updateBlacklist(Seq[String]().asJava, Seq("hostA", "hostB").asJava)
   }
 
