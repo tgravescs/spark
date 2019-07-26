@@ -25,8 +25,8 @@ import scala.collection.mutable
 import org.apache.spark.annotation.Evolving
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config._
-import org.apache.spark.internal.config.Python.PYSPARK_EXECUTOR_MEMORY
 import org.apache.spark.resource._
+
 
 /**
  * Class to hold information about the resources required when this rdd
@@ -39,6 +39,7 @@ import org.apache.spark.resource._
  */
 @Evolving
 class ResourceProfile(taskReqs: Map[String, ResourceRequest]) extends Serializable with Logging {
+
 
   // TODO - want to add both task requirements and executor requirements for above
   // Perhaps use sparkConf as a way??? - just for the internal implementation,
@@ -74,7 +75,7 @@ class ResourceProfile(taskReqs: Map[String, ResourceRequest]) extends Serializab
     ("cores" -> true),
     ("memoryOverhead" -> true), // yarn only?
     ("pyspark.memory" -> true),
-    ("resource" -> true),
+    ("gpu" -> true), // TODO - how to do generic resource types??
     ("instances" -> true))
 
   private val allowedTask = HashMap[String, Boolean](
@@ -104,6 +105,7 @@ class ResourceProfile(taskReqs: Map[String, ResourceRequest]) extends Serializab
     }.toMap
   }
 
+  // TODO - handle mapping resource.XXX to actual name
   def getExecutorResources: Map[String, ExecutorResourceRequirement] = {
     executorResources.map { case (name, rr) =>
       (name, ExecutorResourceRequirement(name, rr.amount))
@@ -115,8 +117,8 @@ class ResourceProfile(taskReqs: Map[String, ResourceRequest]) extends Serializab
   }
 
   private def allowedResource(rid: ResourceID): Boolean = {
-    ((allowedComponents.contains(rid.componentName) &&
-      (allowedComponents(rid.componentName).contains(rid.resourceName))))
+    (allowedComponents.contains(rid.componentName) &&
+      allowedComponents(rid.componentName).contains(rid.resourceName))
   }
 
   private def addResourceRequest(request: ResourceRequest): Unit = {
@@ -126,6 +128,8 @@ class ResourceProfile(taskReqs: Map[String, ResourceRequest]) extends Serializab
   def require(request: ResourceRequest): this.type = {
     if (allowedResource(request.id)) {
       addResourceRequest(request)
+    } else {
+      throw new IllegalArgumentException(s"Resource id not allowed: ${request.id}")
     }
     this
   }
@@ -179,11 +183,4 @@ private[spark] object ResourceProfile {
 
   def getNextProfileId: Int = nextProfileId.getAndIncrement()
 
- /* private val defaultProfile = new ResourceProfile(Map.empty).
-    require(ResourceRequest(ResourceID(SPARK_EXECUTOR_PREFIX, "cores"),
-      conf.get(EXECUTOR_CORES), None, None)).
-    require(ResourceRequest(ResourceID(SPARK_EXECUTOR_PREFIX, "memory"),
-      conf.get(EXECUTOR_MEMORY).toInt, None, None))
-
-  def getDefaultProfile: ResourceProfile = defaultProfile */
 }

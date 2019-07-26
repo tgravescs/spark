@@ -202,7 +202,7 @@ private[yarn] class LocalityPreferredContainerPlacementStrategy(
     val allResourceProfiles = filteredHostToLocalTaskCount.keys.map { case (_, resourceProfile) =>
       resourceProfile
     }.toSeq
-    assert(allResourceProfiles.size == 0 || allResourceProfiles == 1,
+    assert(allResourceProfiles.size == 0 || allResourceProfiles.size == 1,
       s"should only have 0 or 1 resource profile, actual: ${allResourceProfiles.size}")
 
     filteredHostToLocalTaskCount.map { case ((host, rp), count) =>

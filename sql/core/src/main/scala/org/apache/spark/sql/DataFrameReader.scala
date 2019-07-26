@@ -22,8 +22,8 @@ import java.util.{Locale, Properties}
 import scala.collection.JavaConverters._
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import org.apache.spark.{Partition, ResourceProfile}
 
-import org.apache.spark.Partition
 import org.apache.spark.annotation.Stable
 import org.apache.spark.api.java.JavaRDD
 import org.apache.spark.internal.Logging
@@ -808,6 +808,16 @@ class DataFrameReader private[sql](sparkSession: SparkSession) extends Logging {
     }
   }
 
+  // @Experimental
+  // @Since("3.0.0")
+  // if withResources gives you need RDD we wouldn't return this.type
+  def withResources(stageResources: ResourceProfile): this.type = {
+    // TODO - need to merge
+    resourceProfile = Some(stageResources)
+    logInfo("adding resource profile to rdd: " + resourceProfile)
+    this
+  }
+
   ///////////////////////////////////////////////////////////////////////////////////////
   // Builder pattern config options
   ///////////////////////////////////////////////////////////////////////////////////////
@@ -817,5 +827,7 @@ class DataFrameReader private[sql](sparkSession: SparkSession) extends Logging {
   private var userSpecifiedSchema: Option[StructType] = None
 
   private val extraOptions = new scala.collection.mutable.HashMap[String, String]
+
+  private var resourceProfile: Option[ResourceProfile] = None
 
 }

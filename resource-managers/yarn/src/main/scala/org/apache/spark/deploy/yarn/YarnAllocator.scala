@@ -640,6 +640,7 @@ private[yarn] class YarnAllocator(
       val finalMap = resourceProfileExecResource +
         ("memory" -> ExecutorResourceRequirement("memory", totalMemory)) +
         ("cores" -> ExecutorResourceRequirement("cores", cores))
+      // TODO - also need to convert gpu and fpga since yarn.io/gpu
       logInfo("container resources after is: " + containerResources + " rp resources: " + finalMap)
 
       finalMap == containerResources

@@ -26,13 +26,14 @@ import scala.util.control.NonFatal
 
 import org.apache.commons.lang3.StringUtils
 
-import org.apache.spark.TaskContext
+import org.apache.spark.{ResourceProfile, TaskContext}
 import org.apache.spark.annotation.{DeveloperApi, Evolving, Experimental, Stable, Unstable}
 import org.apache.spark.api.java.JavaRDD
 import org.apache.spark.api.java.function._
 import org.apache.spark.api.python.{PythonEvalType, PythonRDD, SerDeUtil}
 import org.apache.spark.api.r.RRDD
 import org.apache.spark.broadcast.Broadcast
+import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.QueryPlanningTracker
 import org.apache.spark.sql.catalyst.analysis._
@@ -180,7 +181,7 @@ class Dataset[T] private[sql](
     @transient val sparkSession: SparkSession,
     @DeveloperApi @Unstable @transient val queryExecution: QueryExecution,
     @DeveloperApi @Unstable @transient val encoder: Encoder[T])
-  extends Serializable {
+  extends Serializable with Logging {
 
   queryExecution.assertAnalyzed()
 
@@ -2951,6 +2952,20 @@ class Dataset[T] private[sql](
     sparkSession.sharedState.cacheManager.cacheQuery(this)
     this
   }
+
+  private var resourceProfile: Option[ResourceProfile] = None
+
+  // @Experimental
+  // @Since("3.0.0")
+  // if withResources gives you need RDD we wouldn't return this.type
+  def withResources(stageResources: ResourceProfile): this.type = {
+    // TODO - need to merge
+    resourceProfile = Some(stageResources)
+    logInfo("adding resource profile to rdd: " + resourceProfile)
+    this
+  }
+
+  def getResources(): Option[ResourceProfile] = resourceProfile
 
   /**
    * Persist this Dataset with the default storage level (`MEMORY_AND_DISK`).

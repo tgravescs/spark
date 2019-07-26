@@ -328,7 +328,7 @@ private[spark] class ExecutorAllocationManager(
 
       listener.execResourceProfIdToNumTasks.foreach { case (rProfId, needed) =>
         val maxNeeded = maxNumExecutorsNeededPerResourceProfile(rProfId)
-        logInfo("max needed for rp: " + rProfId + " is: " + maxNeeded)
+        // logInfo("max needed for rp: " + rProfId + " is: " + maxNeeded)
         val resourceProfile = listener.resourceProfileIdToResourceProfile(rProfId)
         val targetExecs =
           numExecutorsTargetPerResourceProfile.getOrElseUpdate(resourceProfile, 0)

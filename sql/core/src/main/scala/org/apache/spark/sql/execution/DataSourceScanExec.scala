@@ -319,6 +319,7 @@ case class FileSourceScanExec(
       case _ =>
         createNonBucketedReadRDD(readFile, selectedPartitions, relation)
     }
+    logInfo("in inputRDD before return readRDD")
     sendDriverMetrics()
     readRDD
   }
@@ -342,6 +343,7 @@ case class FileSourceScanExec(
     } else {
       val numOutputRows = longMetric("numOutputRows")
 
+      logInfo("in do execute data source scan exec")
       if (needsUnsafeRowConversion) {
         inputRDD.mapPartitionsWithIndexInternal { (index, iter) =>
           val proj = UnsafeProjection.create(schema)
