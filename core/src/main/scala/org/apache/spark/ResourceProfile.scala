@@ -38,7 +38,9 @@ import org.apache.spark.resource._
  * @param addresses an optional array of strings describing the addresses of the resource
  */
 @Evolving
-class ResourceProfile(taskReqs: Map[String, ResourceRequest]) extends Serializable with Logging {
+class ResourceProfile(taskReqs: Map[String, TaskResourceRequest])
+  extends Serializable with Logging {
+
 
 
   // TODO - want to add both task requirements and executor requirements for above
@@ -63,12 +65,12 @@ class ResourceProfile(taskReqs: Map[String, ResourceRequest]) extends Serializab
 
   logInfo("resource profile has id: " + getId)
 
-  private val taskResources: mutable.Map[String, ResourceRequest] =
-    mutable.Map.empty[String, ResourceRequest]
+  private val taskResources: mutable.Map[String, TaskResourceRequest] =
+    mutable.Map.empty[String, TaskResourceRequest] ++= taskReqs
 
   // TODO - do we need ExecutorResourceProfile separate to track allocations, etc.
-  private val executorResources: mutable.Map[String, ResourceRequest] =
-    mutable.Map.empty[String, ResourceRequest]
+  private val executorResources: mutable.Map[String, ExecutorResourceRequest] =
+    mutable.Map.empty[String, ExecutorResourceRequest]
 
   private val allowedExecutor = HashMap[String, Boolean](
     ("memory" -> true),
@@ -97,7 +99,7 @@ class ResourceProfile(taskReqs: Map[String, ResourceRequest]) extends Serializab
 
 
 
-  def getResources: Map[String, ResourceRequest] = taskResources.toMap
+  def getResources: Map[String, TaskResourceRequest] = taskResources.toMap
 
   def getTaskResources: Map[String, TaskResourceRequirement] = {
     taskResources.map { case (name, rr) =>
@@ -121,16 +123,39 @@ class ResourceProfile(taskReqs: Map[String, ResourceRequest]) extends Serializab
       allowedComponents(rid.componentName).contains(rid.resourceName))
   }
 
-  private def addResourceRequest(request: ResourceRequest): Unit = {
-    resourcesMap(request.id.componentName)(request.id.resourceName) = request
+
+  private def addResourceRequest(request: TaskResourceRequest): Unit = {
+    taskResources(request.resourceName) = request
   }
 
-  def require(request: ResourceRequest): this.type = {
+  private def addResourceRequest(request: ExecutorResourceRequest): Unit = {
+    executorResources(request.resourceName) = request
+  }
+
+ /* def require(request: ResourceRequest): this.type = {
     if (allowedResource(request.id)) {
       addResourceRequest(request)
     } else {
       throw new IllegalArgumentException(s"Resource id not allowed: ${request.id}")
     }
+    this
+  } */
+
+  def require(request: TaskResourceRequest): this.type = {
+   //  if (allowedResource(request.id)) {
+      addResourceRequest(request)
+ /*   } else {
+      throw new IllegalArgumentException(s"Resource id not allowed: ${request.id}")
+    } */
+    this
+  }
+
+  def require(request: ExecutorResourceRequest): this.type = {
+    // if (allowedResource(request.id)) {
+      addResourceRequest(request)
+   /* } else {
+      throw new IllegalArgumentException(s"Resource id not allowed: ${request.id}")
+    } */
     this
   }
 
@@ -163,13 +188,14 @@ private[spark] object ResourceProfile {
 
   private val nextProfileId = new AtomicInteger(0)
 
+
   def getOrCreateDefaultProfile(conf: SparkConf): ResourceProfile = {
     synchronized {
       if (defaultProfileRef.get() == null) {
         val rp = new ResourceProfile(Map.empty).
-          require(ResourceRequest(ResourceID(SPARK_EXECUTOR_PREFIX, "cores"),
+          require(new ExecutorResourceRequest("cores",
             conf.get(EXECUTOR_CORES), None, None)).
-          require(ResourceRequest(ResourceID(SPARK_EXECUTOR_PREFIX, "memory"),
+          require(new ExecutorResourceRequest("memory",
             conf.get(EXECUTOR_MEMORY).toInt, None, None))
         assert(rp.getId == DEFAULT_RESOURCE_PROFILE_ID,
           s"Default Profile must have the default profile id: $DEFAULT_RESOURCE_PROFILE_ID")

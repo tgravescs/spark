@@ -574,7 +574,7 @@ private[spark] class DAGScheduler(
   }
 
   private[scheduler] def getStageResourceProfiles(rdd: RDD[_]): HashSet[ResourceProfile] = {
-    logInfo("getting stage resource profiles for rdd: " + rdd + " profile: " + rdd.getResources())
+    logInfo("getting stage resource profiles for rdd: " + rdd + " profile: " + rdd.getResourceProfile())
     val resourceProfiles = new HashSet[ResourceProfile]
     val visited = new HashSet[RDD[_]]
     val waitingForVisit = new ListBuffer[RDD[_]]
@@ -583,8 +583,8 @@ private[spark] class DAGScheduler(
       val toVisit = waitingForVisit.remove(0)
       if (!visited(toVisit)) {
         visited += toVisit
-        logInfo("get resource profile normal dep, resource: " + rdd.getResources())
-        rdd.getResources().foreach(resourceProfiles += _)
+        logInfo("get resource profile normal dep, resource: " + rdd.getResourceProfile())
+        rdd.getResourceProfile().foreach(resourceProfiles += _)
         logInfo("to visit deps are: " + toVisit)
         toVisit.dependencies.foreach {
           case _: ShuffleDependency[_, _, _] =>
@@ -1308,7 +1308,7 @@ private[spark] class DAGScheduler(
         s"tasks are for partitions ${tasks.take(15).map(_.partitionId)})")
       taskScheduler.submitTasks(new TaskSet(
         tasks.toArray, stage.id, stage.latestInfo.attemptNumber, jobId, properties,
-        stage.rdd.getResources()))
+        stage.rdd.getResourceProfile()))
     } else {
       // Because we posted SparkListenerStageSubmitted earlier, we should mark
       // the stage as completed here in case there are no tasks to run

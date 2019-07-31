@@ -1676,13 +1676,12 @@ abstract class RDD[T: ClassTag](
   // @Since("3.0.0")
   // if withResources gives you need RDD we wouldn't return this.type
   def withResources(stageResources: ResourceProfile): this.type = {
-    // TODO - need to merge
     resourceProfile = Some(stageResources)
     logInfo("adding resource profile to rdd: " + resourceProfile)
     this
   }
 
-  def getResources(): Option[ResourceProfile] = resourceProfile
+  def getResourceProfile(): Option[ResourceProfile] = resourceProfile
 
   // =======================================================================
   // Other internal methods and fields
@@ -1810,7 +1809,9 @@ abstract class RDD[T: ClassTag](
           info.numCachedPartitions, bytesToString(info.memSize),
           bytesToString(info.externalBlockStoreSize), bytesToString(info.diskSize)))
 
-      s"$rdd [$persistence]" +: storageInfo
+      val resourceProfileInfo = rdd.getResourceProfile().map(x => x.toString()).getOrElse("")
+
+      s"$rdd [$persistence][$resourceProfileInfo][isBarrier = $isBarrier()]" +: storageInfo
     }
 
     // Apply a different rule to the last child

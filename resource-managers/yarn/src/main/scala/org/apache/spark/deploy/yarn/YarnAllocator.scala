@@ -612,7 +612,13 @@ private[yarn] class YarnAllocator(
       logInfo("resource is: " + r)
       if (r.getName() != "vcores" && r.getName() != "memory-mb" && r.getValue.toInt > 0) {
         logInfo("adding resource is: " + r)
-        containerResources(r.getName()) = ExecutorResourceRequirement(r.getName, r.getValue.toInt)
+        if (r.getName() == "yarn.io/gpu") {
+          containerResources("gpu") = ExecutorResourceRequirement("gpu", r.getValue.toInt)
+        } else if (r.getName() == "yarn.io/fpga") {
+          containerResources("fpga") = ExecutorResourceRequirement("fpga", r.getValue.toInt)
+        } else {
+          containerResources(r.getName()) = ExecutorResourceRequirement(r.getName, r.getValue.toInt)
+        }
       }
     }
     // TODO - need to handle case yarn resources come back with more entries with 0 value
@@ -626,10 +632,13 @@ private[yarn] class YarnAllocator(
       var overheadMem = memoryOverhead
       var pysparkMem = pysparkWorkerMemory
       var cores = executorCores
+      var yarnGpus = 0
       resourceProfileExecResource.get("memory").foreach(x => heapMem = x.amount)
       resourceProfileExecResource.get("memoryOverhead").foreach(x => overheadMem = x.amount)
       resourceProfileExecResource.get("pyspark.memory").foreach(x => pysparkMem = x.amount)
       resourceProfileExecResource.get("cores").foreach(x => cores = x.amount)
+      // resourceProfileExecResource.get("gpu").foreach(x => yarnGpus = x.amount)
+
 
       // have to roundup to what yarn is going to do which is really
       // yarn.scheduler.minimum-allocation-mb
@@ -637,12 +646,18 @@ private[yarn] class YarnAllocator(
       val yarnMinAllocationMB = 512
       val totalMemory = (((heapMem + overheadMem + pysparkMem) + yarnMinAllocationMB - 1) /
         yarnMinAllocationMB) * yarnMinAllocationMB
-      val finalMap = resourceProfileExecResource +
+      // val finalMap = new mutable.HashMap[String, ExecutorResourceRequirement]
+
+      val finalMap = resourceProfileExecResource  +
         ("memory" -> ExecutorResourceRequirement("memory", totalMemory)) +
         ("cores" -> ExecutorResourceRequirement("cores", cores))
-      // TODO - also need to convert gpu and fpga since yarn.io/gpu
+     //  if (yarnGpus > 0) {
+      //  finalMap += ("gpu" -> ExecutorResourceRequirement("gpu", yarnGpus))
+      // }
       logInfo("container resources after is: " + containerResources + " rp resources: " + finalMap)
 
+      // TODO - this really needs to be a contains or <= because yarn could return
+      // containers with extra resources
       finalMap == containerResources
     }
     if (left.size <= 0) {
@@ -655,7 +670,13 @@ private[yarn] class YarnAllocator(
     } else {
       val rp = left.toSeq(0)
       val resourceMap = rp.getExecutorResources.map { case (name, req) =>
-        (name, req.amount.toString)
+        if (name.equals("gpu")) {
+          ("yarn.io/gpu", req.amount.toString)
+        } else if (name.equals("fpga")) {
+          ("yarn.io/fpga", req.amount.toString)
+        } else {
+          (name, req.amount.toString)
+        }
       }.filter { case(k, v) => k != "memory" && k != "cores" }
       (rp.getId, resourceMap)
     }

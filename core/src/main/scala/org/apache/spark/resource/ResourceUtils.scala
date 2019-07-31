@@ -48,6 +48,27 @@ case class ResourceRequest(
     discoveryScript: Option[String],
     vendor: Option[String])
 
+class ExecutorResourceRequest(
+    val resourceName: String,
+    val amount: Int,
+    val discoveryScript: Option[String] = None,
+    val vendor: Option[String] = None) extends Serializable {
+  override def toString(): String = {
+    s"ExecutorResourceRequest: resourceName = $resourceName, amount = $amount, " +
+      s"discoveryScript = $discoveryScript, vendor = $vendor"
+  }
+}
+
+class TaskResourceRequest(
+    val resourceName: String,
+    val amount: Int) extends Serializable {
+
+  override def toString(): String = {
+    s"TaskResourceRequest: resourceName = $resourceName, amount = $amount"
+  }
+}
+
+
 private[spark] case class TaskResourceRequirement(resourceName: String, amount: Int)
 
 private[spark] case class ExecutorResourceRequirement(resourceName: String, amount: Int)
