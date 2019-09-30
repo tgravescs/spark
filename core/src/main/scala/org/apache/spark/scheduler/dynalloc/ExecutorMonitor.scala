@@ -282,8 +282,6 @@ private[spark] class ExecutorMonitor(
     val executorId = event.taskInfo.executorId
     // Guard against a late arriving task start event (SPARK-26927).
     if (client.isExecutorActive(executorId)) {
-     //  val exec = ensureExecutorIsTracked(executorId)
-      // TODO - what to put here?? shoudln't happen
       val exec = ensureExecutorIsTracked(executorId, UNKNOWN_RESOURCE_PROFILE_ID)
       exec.updateRunningTasks(1)
     }
@@ -332,9 +330,6 @@ private[spark] class ExecutorMonitor(
     if (!event.blockUpdatedInfo.blockId.isInstanceOf[RDDBlockId]) {
       return
     }
-
-    // val exec = ensureExecutorIsTracked(event.blockUpdatedInfo.blockManagerId.executorId)
-    // todo -WHAT TO PASS HERE for resource profile id?
     val exec = ensureExecutorIsTracked(event.blockUpdatedInfo.blockManagerId.executorId,
       UNKNOWN_RESOURCE_PROFILE_ID)
     val storageLevel = event.blockUpdatedInfo.storageLevel
