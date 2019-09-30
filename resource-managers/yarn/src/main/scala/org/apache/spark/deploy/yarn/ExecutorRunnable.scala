@@ -53,7 +53,8 @@ private[yarn] class ExecutorRunnable(
     executorCores: Int,
     appId: String,
     securityMgr: SecurityManager,
-    localResources: Map[String, LocalResource]) extends Logging {
+    localResources: Map[String, LocalResource],
+    resourceProfileId: Int) extends Logging {
 
   var rpc: YarnRPC = YarnRPC.create(conf)
   var nmClient: NMClient = _
@@ -66,13 +67,14 @@ private[yarn] class ExecutorRunnable(
     startContainer()
   }
 
+  // TODO - do we want to call this when new resource profile used
   def launchContextDebugInfo(): String = {
     val commands = prepareCommand()
     val env = prepareEnvironment()
 
     s"""
     |===============================================================================
-    |YARN executor launch context:
+    |Default YARN executor launch context:
     |  env:
     |${Utils.redact(sparkConf, env.toSeq).map { case (k, v) => s"    $k -> $v\n" }.mkString}
     |  command:
@@ -207,7 +209,8 @@ private[yarn] class ExecutorRunnable(
         "--executor-id", executorId,
         "--hostname", hostname,
         "--cores", executorCores.toString,
-        "--app-id", appId) ++
+        "--app-id", appId,
+        "--resourceProfileId", resourceProfileId.toString) ++
       userClassPath ++
       Seq(
         s"1>${ApplicationConstants.LOG_DIR_EXPANSION_VAR}/stdout",
