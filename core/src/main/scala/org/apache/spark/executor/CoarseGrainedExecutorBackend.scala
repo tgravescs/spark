@@ -29,6 +29,7 @@ import scala.util.control.NonFatal
 import org.json4s.DefaultFormats
 
 import org.apache.spark._
+import org.apache.spark.ResourceProfile.DEFAULT_RESOURCE_PROFILE_ID
 import org.apache.spark.TaskState.TaskState
 import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.deploy.worker.WorkerWatcher
@@ -50,7 +51,8 @@ private[spark] class CoarseGrainedExecutorBackend(
     cores: Int,
     userClassPath: Seq[URL],
     env: SparkEnv,
-    resourcesFileOpt: Option[String])
+    resourcesFileOpt: Option[String],
+    resourceProfileId: Int)
   extends ThreadSafeRpcEndpoint with ExecutorBackend with Logging {
 
   private implicit val formats = DefaultFormats
@@ -72,12 +74,13 @@ private[spark] class CoarseGrainedExecutorBackend(
 
   override def onStart() {
     logInfo("Connecting to driver: " + driverUrl)
+    // TODO - need to get resources from passed in vs config
     val resources = parseOrFindResources(resourcesFileOpt)
     rpcEnv.asyncSetupEndpointRefByURI(driverUrl).flatMap { ref =>
       // This is a very fast action so we can use "ThreadUtils.sameThread"
       driver = Some(ref)
       ref.ask[Boolean](RegisterExecutor(executorId, self, hostname, cores, extractLogUrls,
-        extractAttributes, resources))
+        extractAttributes, resources, resourceProfileId))
     }(ThreadUtils.sameThread).onComplete {
       // This is a very fast action so we can use "ThreadUtils.sameThread"
       case Success(msg) =>
@@ -232,14 +235,15 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
       appId: String,
       workerUrl: Option[String],
       userClassPath: mutable.ListBuffer[URL],
-      resourcesFileOpt: Option[String])
+      resourcesFileOpt: Option[String],
+      resourceProfileId: Int)
 
   def main(args: Array[String]): Unit = {
     val createFn: (RpcEnv, Arguments, SparkEnv) =>
       CoarseGrainedExecutorBackend = { case (rpcEnv, arguments, env) =>
       new CoarseGrainedExecutorBackend(rpcEnv, arguments.driverUrl, arguments.executorId,
         arguments.hostname, arguments.cores, arguments.userClassPath, env,
-        arguments.resourcesFileOpt)
+        arguments.resourcesFileOpt, arguments.resourceProfileId)
     }
     run(parseArguments(args, this.getClass.getCanonicalName.stripSuffix("$")), createFn)
     System.exit(0)
@@ -317,6 +321,7 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
     var appId: String = null
     var workerUrl: Option[String] = None
     val userClassPath = new mutable.ListBuffer[URL]()
+    var resourceProfileId: Int = DEFAULT_RESOURCE_PROFILE_ID
 
     var argv = args.toList
     while (!argv.isEmpty) {
@@ -346,6 +351,9 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
         case ("--user-class-path") :: value :: tail =>
           userClassPath += new URL(value)
           argv = tail
+        case ("--resourceProfileId") :: value :: tail =>
+          resourceProfileId = value.toInt
+          argv = tail
         case Nil =>
         case tail =>
           // scalastyle:off println
@@ -365,7 +373,7 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
     }
 
     Arguments(driverUrl, executorId, hostname, cores, appId, workerUrl,
-      userClassPath, resourcesFileOpt)
+      userClassPath, resourcesFileOpt, resourceProfileId)
   }
 
   private def printUsageAndExit(classNameForEntry: String): Unit = {
@@ -383,6 +391,7 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
       |   --app-id <appid>
       |   --worker-url <workerUrl>
       |   --user-class-path <url>
+      |   --resourceProfileId <id>
       |""".stripMargin)
     // scalastyle:on println
     System.exit(1)
