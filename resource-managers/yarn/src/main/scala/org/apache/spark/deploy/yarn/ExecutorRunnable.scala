@@ -187,6 +187,8 @@ private[yarn] class ExecutorRunnable(
         }
     */
 
+    sparkConf.set("spark.resoureprofile.1.testing", "tom")
+
     // For log4j configuration to reference
     javaOpts += ("-Dspark.yarn.app.container.log.dir=" + ApplicationConstants.LOG_DIR_EXPANSION_VAR)
 

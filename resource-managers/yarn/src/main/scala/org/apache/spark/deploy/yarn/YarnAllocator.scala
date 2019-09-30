@@ -31,7 +31,7 @@ import org.apache.hadoop.yarn.client.api.AMRMClient
 import org.apache.hadoop.yarn.client.api.AMRMClient.ContainerRequest
 import org.apache.hadoop.yarn.conf.YarnConfiguration
 
-import org.apache.spark.{SecurityManager, SparkConf, SparkException}
+import org.apache.spark.{ResourceProfile, SecurityManager, SparkConf, SparkException}
 import org.apache.spark.deploy.yarn.ResourceRequestHelper._
 import org.apache.spark.deploy.yarn.YarnSparkHadoopUtil._
 import org.apache.spark.deploy.yarn.config._
@@ -565,7 +565,8 @@ private[yarn] class YarnAllocator(
                 executorCores,
                 appAttemptId.getApplicationId.toString,
                 securityMgr,
-                localResources
+                localResources,
+                ResourceProfile.DEFAULT_RESOURCE_PROFILE_ID
               ).run()
               updateInternalState()
             } catch {

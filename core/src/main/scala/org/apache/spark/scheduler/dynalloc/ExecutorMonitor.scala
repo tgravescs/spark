@@ -150,7 +150,6 @@ private[spark] class ExecutorMonitor(
 
   def executorCount: Int = executors.size()
 
-  // TODO - performance?
   def executorCountWithResourceProfile(id: Int): Int = {
     var count = 0
     executors.forEachValue(1, (trackingInfo) => {
@@ -164,8 +163,6 @@ private[spark] class ExecutorMonitor(
   def getResourceProfileId(executorId: String): Int = {
     executors.get(executorId).rProfId
   }
-
-  // def executorProfile(id: String): ResourceProfile = executors.get(id).rp
 
   def pendingRemovalCount: Int = executors.asScala.count {
     case (_, exec) => exec.tracker.pendingRemoval
