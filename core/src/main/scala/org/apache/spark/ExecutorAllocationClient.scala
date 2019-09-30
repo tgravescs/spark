@@ -46,18 +46,21 @@ private[spark] trait ExecutorAllocationClient {
    * @param hostToLocalTaskCount A map of hosts to the number of tasks from all active stages
    *                             that would like to like to run on that host.
    *                             This includes running, pending, and completed tasks.
+   * @param resources A map of ResourceProfile to the number of executors needed with that profile.
    * @return whether the request is acknowledged by the cluster manager.
    */
   private[spark] def requestTotalExecutors(
-      numExecutors: Int,
-      localityAwareTasks: Int,
-      hostToLocalTaskCount: Map[String, Int]): Boolean
+      numExecutors: Int,  // TODO - do we need anymore if resources below has it???
+      numLocalityAwareTasksPerResourceProfileId: Map[Int, Int],
+      hostToLocalTaskCount: Map[(String, ResourceProfile), Int],
+      resources: Option[Map[ResourceProfile, Int]] = None): Boolean
 
   /**
    * Request an additional number of executors from the cluster manager.
    * @return whether the request is acknowledged by the cluster manager.
    */
-  def requestExecutors(numAdditionalExecutors: Int): Boolean
+  def requestExecutors(numAdditionalExecutors: Int,
+      resources: Option[Map[ResourceProfile, Int]] = None): Boolean
 
   /**
    * Request that the cluster manager kill the specified executors.
