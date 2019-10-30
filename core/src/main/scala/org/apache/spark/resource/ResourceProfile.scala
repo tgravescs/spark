@@ -55,7 +55,7 @@ import org.apache.spark.resource.ResourceUtils.{RESOURCE_DOT, RESOURCE_PREFIX}
  * this will become public.
  */
 @Evolving
-private[spark] class ResourceProfile() extends Serializable {
+class ResourceProfile() extends Serializable {
 
   private val _id = ResourceProfile.getNextProfileId
   private val _taskResources = new mutable.HashMap[String, TaskResourceRequest]()

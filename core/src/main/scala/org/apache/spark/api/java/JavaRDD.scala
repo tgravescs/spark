@@ -27,6 +27,7 @@ import org.apache.spark._
 import org.apache.spark.api.java.JavaSparkContext.fakeClassTag
 import org.apache.spark.api.java.function.{Function => JFunction}
 import org.apache.spark.rdd.RDD
+import org.apache.spark.resource.ResourceProfile
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.util.Utils
 
@@ -48,6 +49,8 @@ class JavaRDD[T](val rdd: RDD[T])(implicit val classTag: ClassTag[T])
    * have a storage level set yet..
    */
   def persist(newLevel: StorageLevel): JavaRDD[T] = wrapRDD(rdd.persist(newLevel))
+
+  def withResources(prof: ResourceProfile): JavaRDD[T] = wrapRDD(rdd.withResources(prof))
 
   /**
    * Mark the RDD as non-persistent, and remove all blocks for it from memory and disk.
