@@ -146,27 +146,37 @@ object SQLMetrics {
     acc
   }
 
+  private def toNumberFormat(value: Long): String = {
+    val numberFormat = NumberFormat.getNumberInstance(Locale.US)
+    numberFormat.format(value.toDouble / baseForAvgMetric)
+  }
+
   /**
    * A function that defines how we aggregate the final accumulator results among all tasks,
    * and represent it in string for a SQL physical operator.
    */
-  def stringValue(metricsType: String, values: Array[Long]): String = {
+  def stringValue(metricsType: String, values: Array[(Long, (Int, Int, Int))]): String = {
     if (metricsType == SUM_METRIC) {
       val numberFormat = NumberFormat.getIntegerInstance(Locale.US)
-      numberFormat.format(values.sum)
+      numberFormat.format(values.map(_._1).sum)
     } else if (metricsType == AVERAGE_METRIC) {
-      val numberFormat = NumberFormat.getNumberInstance(Locale.US)
-
-      val validValues = values.filter(_ > 0)
+      val validValues = values.filter(_._1 > 0)
       val Seq(min, med, max) = {
         val metric = if (validValues.isEmpty) {
-          Seq.fill(3)(0L)
+          val zeros = Seq.fill(3)(0L)
+          zeros.map(v => toNumberFormat(v))
         } else {
-          Arrays.sort(validValues)
-          Seq(validValues(0), validValues(validValues.length / 2),
-            validValues(validValues.length - 1))
+          // unfortunately making copy here instead of inplace
+          val sortedValues = validValues.sortBy(_._1)
+          // Arrays.sort(validValues)
+          val max = validValues(sortedValues.length - 1)
+          val stringMetric = s"${max._2._1.toString}:${max._2._2.toString}:${max._2._3.toString}"
+
+          Seq(toNumberFormat(sortedValues(0)._1),
+            toNumberFormat(sortedValues(validValues.length / 2)._1),
+            s"${toNumberFormat(max._1)}($stringMetric)")
         }
-        metric.map(v => numberFormat.format(v.toDouble / baseForAvgMetric))
+        metric
       }
       s"\n($min, $med, $max)"
     } else {
@@ -180,16 +190,23 @@ object SQLMetrics {
         throw new IllegalStateException("unexpected metrics type: " + metricsType)
       }
 
-      val validValues = values.filter(_ >= 0)
+      val validValues = values.filter(_._1 > 0)
       val Seq(sum, min, med, max) = {
         val metric = if (validValues.isEmpty) {
-          Seq.fill(4)(0L)
+          val zeros = Seq.fill(4)(0L)
+          zeros.map(v => strFormat(v))
         } else {
-          Arrays.sort(validValues)
-          Seq(validValues.sum, validValues(0), validValues(validValues.length / 2),
-            validValues(validValues.length - 1))
+          // unfortunately making copy here instead of inplace
+          val sortedValues = validValues.sortBy(_._1)
+          // Arrays.sort(validValues)
+          val max = validValues(sortedValues.length - 1)
+          val stringMetric = s"${max._2._1.toString}:${max._2._2.toString}:${max._2._3.toString}"
+
+          Seq(strFormat(validValues.map(_._1).sum), strFormat(sortedValues(0)._1),
+            strFormat(sortedValues(validValues.length / 2)._1),
+            s"${strFormat(max._1)}($stringMetric)")
         }
-        metric.map(strFormat)
+        metric
       }
       s"\n$sum ($min, $med, $max)"
     }

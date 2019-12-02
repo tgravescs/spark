@@ -108,7 +108,8 @@ class SQLAppStatusListener(
     val accumIds = exec.metrics.map(_.accumulatorId).toSet
     if (accumIds.nonEmpty) {
       event.stageInfos.foreach { stage =>
-        stageMetrics.put(stage.stageId, new LiveStageMetrics(0, stage.numTasks, accumIds))
+        stageMetrics.put(stage.stageId,
+          new LiveStageMetrics(stage.stageId, 0, stage.numTasks, accumIds))
       }
     }
 
@@ -126,7 +127,8 @@ class SQLAppStatusListener(
     Option(stageMetrics.get(event.stageInfo.stageId)).foreach { stage =>
       if (stage.attemptId != event.stageInfo.attemptNumber) {
         stageMetrics.put(event.stageInfo.stageId,
-          new LiveStageMetrics(event.stageInfo.attemptNumber, stage.numTasks, stage.accumulatorIds))
+          new LiveStageMetrics(event.stageInfo.stageId, event.stageInfo.attemptNumber,
+            stage.numTasks, stage.accumulatorIds))
       }
     }
   }
@@ -202,14 +204,14 @@ class SQLAppStatusListener(
       .flatMap { stageId => Option(stageMetrics.get(stageId)) }
       .flatMap(_.metricValues())
 
-    val allMetrics = new mutable.HashMap[Long, Array[Long]]()
+    val allMetrics = new mutable.HashMap[Long, Array[(Long, (Int, Int, Int))]]()
 
-    taskMetrics.foreach { case (id, values) =>
+    taskMetrics.foreach { case (id, metrics) =>
       val prev = allMetrics.getOrElse(id, null)
       val updated = if (prev != null) {
-        prev ++ values
+        prev ++ metrics
       } else {
-        values
+        metrics
       }
       allMetrics(id) = updated
     }
@@ -219,10 +221,10 @@ class SQLAppStatusListener(
         val prev = allMetrics.getOrElse(id, null)
         val updated = if (prev != null) {
           val _copy = Arrays.copyOf(prev, prev.length + 1)
-          _copy(prev.length) = value
+          _copy(prev.length) = (value, (-1, -1, -1))
           _copy
         } else {
-          Array(value)
+          Array((value, (-1, -1, -1)))
         }
         allMetrics(id) = updated
       }
@@ -440,6 +442,7 @@ private class LiveExecutionData(val executionId: Long) extends LiveEntity {
 }
 
 private class LiveStageMetrics(
+    val stageId: Int,
     val attemptId: Int,
     val numTasks: Int,
     val accumulatorIds: Set[Long]) {
@@ -507,7 +510,12 @@ private class LiveStageMetrics(
     }
   }
 
-  def metricValues(): Seq[(Long, Array[Long])] = taskMetrics.asScala.toSeq
+  def metricValues(): Seq[(Long, Array[(Long, (Int, Int, Int))])] = {
+    val taskMetricsSeq = taskMetrics.asScala.toSeq
+    val taskMetricsWithIndex = taskMetricsSeq.map { case (id, values) => (id, values.zipWithIndex)}
+    taskMetricsWithIndex.map { case (id, values) =>
+      (id, values.map { case (k, i) => (k, (i, stageId, attemptId))})}
+  }
 }
 
 private object SQLAppStatusListener {
