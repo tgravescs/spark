@@ -514,7 +514,7 @@ private class LiveStageMetrics(
     val taskMetricsSeq = taskMetrics.asScala.toSeq
     val taskMetricsWithIndex = taskMetricsSeq.map { case (id, values) => (id, values.zipWithIndex)}
     taskMetricsWithIndex.map { case (id, values) =>
-      (id, values.map { case (k, i) => (k, (i, stageId, attemptId))})}
+      (id, values.map { case (k, i) => (k, (stageId, attemptId, i))})}
   }
 }
 
