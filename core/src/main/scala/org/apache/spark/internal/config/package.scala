@@ -1814,4 +1814,11 @@ package object config {
     .bytesConf(ByteUnit.BYTE)
     .createOptional
 
+  private[spark] val STANDALONE_CUDA_VISIBLE_DEVICES_ENABLED =
+    ConfigBuilder("spark.standalone.cudaVisibleDevicesEnabled")
+      .doc("Set CUDA_VISIBLE_DEVICES on launch of executor to GPUs assigned")
+      .version("3.0.0")
+      .booleanConf
+      .createWithDefault(false)
+
 }

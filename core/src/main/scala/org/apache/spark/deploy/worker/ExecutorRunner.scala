@@ -21,6 +21,7 @@ import java.io._
 import java.nio.charset.StandardCharsets
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable.HashMap
 
 import com.google.common.io.Files
 
@@ -29,9 +30,9 @@ import org.apache.spark.deploy.{ApplicationDescription, ExecutorState}
 import org.apache.spark.deploy.DeployMessages.ExecutorStateChanged
 import org.apache.spark.deploy.StandaloneResourceUtils.prepareResourcesFile
 import org.apache.spark.internal.Logging
-import org.apache.spark.internal.config.SPARK_EXECUTOR_PREFIX
+import org.apache.spark.internal.config.{SPARK_EXECUTOR_PREFIX, STANDALONE_CUDA_VISIBLE_DEVICES_ENABLED}
 import org.apache.spark.internal.config.UI._
-import org.apache.spark.resource.ResourceInformation
+import org.apache.spark.resource.{ResourceInformation, ResourceUtils}
 import org.apache.spark.rpc.RpcEndpointRef
 import org.apache.spark.util.{ShutdownHookManager, Utils}
 import org.apache.spark.util.logging.FileAppender
@@ -147,7 +148,21 @@ private[deploy] class ExecutorRunner(
    */
   private def fetchAndRunExecutor(): Unit = {
     try {
-      val resourceFileOpt = prepareResourcesFile(SPARK_EXECUTOR_PREFIX, resources, executorDir)
+      val setCudaVisibleDevices = conf.get(STANDALONE_CUDA_VISIBLE_DEVICES_ENABLED)
+      val resourceToSet = HashMap.empty ++ resources
+      val gpus = if (resources.contains(ResourceUtils.GPU) && setCudaVisibleDevices) {
+        val gpuAddrs = resources(ResourceUtils.GPU).addresses
+        // adjust addrs to be 0 to X because setting CUDA_VISIBLE_DEVICES will make them
+        // show up that way
+        val addrs = Array.range(0, gpuAddrs.size, 1).map(_.toString)
+        resourceToSet(ResourceUtils.GPU) = new ResourceInformation(ResourceUtils.GPU, addrs)
+        gpuAddrs.mkString(",")
+      } else {
+        ""
+      }
+
+      val resourceFileOpt = prepareResourcesFile(SPARK_EXECUTOR_PREFIX,
+        resourceToSet.toMap, executorDir)
       // Launch the process
       val arguments = appDesc.command.arguments ++ resourceFileOpt.map(f =>
         Seq("--resourcesFile", f.getAbsolutePath)).getOrElse(Seq.empty)
@@ -167,6 +182,9 @@ private[deploy] class ExecutorRunner(
       // In case we are running this from within the Spark Shell, avoid creating a "scala"
       // parent process for the executor command
       builder.environment.put("SPARK_LAUNCH_WITH_SCALA", "0")
+      if (resources.contains(ResourceUtils.GPU) && setCudaVisibleDevices) {
+        builder.environment.put("CUDA_VISIBLE_DEVICES", gpus)
+      }
 
       // Add webUI log urls
       val baseUrl =
