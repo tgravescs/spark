@@ -148,16 +148,20 @@ private[deploy] class ExecutorRunner(
    */
   private def fetchAndRunExecutor(): Unit = {
     try {
+      logWarning("Tom going to fetch and run executor")
       val setCudaVisibleDevices = conf.get(STANDALONE_CUDA_VISIBLE_DEVICES_ENABLED)
       val resourceToSet = HashMap.empty ++ resources
       val gpus = if (resources.contains(ResourceUtils.GPU) && setCudaVisibleDevices) {
+        logWarning("resources has gpu and need to set CUDA_VISIBLE_DEVICES")
         val gpuAddrs = resources(ResourceUtils.GPU).addresses
         // adjust addrs to be 0 to X because setting CUDA_VISIBLE_DEVICES will make them
         // show up that way
         val addrs = Array.range(0, gpuAddrs.size, 1).map(_.toString)
         resourceToSet(ResourceUtils.GPU) = new ResourceInformation(ResourceUtils.GPU, addrs)
+        logWarning(s"resources to set are: $resourceToSet")
         gpuAddrs.mkString(",")
       } else {
+        logWarning("not setting gpu CUDA_VISIBLE_DEVICES")
         ""
       }
 
