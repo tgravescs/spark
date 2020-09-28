@@ -125,9 +125,20 @@ public class SparkFirehoseListener implements SparkListenerInterface {
   }
 
   @Override
+  public final void onExecutorExcluded(SparkListenerExecutorExcluded executorExcluded) {
+    onEvent(executorExcluded);
+  }
+
+  @Override
   public void onExecutorBlacklistedForStage(
       SparkListenerExecutorBlacklistedForStage executorBlacklistedForStage) {
     onEvent(executorBlacklistedForStage);
+  }
+
+  @Override
+  public void onExecutorExcludedForStage(
+      SparkListenerExecutorExcludedForStage executorExcludedForStage) {
+    onEvent(executorExcludedForStage);
   }
 
   @Override
@@ -137,9 +148,21 @@ public class SparkFirehoseListener implements SparkListenerInterface {
   }
 
   @Override
+  public void onNodeExcludedForStage(
+      SparkListenerNodeExcludedForStage nodeExcludedForStage) {
+    onEvent(nodeExcludedForStage);
+  }
+
+  @Override
   public final void onExecutorUnblacklisted(
       SparkListenerExecutorUnblacklisted executorUnblacklisted) {
     onEvent(executorUnblacklisted);
+  }
+
+  @Override
+  public final void onExecutorUnexcluded(
+      SparkListenerExecutorUnexcluded executorUnexcluded) {
+    onEvent(executorUnexcluded);
   }
 
   @Override
@@ -148,8 +171,18 @@ public class SparkFirehoseListener implements SparkListenerInterface {
   }
 
   @Override
+  public final void onNodeExcluded(SparkListenerNodeExcluded nodeExcluded) {
+    onEvent(nodeExcluded);
+  }
+
+  @Override
   public final void onNodeUnblacklisted(SparkListenerNodeUnblacklisted nodeUnblacklisted) {
     onEvent(nodeUnblacklisted);
+  }
+
+  @Override
+  public final void onNodeUnexcluded(SparkListenerNodeUnexcluded nodeUnexcluded) {
+    onEvent(nodeUnexcluded);
   }
 
   @Override
