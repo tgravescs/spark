@@ -34,6 +34,7 @@ import org.apache.spark.deploy.k8s.Config._
 import org.apache.spark.deploy.k8s.Constants._
 import org.apache.spark.deploy.k8s.Fabric8Aliases._
 import org.apache.spark.internal.config.DYN_ALLOCATION_EXECUTOR_IDLE_TIMEOUT
+import org.apache.spark.resource.ResourceProfile
 import org.apache.spark.scheduler.cluster.k8s.ExecutorLifecycleTestUtils._
 import org.apache.spark.util.ManualClock
 
@@ -53,6 +54,8 @@ class ExecutorPodsAllocatorSuite extends SparkFunSuite with BeforeAndAfter {
   private val conf = new SparkConf()
     .set(KUBERNETES_DRIVER_POD_NAME, driverPodName)
     .set(DYN_ALLOCATION_EXECUTOR_IDLE_TIMEOUT.key, "10s")
+
+  private val defaultProfile: ResourceProfile = ResourceProfile.getOrCreateDefaultProfile(conf)
 
   private val podAllocationSize = conf.get(KUBERNETES_ALLOCATION_BATCH_SIZE)
   private val podAllocationDelay = conf.get(KUBERNETES_ALLOCATION_BATCH_DELAY)
@@ -97,7 +100,7 @@ class ExecutorPodsAllocatorSuite extends SparkFunSuite with BeforeAndAfter {
 
   test("Initially request executors in batches. Do not request another batch if the" +
     " first has not finished.") {
-    podsAllocatorUnderTest.setTotalExpectedExecutors(podAllocationSize + 1)
+    podsAllocatorUnderTest.setTotalExpectedExecutors(Map(defaultProfile -> (podAllocationSize + 1)))
     for (nextId <- 1 to podAllocationSize) {
       verify(podOperations).create(podWithAttachedContainerForId(nextId))
     }
@@ -106,7 +109,7 @@ class ExecutorPodsAllocatorSuite extends SparkFunSuite with BeforeAndAfter {
 
   test("Request executors in batches. Allow another batch to be requested if" +
     " all pending executors start running.") {
-    podsAllocatorUnderTest.setTotalExpectedExecutors(podAllocationSize + 1)
+    podsAllocatorUnderTest.setTotalExpectedExecutors(Map(defaultProfile -> (podAllocationSize + 1)))
     for (execId <- 1 until podAllocationSize) {
       snapshotsStore.updatePod(runningExecutor(execId))
     }
@@ -122,7 +125,7 @@ class ExecutorPodsAllocatorSuite extends SparkFunSuite with BeforeAndAfter {
 
   test("When a current batch reaches error states immediately, re-request" +
     " them on the next batch.") {
-    podsAllocatorUnderTest.setTotalExpectedExecutors(podAllocationSize)
+    podsAllocatorUnderTest.setTotalExpectedExecutors(Map(defaultProfile -> podAllocationSize))
     for (execId <- 1 until podAllocationSize) {
       snapshotsStore.updatePod(runningExecutor(execId))
     }
