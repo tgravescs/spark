@@ -104,7 +104,7 @@ private[spark] class ExecutorPodsLifecycleManager(
     // This makes sure that we don't keep growing that set indefinitely, in case we end up missing
     // an update for some pod.
     val lastExecutorPods = snapshots.last.executorPods.values.flatten.toMap
-    if (inactivatedPods.nonEmpty && snapshots.nonEmpty) {
+    if (inactivatedPods.nonEmpty && lastExecutorPods.nonEmpty) {
       inactivatedPods.retain(lastExecutorPods.contains(_))
     }
 
