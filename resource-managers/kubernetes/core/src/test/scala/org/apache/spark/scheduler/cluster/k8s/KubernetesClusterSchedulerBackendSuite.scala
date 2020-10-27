@@ -31,12 +31,13 @@ import org.apache.spark.{SparkConf, SparkContext, SparkEnv, SparkFunSuite}
 import org.apache.spark.deploy.k8s.Config._
 import org.apache.spark.deploy.k8s.Constants._
 import org.apache.spark.deploy.k8s.Fabric8Aliases._
-import org.apache.spark.resource.ResourceProfileManager
+import org.apache.spark.resource.{ResourceProfile, ResourceProfileManager}
 import org.apache.spark.rpc.{RpcEndpoint, RpcEndpointRef, RpcEnv}
 import org.apache.spark.scheduler.{ExecutorKilled, LiveListenerBus, TaskSchedulerImpl}
 import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages.RemoveExecutor
 import org.apache.spark.scheduler.cluster.CoarseGrainedSchedulerBackend
 import org.apache.spark.scheduler.cluster.k8s.ExecutorLifecycleTestUtils.TEST_SPARK_APP_ID
+
 
 class KubernetesClusterSchedulerBackendSuite extends SparkFunSuite with BeforeAndAfter {
 
@@ -89,6 +90,7 @@ class KubernetesClusterSchedulerBackendSuite extends SparkFunSuite with BeforeAn
 
   private val listenerBus = new LiveListenerBus(new SparkConf())
   private val resourceProfileManager = new ResourceProfileManager(sparkConf, listenerBus)
+  private val defaultProfile = ResourceProfile.getOrCreateDefaultProfile(sparkConf)
 
   before {
     MockitoAnnotations.initMocks(this)
@@ -118,7 +120,7 @@ class KubernetesClusterSchedulerBackendSuite extends SparkFunSuite with BeforeAn
 
   test("Start all components") {
     schedulerBackendUnderTest.start()
-    verify(podAllocator).setTotalExpectedExecutors(3)
+    verify(podAllocator).setTotalExpectedExecutors(Map(defaultProfile -> 3))
     verify(podAllocator).start(TEST_SPARK_APP_ID)
     verify(lifecycleEventHandler).start(schedulerBackendUnderTest)
     verify(watchEvents).start(TEST_SPARK_APP_ID)
