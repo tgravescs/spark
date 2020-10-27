@@ -134,7 +134,7 @@ private[spark] class KubernetesExecutorConf(
     val appId: String,
     val executorId: String,
     val driverPod: Option[Pod],
-    val resourceProfileId: Int)
+    val resourceProfileId: Int = DEFAULT_RESOURCE_PROFILE_ID)
   extends KubernetesConf(sparkConf) with Logging {
 
   override val resourceNamePrefix: String = {
