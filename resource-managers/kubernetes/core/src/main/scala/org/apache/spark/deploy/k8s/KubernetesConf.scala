@@ -146,7 +146,7 @@ private[spark] class KubernetesExecutorConf(
       SPARK_EXECUTOR_ID_LABEL -> executorId,
       SPARK_APP_ID_LABEL -> appId,
       SPARK_ROLE_LABEL -> SPARK_POD_EXECUTOR_ROLE,
-      SPARK_RESOURCE_PROFILE_ID_LABEL -> resourceProfileId)
+      SPARK_RESOURCE_PROFILE_ID_LABEL -> resourceProfileId.toString)
 
     val executorCustomLabels = KubernetesUtils.parsePrefixedKeyValuePairs(
       sparkConf, KUBERNETES_EXECUTOR_LABEL_PREFIX)

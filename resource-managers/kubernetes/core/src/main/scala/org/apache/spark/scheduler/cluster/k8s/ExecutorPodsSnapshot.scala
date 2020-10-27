@@ -20,6 +20,7 @@ import java.util.Locale
 
 import io.fabric8.kubernetes.api.model.ContainerStateTerminated
 import io.fabric8.kubernetes.api.model.Pod
+import scala.collection.mutable
 
 import org.apache.spark.deploy.k8s.Constants._
 import org.apache.spark.internal.Logging
@@ -52,11 +53,18 @@ object ExecutorPodsSnapshot extends Logging {
     shouldCheckAllContainers = watchAllContainers
   }
 
+  // TODO - rename
   private def toStatesByExecutorId(
       executorPods: Seq[Pod]): Map[Int, Map[Long, ExecutorPodState]] = {
+    val rpIdToStateMap = new mutable.HashMap[Int, mutable.LinkedHashMap[Long, ExecutorPodState]]()
     val idToPod = executorPods.map { pod =>
-      (pod.getMetadata.getLabels.get(SPARK_RESOURCE_PROFILE_ID_LABEL),
-        (pod.getMetadata.getLabels.get(SPARK_EXECUTOR_ID_LABEL).toLong, toState(pod)))
+      val rpId = pod.getMetadata.getLabels.get(SPARK_RESOURCE_PROFILE_ID_LABEL).toInt
+      val execIdToState =
+        rpIdToStateMap.getOrElseUpdate(rpId, mutable.LinkedHashMap[Long, ExecutorPodState]())
+      execIdToState(pod.getMetadata.getLabels.get(SPARK_EXECUTOR_ID_LABEL).toLong) = toState(pod)
+    }
+    rpIdToStateMap.map { case (rpId, execMap) =>
+      (rpId, execMap.toMap)
     }.toMap
   }
 
