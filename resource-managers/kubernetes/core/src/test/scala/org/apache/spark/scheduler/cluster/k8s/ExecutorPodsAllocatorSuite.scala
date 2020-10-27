@@ -146,7 +146,7 @@ class ExecutorPodsAllocatorSuite extends SparkFunSuite with BeforeAndAfter {
     when(podOperations
       .withLabelIn(SPARK_EXECUTOR_ID_LABEL, "1"))
       .thenReturn(labeledPods)
-    podsAllocatorUnderTest.setTotalExpectedExecutors(1)
+    podsAllocatorUnderTest.setTotalExpectedExecutors(Map(defaultProfile -> 1))
     verify(podOperations).create(podWithAttachedContainerForId(1))
     waitForExecutorPodsClock.setTime(podCreationTimeout + 1)
     snapshotsStore.notifySubscribers()
@@ -172,7 +172,7 @@ class ExecutorPodsAllocatorSuite extends SparkFunSuite with BeforeAndAfter {
     waitForExecutorPodsClock.setTime(startTime)
 
     // Target 1 executor, make sure it's requested, even with an empty initial snapshot.
-    podsAllocatorUnderTest.setTotalExpectedExecutors(1)
+    podsAllocatorUnderTest.setTotalExpectedExecutors(Map(defaultProfile -> 1))
     verify(podOperations).create(podWithAttachedContainerForId(1))
 
     // Mark executor as running, verify that subsequent allocation cycle is a no-op.
@@ -182,7 +182,7 @@ class ExecutorPodsAllocatorSuite extends SparkFunSuite with BeforeAndAfter {
     verify(podOperations, never()).delete()
 
     // Request 3 more executors, make sure all are requested.
-    podsAllocatorUnderTest.setTotalExpectedExecutors(4)
+    podsAllocatorUnderTest.setTotalExpectedExecutors(Map(defaultProfile -> 4))
     snapshotsStore.notifySubscribers()
     verify(podOperations).create(podWithAttachedContainerForId(2))
     verify(podOperations).create(podWithAttachedContainerForId(3))
@@ -197,7 +197,7 @@ class ExecutorPodsAllocatorSuite extends SparkFunSuite with BeforeAndAfter {
 
     // Scale down to 1. Pending executors (both acknowledged and not) should be deleted.
     waitForExecutorPodsClock.advance(executorIdleTimeout * 2)
-    podsAllocatorUnderTest.setTotalExpectedExecutors(1)
+    podsAllocatorUnderTest.setTotalExpectedExecutors(Map(defaultProfile -> 1))
     snapshotsStore.notifySubscribers()
     verify(podOperations, times(4)).create(any())
     verify(podOperations).withLabelIn(SPARK_EXECUTOR_ID_LABEL, "3", "4")
@@ -232,7 +232,7 @@ class ExecutorPodsAllocatorSuite extends SparkFunSuite with BeforeAndAfter {
     val startTime = Instant.now.toEpochMilli
     waitForExecutorPodsClock.setTime(startTime)
 
-    podsAllocatorUnderTest.setTotalExpectedExecutors(5)
+    podsAllocatorUnderTest.setTotalExpectedExecutors(Map(defaultProfile -> 5))
     verify(podOperations).create(podWithAttachedContainerForId(1))
     verify(podOperations).create(podWithAttachedContainerForId(2))
     verify(podOperations).create(podWithAttachedContainerForId(3))
@@ -244,7 +244,7 @@ class ExecutorPodsAllocatorSuite extends SparkFunSuite with BeforeAndAfter {
     snapshotsStore.updatePod(pendingExecutor(2))
 
     // Newly created executors (both acknowledged and not) are protected by executorIdleTimeout
-    podsAllocatorUnderTest.setTotalExpectedExecutors(0)
+    podsAllocatorUnderTest.setTotalExpectedExecutors(Map(defaultProfile -> 0))
     snapshotsStore.notifySubscribers()
     verify(podOperations, never()).withLabelIn(SPARK_EXECUTOR_ID_LABEL, "1", "2", "3", "4", "5")
     verify(podOperations, never()).delete()
