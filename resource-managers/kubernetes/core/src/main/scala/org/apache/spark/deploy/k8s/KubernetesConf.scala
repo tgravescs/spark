@@ -132,7 +132,8 @@ private[spark] class KubernetesExecutorConf(
     sparkConf: SparkConf,
     val appId: String,
     val executorId: String,
-    val driverPod: Option[Pod])
+    val driverPod: Option[Pod],
+    val resourceProfileId: Int)
   extends KubernetesConf(sparkConf) with Logging {
 
   override val resourceNamePrefix: String = {
@@ -144,7 +145,8 @@ private[spark] class KubernetesExecutorConf(
     val presetLabels = Map(
       SPARK_EXECUTOR_ID_LABEL -> executorId,
       SPARK_APP_ID_LABEL -> appId,
-      SPARK_ROLE_LABEL -> SPARK_POD_EXECUTOR_ROLE)
+      SPARK_ROLE_LABEL -> SPARK_POD_EXECUTOR_ROLE,
+      SPARK_RESOURCE_PROFILE_ID_LABEL -> resourceProfileId)
 
     val executorCustomLabels = KubernetesUtils.parsePrefixedKeyValuePairs(
       sparkConf, KUBERNETES_EXECUTOR_LABEL_PREFIX)
@@ -217,8 +219,9 @@ private[spark] object KubernetesConf {
       sparkConf: SparkConf,
       executorId: String,
       appId: String,
-      driverPod: Option[Pod]): KubernetesExecutorConf = {
-    new KubernetesExecutorConf(sparkConf.clone(), appId, executorId, driverPod)
+      driverPod: Option[Pod],
+      resourceProfileId: Int): KubernetesExecutorConf = {
+    new KubernetesExecutorConf(sparkConf.clone(), appId, executorId, driverPod, resourceProfileId)
   }
 
   def getResourceNamePrefix(appName: String): String = {

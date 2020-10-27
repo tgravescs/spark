@@ -121,7 +121,7 @@ private[spark] class KubernetesClusterSchedulerBackend(
 
   override def doRequestTotalExecutors(
       resourceProfileToTotalExecs: Map[ResourceProfile, Int]): Future[Boolean] = {
-    podAllocator.setTotalExpectedExecutors(resourceProfileToTotalExecs(defaultProfile))
+    podAllocator.setTotalExpectedExecutors(resourceProfileToTotalExecs)
     Future.successful(true)
   }
 

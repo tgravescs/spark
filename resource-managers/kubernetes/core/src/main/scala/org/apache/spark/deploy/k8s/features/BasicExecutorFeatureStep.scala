@@ -104,7 +104,8 @@ private[spark] class BasicExecutorFeatureStep(
           (ENV_APPLICATION_ID, kubernetesConf.appId),
           // This is to set the SPARK_CONF_DIR to be /opt/spark/conf
           (ENV_SPARK_CONF_DIR, SPARK_CONF_DIR_INTERNAL),
-          (ENV_EXECUTOR_ID, kubernetesConf.executorId)
+          (ENV_EXECUTOR_ID, kubernetesConf.executorId),
+          (ENV_RESOURCE_PROFILE_ID, kubernetesConf.resourceProfileId)
         ) ++ kubernetesConf.environment).map { case (k, v) =>
           new EnvVarBuilder()
             .withName(k)

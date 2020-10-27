@@ -27,7 +27,8 @@ import org.apache.spark.internal.Logging
 /**
  * An immutable view of the current executor pods that are running in the cluster.
  */
-private[spark] case class ExecutorPodsSnapshot(executorPods: Map[Long, ExecutorPodState]) {
+private[spark]
+case class ExecutorPodsSnapshot(executorPods: Map[Int, Map[Long, ExecutorPodState]]) {
 
   import ExecutorPodsSnapshot._
 
@@ -44,15 +45,18 @@ object ExecutorPodsSnapshot extends Logging {
     ExecutorPodsSnapshot(toStatesByExecutorId(executorPods))
   }
 
-  def apply(): ExecutorPodsSnapshot = ExecutorPodsSnapshot(Map.empty[Long, ExecutorPodState])
+  def apply(): ExecutorPodsSnapshot =
+    ExecutorPodsSnapshot(Map[Int, Map[Long, ExecutorPodState]]())
 
   def setShouldCheckAllContainers(watchAllContainers: Boolean): Unit = {
     shouldCheckAllContainers = watchAllContainers
   }
 
-  private def toStatesByExecutorId(executorPods: Seq[Pod]): Map[Long, ExecutorPodState] = {
-    executorPods.map { pod =>
-      (pod.getMetadata.getLabels.get(SPARK_EXECUTOR_ID_LABEL).toLong, toState(pod))
+  private def toStatesByExecutorId(
+      executorPods: Seq[Pod]): Map[Int, Map[Long, ExecutorPodState]] = {
+    val idToPod = executorPods.map { pod =>
+      (pod.getMetadata.getLabels.get(SPARK_RESOURCE_PROFILE_ID_LABEL),
+        (pod.getMetadata.getLabels.get(SPARK_EXECUTOR_ID_LABEL).toLong, toState(pod)))
     }.toMap
   }
 
