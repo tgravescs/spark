@@ -26,6 +26,7 @@ import org.apache.spark.deploy.k8s.Constants._
 import org.apache.spark.deploy.k8s.submit._
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config.ConfigEntry
+import org.apache.spark.resource.ResourceProfile.DEFAULT_RESOURCE_PROFILE_ID
 import org.apache.spark.util.Utils
 
 /**
@@ -220,7 +221,7 @@ private[spark] object KubernetesConf {
       executorId: String,
       appId: String,
       driverPod: Option[Pod],
-      resourceProfileId: Int): KubernetesExecutorConf = {
+      resourceProfileId: Int = DEFAULT_RESOURCE_PROFILE_ID): KubernetesExecutorConf = {
     new KubernetesExecutorConf(sparkConf.clone(), appId, executorId, driverPod, resourceProfileId)
   }
 
