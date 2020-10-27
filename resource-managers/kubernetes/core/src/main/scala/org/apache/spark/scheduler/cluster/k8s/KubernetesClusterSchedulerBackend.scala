@@ -78,7 +78,8 @@ private[spark] class KubernetesClusterSchedulerBackend(
 
   override def start(): Unit = {
     super.start()
-    podAllocator.setTotalExpectedExecutors(initialExecutors)
+    val initExecs = Map(ResourceProfile.getOrCreateDefaultProfile(conf) -> initialExecutors)
+    podAllocator.setTotalExpectedExecutors(initExecs)
     lifecycleEventHandler.start(this)
     podAllocator.start(applicationId())
     watchEvents.start(applicationId())

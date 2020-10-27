@@ -17,7 +17,7 @@
 package org.apache.spark.scheduler.cluster.k8s
 
 import java.time.Instant
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicLong}
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 
 import scala.collection.mutable
 import scala.util.control.NonFatal
@@ -33,6 +33,7 @@ import org.apache.spark.deploy.k8s.KubernetesUtils.addOwnerReference
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config.DYN_ALLOCATION_EXECUTOR_IDLE_TIMEOUT
 import org.apache.spark.resource.ResourceProfile
+import org.apache.spark.scheduler.cluster.SchedulerBackendUtils
 import org.apache.spark.util.{Clock, Utils}
 
 private[spark] class ExecutorPodsAllocator(
@@ -45,7 +46,8 @@ private[spark] class ExecutorPodsAllocator(
 
   private val EXECUTOR_ID_COUNTER = new AtomicLong(0L)
 
-  private val totalExpectedExecutors = new AtomicInteger(0)
+  // TODO - verify locking
+  // ResourceProfile id -> total expected executors
   private val totalExpectedExecutorsPerResourceProfileId = new mutable.HashMap[Int, Int]
 
   private val podAllocationSize = conf.get(KUBERNETES_ALLOCATION_BATCH_SIZE)
@@ -71,11 +73,10 @@ private[spark] class ExecutorPodsAllocator(
         s"No pod was found named $kubernetesDriverPodName in the cluster in the " +
           s"namespace $namespace (this was supposed to be the driver pod.).")))
 
-  private case class ExecIdAndResourceProfileId(execId: Long, rpId: Int)
-
+  // ResourceProfile ID to Executor IDs where
   // Executor IDs that have been requested from Kubernetes but have not been detected in any
   // snapshot yet. Mapped to the timestamp when they were created.
-  private val newlyCreatedExecutors = mutable.LinkedHashMap[Int, mutable.LinkedHashMap[Long, Long]]()
+  private val newlyCreatedExecutors = mutable.HashMap[Int, mutable.LinkedHashMap[Long, Long]]()
 
   private val dynamicAllocationEnabled = Utils.isDynamicAllocationEnabled(conf)
 
@@ -94,12 +95,16 @@ private[spark] class ExecutorPodsAllocator(
     }
   }
 
+  // TODO - locking?
   private def getOrUpdateTotalNumExecutorsForRPId(rpId: Int): Int = synchronized {
-    totalExpectedExecutorsPerResourceProfileId.getOrElseUpdate(rpId, 0)
+    totalExpectedExecutorsPerResourceProfileId.getOrElseUpdate(rpId,
+      SchedulerBackendUtils.getInitialTargetExecutorNumber(conf))
   }
 
-  def setTotalExpectedExecutors(resourceProfileToTotalExecs: Map[ResourceProfile, Int]): Unit = {
-    val res = resourceProfileToTotalExecs.map { case (rp, numExecs) =>
+  // TODO - locking?
+  def setTotalExpectedExecutors(
+      resourceProfileToTotalExecs: Map[ResourceProfile, Int]): Unit = synchronized {
+    resourceProfileToTotalExecs.map { case (rp, numExecs) =>
       if (numExecs != getOrUpdateTotalNumExecutorsForRPId(rp.id)) {
         logInfo(s"Driver requested a total number of $numExecs executor(s) " +
           s"for resource profile id: ${rp.id}.")
@@ -115,15 +120,7 @@ private[spark] class ExecutorPodsAllocator(
 
   private def onNewSnapshots(
       applicationId: String,
-      snapshots: Seq[ExecutorPodsSnapshot]): Unit = {
-
-    /*
-    val rpIdToExecId = snapshots.flatMap { sn =>
-      sn.executorPods.toSeq.flatMap { case (rpId, v) =>
-        v.keys.map((ExecIdAndResourceProfileId(_, rpId)))
-      }
-    }
-    */
+      snapshots: Seq[ExecutorPodsSnapshot]): Unit = synchronized {
 
     snapshots.map { sn =>
       sn.executorPods.map { case (rpId, execPodState) =>
