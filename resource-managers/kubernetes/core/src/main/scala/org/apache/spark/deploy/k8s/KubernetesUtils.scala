@@ -224,16 +224,18 @@ private[spark] object KubernetesUtils extends Logging {
    * It returns a set with a tuple of vendor-domain/resource and Quantity for each resource.
    */
   def buildResourcesQuantities(
-      customResources: Set[ExecutorResourceRequest]): Map[String, Quantity] = {
-    customResources.map { request =>
-      val vendorDomain = if (request.vendor.nonEmpty) {
-        request.vendor
+      componentName: String,
+      sparkConf: SparkConf): Map[String, Quantity] = {
+    val requests = ResourceUtils.parseAllResourceRequests(sparkConf, componentName)
+    requests.map { request =>
+      val vendorDomain = if (request.vendor.isPresent()) {
+        request.vendor.get()
       } else {
-        throw new SparkException(s"Resource: ${request.resourceName} was requested, " +
+        throw new SparkException(s"Resource: ${request.id.resourceName} was requested, " +
           "but vendor was not specified.")
       }
       val quantity = new Quantity(request.amount.toString)
-      (KubernetesConf.buildKubernetesResourceName(vendorDomain, request.resourceName), quantity)
+      (KubernetesConf.buildKubernetesResourceName(vendorDomain, request.id.resourceName), quantity)
     }.toMap
   }
 

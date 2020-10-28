@@ -65,7 +65,7 @@ private[spark] class BasicExecutorFeatureStep(
   private var executorCores = kubernetesConf.sparkConf.get(EXECUTOR_CORES)
 
   private var pysparkMemoryMiB =
-    kubernetesConf.get(PYSPARK_EXECUTOR_MEMORY).map(_.toLong).getOrElse(0)
+    kubernetesConf.get(PYSPARK_EXECUTOR_MEMORY).map(_.toInt).getOrElse(0).toLong
 
   // TODO - https://github.com/apache/spark/pull/29477/files
   // var offHeapMem =
@@ -104,6 +104,20 @@ private[spark] class BasicExecutorFeatureStep(
       executorMemoryWithOverhead
     }
 
+  private def buildExecutorResourcesQuantities(
+      customResources: Set[ExecutorResourceRequest]): Map[String, Quantity] = {
+    customResources.map { request =>
+      val vendorDomain = if (request.vendor.nonEmpty) {
+        request.vendor
+      } else {
+        throw new SparkException(s"Resource: ${request.resourceName} was requested, " +
+          "but vendor was not specified.")
+      }
+      val quantity = new Quantity(request.amount.toString)
+      (KubernetesConf.buildKubernetesResourceName(vendorDomain, request.resourceName), quantity)
+    }.toMap
+  }
+
   override def configurePod(pod: SparkPod): SparkPod = {
     val name = s"$executorPodNamePrefix-exec-${kubernetesConf.executorId}"
 
@@ -119,8 +133,7 @@ private[spark] class BasicExecutorFeatureStep(
     val executorMemoryQuantity = new Quantity(s"${executorMemoryTotal}Mi")
     val executorCpuQuantity = new Quantity(executorCoresRequest)
 
-    val executorResourceQuantities =
-      KubernetesUtils.buildResourcesQuantities(customResources.toSet)
+    val executorResourceQuantities = buildExecutorResourcesQuantities(customResources.toSet)
 
     val executorEnv: Seq[EnvVar] = {
         (Seq(
