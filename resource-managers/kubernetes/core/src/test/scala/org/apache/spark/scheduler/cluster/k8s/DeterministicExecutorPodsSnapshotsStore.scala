@@ -52,12 +52,9 @@ class DeterministicExecutorPodsSnapshotsStore extends ExecutorPodsSnapshotsStore
   }
 
   def removeDeletedExecutors(): Unit = {
-    val nonDeleted = currentSnapshot.executorPods.map { case (rpId, execIdToState) =>
-      val nonDeleted = execIdToState.filter {
-        case (_, PodDeleted(_)) => false
-        case _ => true
-      }
-      (rpId, nonDeleted)
+    val nonDeleted = currentSnapshot.executorPods.filter {
+      case (_, PodDeleted(_)) => false
+      case _ => true
     }
     currentSnapshot = ExecutorPodsSnapshot(nonDeleted)
     snapshotsBuffer += currentSnapshot

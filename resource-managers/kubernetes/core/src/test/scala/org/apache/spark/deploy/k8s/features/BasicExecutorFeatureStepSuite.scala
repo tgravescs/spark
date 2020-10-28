@@ -256,7 +256,7 @@ class BasicExecutorFeatureStepSuite extends SparkFunSuite with BeforeAndAfter {
     secMgr.initializeAuth()
 
     val step = new BasicExecutorFeatureStep(KubernetesTestConf.createExecutorConf(sparkConf = conf),
-      secMgr, defaultProfile(baseConf)))
+      secMgr, defaultProfile(baseConf))
 
     val executor = step.configurePod(SparkPod.initialPod())
     assert(!KubernetesFeaturesTestUtils.containerHasEnvVar(

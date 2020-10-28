@@ -78,7 +78,10 @@ private[spark] class ExecutorPodsAllocator(
   // ResourceProfile ID to Executor IDs where
   // Executor IDs that have been requested from Kubernetes but have not been detected in any
   // snapshot yet. Mapped to the timestamp when they were created.
-  private val newlyCreatedExecutors = mutable.HashMap[Int, mutable.LinkedHashMap[Long, Long]]()
+  // private val newlyCreatedExecutors = mutable.LinkedHashMap.empty[Long, Long]
+  // private val newlyCreatedExecutors = mutable.HashMap[Int, mutable.LinkedHashMap[Long, Long]]()
+  private val newlyCreatedExecutors = mutable.LinkedHashMap[Long, (Int, Long)]()
+
 
   private val dynamicAllocationEnabled = Utils.isDynamicAllocationEnabled(conf)
 
@@ -127,13 +130,7 @@ private[spark] class ExecutorPodsAllocator(
       applicationId: String,
       snapshots: Seq[ExecutorPodsSnapshot]): Unit = synchronized {
 
-    snapshots.map { sn =>
-      sn.executorPods.map { case (rpId, execPodState) =>
-        val execIdToCreated =
-          newlyCreatedExecutors.getOrElseUpdate(rpId, mutable.LinkedHashMap.empty[Long, Long])
-        execIdToCreated --= execPodState.keys
-      }
-    }
+    newlyCreatedExecutors --= snapshots.flatMap(_.executorPods.keys)
 
     // For all executors we've created against the API but have not seen in a snapshot
     // yet - check the current time. If the current time has exceeded some threshold,
@@ -142,33 +139,31 @@ private[spark] class ExecutorPodsAllocator(
     // both the creation and deletion events. In either case, delete the missing pod
     // if possible, and mark such a pod to be rescheduled below.
     val currentTime = clock.getTimeMillis()
-    newlyCreatedExecutors.foreach { case (rpId, execIdsToTimeouts) =>
-      val timedOut = execIdsToTimeouts.flatMap { case (execId, timeCreated) =>
-        if (currentTime - timeCreated > podCreationTimeout) {
-          Some(execId)
-        } else {
-          logDebug(s"Executor with id $execId was not found in the Kubernetes " +
-            s"cluster since it was created ${currentTime - timeCreated} milliseconds ago.")
-          None
-        }
+    val timedOut = newlyCreatedExecutors.flatMap { case (execId, (rpId, timeCreated)) =>
+      if (currentTime - timeCreated > podCreationTimeout) {
+        Some(execId)
+      } else {
+        logDebug(s"Executor with id $execId was not found in the Kubernetes cluster since it" +
+          s" was created ${currentTime - timeCreated} milliseconds ago.")
+        None
       }
-      if (timedOut.nonEmpty) {
-        logWarning(s"Executors with ids ${timedOut.mkString(",")} were not detected in the" +
-          s" Kubernetes cluster after $podCreationTimeout ms despite the fact that a previous" +
-          " allocation attempt tried to create them. The executors may have been deleted but the" +
-          " application missed the deletion event.")
+    }
 
-        execIdsToTimeouts --= timedOut
-        if (shouldDeleteExecutors) {
-          Utils.tryLogNonFatalError {
-            // TODO - do we need to include the resource profile id label? hopefully not
-            kubernetesClient
-              .pods()
-              .withLabel(SPARK_APP_ID_LABEL, applicationId)
-              .withLabel(SPARK_ROLE_LABEL, SPARK_POD_EXECUTOR_ROLE)
-              .withLabelIn(SPARK_EXECUTOR_ID_LABEL, timedOut.toSeq.map(_.toString): _*)
-              .delete()
-          }
+    if (timedOut.nonEmpty) {
+      logWarning(s"Executors with ids ${timedOut.mkString(",")} were not detected in the" +
+        s" Kubernetes cluster after $podCreationTimeout ms despite the fact that a previous" +
+        " allocation attempt tried to create them. The executors may have been deleted but the" +
+        " application missed the deletion event.")
+
+      newlyCreatedExecutors --= timedOut
+      if (shouldDeleteExecutors) {
+        Utils.tryLogNonFatalError {
+          kubernetesClient
+            .pods()
+            .withLabel(SPARK_APP_ID_LABEL, applicationId)
+            .withLabel(SPARK_ROLE_LABEL, SPARK_POD_EXECUTOR_ROLE)
+            .withLabelIn(SPARK_EXECUTOR_ID_LABEL, timedOut.toSeq.map(_.toString): _*)
+            .delete()
         }
       }
     }
@@ -177,69 +172,79 @@ private[spark] class ExecutorPodsAllocator(
       lastSnapshot = snapshots.last
     }
 
-    val currentRunningCountPerRpId = lastSnapshot.executorPods.map { case (rpId, execIdToState) =>
-      val count = execIdToState.values.count {
-        case PodRunning(_) => true
-        case _ => false
-      }
-      (rpId, count)
-    }
-
-    val currentPendingExecutors = lastSnapshot.executorPods.map { case (rpId, execIdToState) =>
-      val pending = execIdToState.filter {
-        case (_, PodPending(_)) => true
-        case _ => false
-      }
-      (rpId, pending)
-    }
-
     // Make a local, non-volatile copy of the reference since it's used multiple times. This
     // is the only method that modifies the list, so this is safe.
     var _deletedExecutorIds = deletedExecutorIds
-
     if (snapshots.nonEmpty) {
-      // TODO - how do we want to display?
-      logDebug(s"Pod allocation status: ${currentRunningCountPerRpId.values.sum} running, " +
-        s"${currentPendingExecutors.size} pending, " +
-        s"${newlyCreatedExecutors.size} unacknowledged.")
-
-      // TODO - better way to do this?
-      val existingExecs = lastSnapshot.executorPods.values.flatten.toMap.keySet
+      val existingExecs = lastSnapshot.executorPods.keySet
       _deletedExecutorIds = _deletedExecutorIds.filter(existingExecs.contains)
     }
 
-    // This variable is used later to print some debug logs. It's updated when cleaning up
-    // excess pod requests, since currentPendingExecutors is immutable.
-    var knownPendingCountGlobal = currentPendingExecutors.values.flatten.toMap.size
+    // map the pods into per resource profile id so we can track them
+    val rpIdToExecsAndPodState =
+      mutable.HashMap[Int, mutable.LinkedHashMap[Long, ExecutorPodState]]()
+    lastSnapshot.executorPods.foreach { case (execId, execPodState) =>
+      val rpId = execPodState.pod.getMetadata.getLabels.get(SPARK_RESOURCE_PROFILE_ID_LABEL).toInt
+      val execPods = rpIdToExecsAndPodState.getOrElseUpdate(rpId,
+        mutable.LinkedHashMap[Long, ExecutorPodState]())
+      execPods(execId) = execPodState
+    }
 
-    // It's possible that we have outstanding pods that are outdated when dynamic allocation
-    // decides to downscale the application. So check if we can release any pending pods early
-    // instead of waiting for them to time out. Drop them first from the unacknowledged list,
-    // then from the pending. However, in order to prevent too frequent fluctuation, newly
-    // requested pods are protected during executorIdleTimeout period.
-    //
-    // TODO: with dynamic allocation off, handle edge cases if we end up with more running
-    // executors than expected.
-    totalExpectedExecutorsPerResourceProfileId.map { case (rpId, targetNum) =>
-      // Do we need to check for missing?
-      val pendingExecs = currentPendingExecutors.getOrElse(rpId, Map.empty[Long, ExecutorPodState])
-      // TODO this was used for logging outside this, what do we do with it?
-      var knownPendingCount = pendingExecs.size
-      val running = currentRunningCountPerRpId.getOrElse(rpId, 0)
-      val newlyCreatedForRpId =
-        newlyCreatedExecutors.getOrElse(rpId, mutable.LinkedHashMap.empty[Long, Long])
-      val numNewlyCreatedExecutorsForRpId = newlyCreatedForRpId.size
-      val knownPodCount = running + knownPendingCount + numNewlyCreatedExecutorsForRpId
+    var knownPendingCount = 0
+    var totalRunningCount = 0
+    totalExpectedExecutorsPerResourceProfileId.foreach { case (rpId, targetNum) =>
+
+      val snapshotsForRpId = rpIdToExecsAndPodState.getOrElse(rpId, mutable.LinkedHashMap.empty)
+
+      val currentRunningCount = snapshotsForRpId.values.count {
+        case PodRunning(_) => true
+        case _ => false
+      }
+      totalRunningCount += currentRunningCount
+
+      val currentPendingExecutors = snapshotsForRpId.filter {
+        case (_, PodPending(_)) => true
+        case _ => false
+      }
+
+      if (snapshotsForRpId.nonEmpty) {
+        logDebug(s"Pod for ResourceProfile Id: $rpId " +
+          s"allocation status: $currentRunningCount running, " +
+          s"${currentPendingExecutors.size} pending.")
+          // TODO add back?
+          // s"${newlyCreatedExecutors.size} unacknowledged.")
+      }
+
+      val newlyCreatedExecutorsForRpId =
+        newlyCreatedExecutors.filter { case (execid, (waitingRpId, _)) =>
+          rpId == waitingRpId
+        }
+
+      // This variable is used later to print some debug logs. It's updated when cleaning up
+      // excess pod requests, since currentPendingExecutors is immutable.
+      knownPendingCount += currentPendingExecutors.size
+
+      // It's possible that we have outstanding pods that are outdated when dynamic allocation
+      // decides to downscale the application. So check if we can release any pending pods early
+      // instead of waiting for them to time out. Drop them first from the unacknowledged list,
+      // then from the pending. However, in order to prevent too frequent fluctuation, newly
+      // requested pods are protected during executorIdleTimeout period.
+      //
+      // TODO: with dynamic allocation off, handle edge cases if we end up with more running
+      // executors than expected.
+      val knownPodCount = currentRunningCount + currentPendingExecutors.size +
+        newlyCreatedExecutorsForRpId.size
 
       if (knownPodCount > targetNum) {
         val excess = knownPodCount - targetNum
-        val knownPendingToDelete = pendingExecs
+        val knownPendingToDelete = currentPendingExecutors
           .filter(x => isExecutorIdleTimedOut(x._2, currentTime))
           .map { case (id, _) => id }
-          .take(excess - numNewlyCreatedExecutorsForRpId)
-        val toDelete = newlyCreatedForRpId
-          .filter(x => currentTime - x._2 > executorIdleTimeout)
-          .keys.take(excess).toList ++ knownPendingToDelete
+          .take(excess - newlyCreatedExecutorsForRpId.size)
+        val toDelete = newlyCreatedExecutorsForRpId
+          .filter { case (_, (_, createTime)) =>
+            currentTime - createTime > executorIdleTimeout
+          }.keys.take(excess).toList ++ knownPendingToDelete
 
         if (toDelete.nonEmpty) {
           logInfo(s"Deleting ${toDelete.size} excess pod requests (${toDelete.mkString(",")}).")
@@ -253,33 +258,23 @@ private[spark] class ExecutorPodsAllocator(
               .withLabel(SPARK_ROLE_LABEL, SPARK_POD_EXECUTOR_ROLE)
               .withLabelIn(SPARK_EXECUTOR_ID_LABEL, toDelete.sorted.map(_.toString): _*)
               .delete()
-            newlyCreatedExecutors.getOrElseUpdate(rpId,
-              mutable.LinkedHashMap.empty[Long, Long])--= toDelete
-            knownPendingCountGlobal -= knownPendingToDelete.size
+            newlyCreatedExecutors --= toDelete
+            knownPendingCount -= knownPendingToDelete.size
           }
         }
       }
-    }
 
-    totalExpectedExecutorsPerResourceProfileId.map { case (rpId, targetNum) =>
-      val running = currentRunningCountPerRpId.getOrElse(rpId, 0)
-      val pendingExecs = currentPendingExecutors.getOrElse(rpId, Map.empty[Long, ExecutorPodState])
-      val createdForRpId =
-        newlyCreatedExecutors.getOrElseUpdate(rpId, mutable.LinkedHashMap.empty[Long, Long])
-
-      if (createdForRpId.isEmpty
-        && pendingExecs.isEmpty
-        && running < targetNum) {
-        requestNewExecutors(targetNum, running, applicationId, rpId)
+      if (newlyCreatedExecutorsForRpId.isEmpty
+        && knownPodCount < targetNum) {
+        requestNewExecutors(targetNum, knownPodCount, applicationId, rpId)
       }
     }
 
     deletedExecutorIds = _deletedExecutorIds
 
-    val numToCreate = newlyCreatedExecutors.values.flatten.toMap.size
     // Update the flag that helps the setTotalExpectedExecutors() callback avoid triggering this
     // update method when not needed.
-    hasPendingPods.set(knownPendingCountGlobal + numToCreate > 0)
+    hasPendingPods.set(knownPendingCount + newlyCreatedExecutors.size > 0)
 
     // The code below just prints debug messages, which are only useful when there's a change
     // in the snapshot state. Since the messages are a little spammy, avoid them when we know
@@ -288,13 +283,12 @@ private[spark] class ExecutorPodsAllocator(
       return
     }
 
-    val totalRunning = currentRunningCountPerRpId.values.sum
     val totalExpected = totalExpectedExecutorsPerResourceProfileId.values.sum
-    if (totalRunning >= totalExpected && !dynamicAllocationEnabled) {
+    if (totalRunningCount >= totalExpected && !dynamicAllocationEnabled) {
       logDebug("Current number of running executors is equal to the number of requested" +
         " executors. Not scaling up further.")
     } else {
-      val outstanding = knownPendingCountGlobal + numToCreate
+      val outstanding = knownPendingCount + newlyCreatedExecutors.size
       if (outstanding > 0) {
         logDebug(s"Still waiting for $outstanding executors before requesting more.")
       }

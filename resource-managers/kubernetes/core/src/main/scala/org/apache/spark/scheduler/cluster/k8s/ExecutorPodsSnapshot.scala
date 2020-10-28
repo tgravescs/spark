@@ -20,7 +20,6 @@ import java.util.Locale
 
 import io.fabric8.kubernetes.api.model.ContainerStateTerminated
 import io.fabric8.kubernetes.api.model.Pod
-import scala.collection.mutable
 
 import org.apache.spark.deploy.k8s.Constants._
 import org.apache.spark.internal.Logging
@@ -28,16 +27,13 @@ import org.apache.spark.internal.Logging
 /**
  * An immutable view of the current executor pods that are running in the cluster.
  */
-private[spark]
-case class ExecutorPodsSnapshot(executorPods: Map[Int, Map[Long, ExecutorPodState]]) {
+private[spark] case class ExecutorPodsSnapshot(executorPods: Map[Long, ExecutorPodState]) {
 
   import ExecutorPodsSnapshot._
 
   def withUpdate(updatedPod: Pod): ExecutorPodsSnapshot = {
-    val rpId = updatedPod.getMetadata.getLabels.get(SPARK_RESOURCE_PROFILE_ID_LABEL).toInt
-    val execIdToStates = toStatesByExecutorIdOrig(Seq(updatedPod))
-    val newExecutorPods = Map(rpId -> (executorPods.getOrElse(rpId, Map.empty) ++ execIdToStates))
-    new ExecutorPodsSnapshot(executorPods ++ newExecutorPods)
+    val newExecutorPods = executorPods ++ toStatesByExecutorId(Seq(updatedPod))
+    new ExecutorPodsSnapshot(newExecutorPods)
   }
 }
 
@@ -48,31 +44,15 @@ object ExecutorPodsSnapshot extends Logging {
     ExecutorPodsSnapshot(toStatesByExecutorId(executorPods))
   }
 
-  def apply(): ExecutorPodsSnapshot =
-    ExecutorPodsSnapshot(Map[Int, Map[Long, ExecutorPodState]]())
+  def apply(): ExecutorPodsSnapshot = ExecutorPodsSnapshot(Map.empty[Long, ExecutorPodState])
 
   def setShouldCheckAllContainers(watchAllContainers: Boolean): Unit = {
     shouldCheckAllContainers = watchAllContainers
   }
 
-  private def toStatesByExecutorIdOrig(executorPods: Seq[Pod]): Map[Long, ExecutorPodState] = {
+  private def toStatesByExecutorId(executorPods: Seq[Pod]): Map[Long, ExecutorPodState] = {
     executorPods.map { pod =>
       (pod.getMetadata.getLabels.get(SPARK_EXECUTOR_ID_LABEL).toLong, toState(pod))
-    }.toMap
-  }
-
-  // TODO - rename
-  private def toStatesByExecutorId(
-      executorPods: Seq[Pod]): Map[Int, Map[Long, ExecutorPodState]] = {
-    val rpIdToStateMap = new mutable.HashMap[Int, mutable.LinkedHashMap[Long, ExecutorPodState]]()
-    val idToPod = executorPods.map { pod =>
-      val rpId = pod.getMetadata.getLabels.get(SPARK_RESOURCE_PROFILE_ID_LABEL).toInt
-      val execIdToState =
-        rpIdToStateMap.getOrElseUpdate(rpId, mutable.LinkedHashMap[Long, ExecutorPodState]())
-      execIdToState(pod.getMetadata.getLabels.get(SPARK_EXECUTOR_ID_LABEL).toLong) = toState(pod)
-    }
-    rpIdToStateMap.map { case (rpId, execMap) =>
-      (rpId, execMap.toMap)
     }.toMap
   }
 

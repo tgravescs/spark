@@ -60,8 +60,7 @@ private[spark] class ExecutorPodsLifecycleManager(
       snapshots: Seq[ExecutorPodsSnapshot]): Unit = {
     val execIdsRemovedInThisRound = mutable.HashSet.empty[Long]
     snapshots.foreach { snapshot =>
-      val execPods = snapshot.executorPods.values.flatten
-      execPods.foreach { case (execId, state) =>
+      snapshot.executorPods.foreach { case (execId, state) =>
         state match {
           case _state if isPodInactive(_state.pod) =>
             inactivatedPods -= execId
@@ -103,11 +102,8 @@ private[spark] class ExecutorPodsLifecycleManager(
     // Clean up any pods from the inactive list that don't match any pods from the last snapshot.
     // This makes sure that we don't keep growing that set indefinitely, in case we end up missing
     // an update for some pod.
-    if (snapshots.nonEmpty) {
-      val lastExecutorPods = snapshots.last.executorPods.values.flatten.toMap
-      if (inactivatedPods.nonEmpty && lastExecutorPods.nonEmpty) {
-        inactivatedPods.retain(lastExecutorPods.contains(_))
-      }
+    if (inactivatedPods.nonEmpty && snapshots.nonEmpty) {
+      inactivatedPods.retain(snapshots.last.executorPods.contains(_))
     }
 
     // Reconcile the case where Spark claims to know about an executor but the corresponding pod
@@ -116,10 +112,8 @@ private[spark] class ExecutorPodsLifecycleManager(
     // snapshot for this, and we don't do this for executors in the deleted executors cache or
     // that we just removed in this round.
     val lostExecutors = if (snapshots.nonEmpty) {
-      // TODO this is same as above
-      val lastExecutorPods = snapshots.last.executorPods.values.flatten.toMap
       schedulerBackend.getExecutorIds().map(_.toLong).toSet --
-        lastExecutorPods.keySet -- execIdsRemovedInThisRound
+        snapshots.last.executorPods.keySet -- execIdsRemovedInThisRound
     } else {
       Nil
     }
