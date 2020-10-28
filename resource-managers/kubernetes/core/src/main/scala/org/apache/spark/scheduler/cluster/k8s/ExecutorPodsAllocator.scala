@@ -220,7 +220,8 @@ private[spark] class ExecutorPodsAllocator(
       // TODO this was used for logging outside this, what do we do with it?
       var knownPendingCount = pendingExecs.size
       val running = currentRunningCountPerRpId.getOrElse(rpId, 0)
-      val newlyCreatedForRpId = newlyCreatedExecutors(rpId)
+      val newlyCreatedForRpId =
+        newlyCreatedExecutors.getOrElse(rpId, mutable.LinkedHashMap.empty[Long, Long])
       val numNewlyCreatedExecutorsForRpId = newlyCreatedForRpId.size
       val knownPodCount = running + knownPendingCount + numNewlyCreatedExecutorsForRpId
 
@@ -246,7 +247,8 @@ private[spark] class ExecutorPodsAllocator(
               .withLabel(SPARK_ROLE_LABEL, SPARK_POD_EXECUTOR_ROLE)
               .withLabelIn(SPARK_EXECUTOR_ID_LABEL, toDelete.sorted.map(_.toString): _*)
               .delete()
-            newlyCreatedExecutors(rpId) --= toDelete
+            newlyCreatedExecutors.getOrElse(rpId,
+              mutable.LinkedHashMap.empty[Long, Long])--= toDelete
             knownPendingCountGlobal -= knownPendingToDelete.size
           }
         }
@@ -256,7 +258,8 @@ private[spark] class ExecutorPodsAllocator(
     totalExpectedExecutorsPerResourceProfileId.map { case (rpId, targetNum) =>
       val running = currentRunningCountPerRpId.getOrElse(rpId, 0)
       val pendingExecs = currentPendingExecutors.getOrElse(rpId, Map.empty[Long, ExecutorPodState])
-      val createdForRpId = newlyCreatedExecutors(rpId)
+      val createdForRpId =
+        newlyCreatedExecutors.getOrElse(rpId, mutable.LinkedHashMap.empty[Long, Long])
 
       if (createdForRpId.isEmpty
         && pendingExecs.isEmpty
