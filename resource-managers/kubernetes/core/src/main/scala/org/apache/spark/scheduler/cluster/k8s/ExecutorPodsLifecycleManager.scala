@@ -103,9 +103,11 @@ private[spark] class ExecutorPodsLifecycleManager(
     // Clean up any pods from the inactive list that don't match any pods from the last snapshot.
     // This makes sure that we don't keep growing that set indefinitely, in case we end up missing
     // an update for some pod.
-    val lastExecutorPods = snapshots.last.executorPods.values.flatten.toMap
-    if (inactivatedPods.nonEmpty && lastExecutorPods.nonEmpty) {
-      inactivatedPods.retain(lastExecutorPods.contains(_))
+    if (snapshots.nonEmpty) {
+      val lastExecutorPods = snapshots.last.executorPods.values.flatten.toMap
+      if (inactivatedPods.nonEmpty && lastExecutorPods.nonEmpty) {
+        inactivatedPods.retain(lastExecutorPods.contains(_))
+      }
     }
 
     // Reconcile the case where Spark claims to know about an executor but the corresponding pod
