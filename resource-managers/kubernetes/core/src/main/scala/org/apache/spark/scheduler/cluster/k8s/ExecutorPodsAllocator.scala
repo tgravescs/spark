@@ -125,7 +125,7 @@ private[spark] class ExecutorPodsAllocator(
     snapshots.map { sn =>
       sn.executorPods.map { case (rpId, execPodState) =>
         val execIdToCreated =
-          newlyCreatedExecutors.getOrElse(rpId, mutable.LinkedHashMap.empty[Long, Long])
+          newlyCreatedExecutors.getOrElseUpdate(rpId, mutable.LinkedHashMap.empty[Long, Long])
         execIdToCreated --= execPodState.keys
       }
     }
@@ -248,7 +248,7 @@ private[spark] class ExecutorPodsAllocator(
               .withLabel(SPARK_ROLE_LABEL, SPARK_POD_EXECUTOR_ROLE)
               .withLabelIn(SPARK_EXECUTOR_ID_LABEL, toDelete.sorted.map(_.toString): _*)
               .delete()
-            newlyCreatedExecutors.getOrElse(rpId,
+            newlyCreatedExecutors.getOrElseUpdate(rpId,
               mutable.LinkedHashMap.empty[Long, Long])--= toDelete
             knownPendingCountGlobal -= knownPendingToDelete.size
           }
@@ -260,7 +260,7 @@ private[spark] class ExecutorPodsAllocator(
       val running = currentRunningCountPerRpId.getOrElse(rpId, 0)
       val pendingExecs = currentPendingExecutors.getOrElse(rpId, Map.empty[Long, ExecutorPodState])
       val createdForRpId =
-        newlyCreatedExecutors.getOrElse(rpId, mutable.LinkedHashMap.empty[Long, Long])
+        newlyCreatedExecutors.getOrElseUpdate(rpId, mutable.LinkedHashMap.empty[Long, Long])
 
       if (createdForRpId.isEmpty
         && pendingExecs.isEmpty
@@ -328,7 +328,9 @@ private[spark] class ExecutorPodsAllocator(
               s"StorageClass ${pvc.getSpec.getStorageClassName}")
             kubernetesClient.persistentVolumeClaims().create(pvc)
           }
-        newlyCreatedExecutors(resourceProfileId)(newExecutorId) = clock.getTimeMillis()
+        val execsForRpId = newlyCreatedExecutors.getOrElseUpdate(resourceProfileId,
+          mutable.LinkedHashMap.empty[Long, Long])
+        execsForRpId(newExecutorId) = clock.getTimeMillis()
         logDebug(s"Requested executor with id $newExecutorId from Kubernetes.")
       } catch {
         case NonFatal(e) =>
