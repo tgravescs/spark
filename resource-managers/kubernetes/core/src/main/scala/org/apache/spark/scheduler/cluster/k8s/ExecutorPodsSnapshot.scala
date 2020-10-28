@@ -36,7 +36,7 @@ case class ExecutorPodsSnapshot(executorPods: Map[Int, Map[Long, ExecutorPodStat
   def withUpdate(updatedPod: Pod): ExecutorPodsSnapshot = {
     val rpId = updatedPod.getMetadata.getLabels.get(SPARK_RESOURCE_PROFILE_ID_LABEL).toInt
     val execIdToStates = toStatesByExecutorIdOrig(Seq(updatedPod))
-    val newExecutorPods = Map(rpId -> (executorPods(rpId) ++ execIdToStates))
+    val newExecutorPods = Map(rpId -> (executorPods.getOrElse(rpId, Map.empty) ++ execIdToStates))
     new ExecutorPodsSnapshot(executorPods ++ newExecutorPods)
   }
 }
