@@ -118,6 +118,9 @@ private[spark] class ExecutorPodsLifecycleManager(
     val lostExecutors = if (snapshots.nonEmpty) {
       // TODO this is same as above
       val lastExecutorPods = snapshots.last.executorPods.values.flatten.toMap
+      logWarning("executor pods is: " + lastExecutorPods +
+        " scheduler exec ids  " +  schedulerBackend.getExecutorIds().map(_.toLong).toSet +
+        " exec ids remove in this round: " + execIdsRemovedInThisRound)
       schedulerBackend.getExecutorIds().map(_.toLong).toSet --
         lastExecutorPods.keySet -- execIdsRemovedInThisRound
     } else {
