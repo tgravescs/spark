@@ -50,6 +50,8 @@ private[spark] class ExecutorPodsAllocator(
   // ResourceProfile id -> total expected executors
   private val totalExpectedExecutorsPerResourceProfileId = new mutable.HashMap[Int, Int]
 
+  private val rpIdToResourceProfile = new mutable.HashMap[Int, ResourceProfile]
+
   private val podAllocationSize = conf.get(KUBERNETES_ALLOCATION_BATCH_SIZE)
 
   private val podAllocationDelay = conf.get(KUBERNETES_ALLOCATION_BATCH_DELAY)
@@ -105,6 +107,9 @@ private[spark] class ExecutorPodsAllocator(
   def setTotalExpectedExecutors(
       resourceProfileToTotalExecs: Map[ResourceProfile, Int]): Unit = synchronized {
     resourceProfileToTotalExecs.map { case (rp, numExecs) =>
+      if (!rpIdToResourceProfile.contains(rp.id)) {
+        rpIdToResourceProfile(rp.id) = rp
+      }
       if (numExecs != getOrUpdateTotalNumExecutorsForRPId(rp.id)) {
         logInfo(s"Driver requested a total number of $numExecs executor(s) " +
           s"for resource profile id: ${rp.id}.")
@@ -309,7 +314,7 @@ private[spark] class ExecutorPodsAllocator(
         driverPod,
         resourceProfileId)
       val resolvedExecutorSpec = executorBuilder.buildFromFeatures(executorConf, secMgr,
-        kubernetesClient)
+        kubernetesClient, rpIdToResourceProfile(resourceProfileId))
       val executorPod = resolvedExecutorSpec.pod
       val podWithAttachedContainer = new PodBuilder(executorPod.pod)
         .editOrNewSpec()

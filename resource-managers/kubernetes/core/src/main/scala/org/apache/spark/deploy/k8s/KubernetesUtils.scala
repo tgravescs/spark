@@ -33,7 +33,7 @@ import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.deploy.k8s.Config.KUBERNETES_FILE_UPLOAD_PATH
 import org.apache.spark.internal.Logging
 import org.apache.spark.launcher.SparkLauncher
-import org.apache.spark.resource.ResourceUtils
+import org.apache.spark.resource.{ExecutorResourceRequest, ResourceUtils}
 import org.apache.spark.util.{Clock, SystemClock, Utils}
 import org.apache.spark.util.Utils.getHadoopFileSystem
 
@@ -224,18 +224,16 @@ private[spark] object KubernetesUtils extends Logging {
    * It returns a set with a tuple of vendor-domain/resource and Quantity for each resource.
    */
   def buildResourcesQuantities(
-      componentName: String,
-      sparkConf: SparkConf): Map[String, Quantity] = {
-    val requests = ResourceUtils.parseAllResourceRequests(sparkConf, componentName)
-    requests.map { request =>
-      val vendorDomain = if (request.vendor.isPresent()) {
-        request.vendor.get()
+      customResources: Set[ExecutorResourceRequest]): Map[String, Quantity] = {
+    customResources.map { request =>
+      val vendorDomain = if (request.vendor.nonEmpty) {
+        request.vendor
       } else {
-        throw new SparkException(s"Resource: ${request.id.resourceName} was requested, " +
+        throw new SparkException(s"Resource: ${request.resourceName} was requested, " +
           "but vendor was not specified.")
       }
       val quantity = new Quantity(request.amount.toString)
-      (KubernetesConf.buildKubernetesResourceName(vendorDomain, request.id.resourceName), quantity)
+      (KubernetesConf.buildKubernetesResourceName(vendorDomain, request.resourceName), quantity)
     }.toMap
   }
 

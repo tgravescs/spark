@@ -17,6 +17,7 @@
 package org.apache.spark.deploy.k8s.features
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 
 import io.fabric8.kubernetes.api.model._
 
@@ -27,13 +28,15 @@ import org.apache.spark.deploy.k8s.Constants._
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config._
 import org.apache.spark.internal.config.Python._
+import org.apache.spark.resource.{ExecutorResourceRequest, ResourceProfile}
 import org.apache.spark.rpc.RpcEndpointAddress
 import org.apache.spark.scheduler.cluster.CoarseGrainedSchedulerBackend
 import org.apache.spark.util.Utils
 
 private[spark] class BasicExecutorFeatureStep(
     kubernetesConf: KubernetesExecutorConf,
-    secMgr: SecurityManager)
+    secMgr: SecurityManager,
+    resourceProfile: ResourceProfile)
   extends KubernetesFeatureConfigStep with Logging {
 
   // Consider moving some of these fields to KubernetesConf or KubernetesExecutorSpecificConf
@@ -50,25 +53,41 @@ private[spark] class BasicExecutorFeatureStep(
     kubernetesConf.get(DRIVER_HOST_ADDRESS),
     kubernetesConf.sparkConf.getInt(DRIVER_PORT.key, DEFAULT_DRIVER_PORT),
     CoarseGrainedSchedulerBackend.ENDPOINT_NAME).toString
-  private val executorMemoryMiB = kubernetesConf.get(EXECUTOR_MEMORY)
-  private val executorMemoryString = kubernetesConf.get(
-    EXECUTOR_MEMORY.key, EXECUTOR_MEMORY.defaultValueString)
 
-  private val memoryOverheadMiB = kubernetesConf
+  private var executorMemoryMiB = kubernetesConf.get(EXECUTOR_MEMORY)
+
+  private var memoryOverheadMiB = kubernetesConf
     .get(EXECUTOR_MEMORY_OVERHEAD)
     .getOrElse(math.max(
       (kubernetesConf.get(MEMORY_OVERHEAD_FACTOR) * executorMemoryMiB).toInt,
       MEMORY_OVERHEAD_MIN_MIB))
-  private val executorMemoryWithOverhead = executorMemoryMiB + memoryOverheadMiB
-  private val executorMemoryTotal =
-    if (kubernetesConf.get(APP_RESOURCE_TYPE) == Some(APP_RESOURCE_TYPE_PYTHON)) {
-      executorMemoryWithOverhead +
-        kubernetesConf.get(PYSPARK_EXECUTOR_MEMORY).map(_.toInt).getOrElse(0)
-    } else {
-      executorMemoryWithOverhead
-    }
 
-  private val executorCores = kubernetesConf.sparkConf.get(EXECUTOR_CORES)
+  private var executorCores = kubernetesConf.sparkConf.get(EXECUTOR_CORES)
+
+  private var pysparkMemoryMiB =
+    kubernetesConf.get(PYSPARK_EXECUTOR_MEMORY).map(_.toLong).getOrElse(0)
+
+  // TODO - https://github.com/apache/spark/pull/29477/files
+  // var offHeapMem =
+  private val customResources = new mutable.HashSet[ExecutorResourceRequest]
+  resourceProfile.executorResources.foreach { case (resource, execReq) =>
+    resource match {
+      case ResourceProfile.MEMORY =>
+        executorMemoryMiB = execReq.amount
+      case ResourceProfile.OVERHEAD_MEM =>
+        memoryOverheadMiB = execReq.amount
+      case ResourceProfile.PYSPARK_MEM =>
+        pysparkMemoryMiB = execReq.amount
+      // case ResourceProfile.OFFHEAP_MEM =>
+      case ResourceProfile.CORES =>
+        executorCores = execReq.amount.toInt
+      case rName =>
+        customResources += execReq
+    }
+  }
+
+  private val executorMemoryString = s"${executorMemoryMiB}Mi"
+
   private val executorCoresRequest =
     if (kubernetesConf.sparkConf.contains(KUBERNETES_EXECUTOR_REQUEST_CORES)) {
       kubernetesConf.get(KUBERNETES_EXECUTOR_REQUEST_CORES).get
@@ -76,6 +95,14 @@ private[spark] class BasicExecutorFeatureStep(
       executorCores.toString
     }
   private val executorLimitCores = kubernetesConf.get(KUBERNETES_EXECUTOR_LIMIT_CORES)
+
+  private val executorMemoryWithOverhead = executorMemoryMiB + memoryOverheadMiB
+  private val executorMemoryTotal =
+    if (kubernetesConf.get(APP_RESOURCE_TYPE) == Some(APP_RESOURCE_TYPE_PYTHON)) {
+      executorMemoryWithOverhead + pysparkMemoryMiB
+    } else {
+      executorMemoryWithOverhead
+    }
 
   override def configurePod(pod: SparkPod): SparkPod = {
     val name = s"$executorPodNamePrefix-exec-${kubernetesConf.executorId}"
@@ -93,8 +120,7 @@ private[spark] class BasicExecutorFeatureStep(
     val executorCpuQuantity = new Quantity(executorCoresRequest)
 
     val executorResourceQuantities =
-      KubernetesUtils.buildResourcesQuantities(SPARK_EXECUTOR_PREFIX,
-        kubernetesConf.sparkConf)
+      KubernetesUtils.buildResourcesQuantities(customResources.toSet)
 
     val executorEnv: Seq[EnvVar] = {
         (Seq(
@@ -105,7 +131,7 @@ private[spark] class BasicExecutorFeatureStep(
           // This is to set the SPARK_CONF_DIR to be /opt/spark/conf
           (ENV_SPARK_CONF_DIR, SPARK_CONF_DIR_INTERNAL),
           (ENV_EXECUTOR_ID, kubernetesConf.executorId),
-          (ENV_RESOURCE_PROFILE_ID, kubernetesConf.resourceProfileId.toString)
+          (ENV_RESOURCE_PROFILE_ID, resourceProfile.id.toString)
         ) ++ kubernetesConf.environment).map { case (k, v) =>
           new EnvVarBuilder()
             .withName(k)
