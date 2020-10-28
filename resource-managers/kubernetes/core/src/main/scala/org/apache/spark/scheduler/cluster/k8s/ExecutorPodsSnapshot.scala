@@ -34,8 +34,10 @@ case class ExecutorPodsSnapshot(executorPods: Map[Int, Map[Long, ExecutorPodStat
   import ExecutorPodsSnapshot._
 
   def withUpdate(updatedPod: Pod): ExecutorPodsSnapshot = {
-    val newExecutorPods = executorPods ++ toStatesByExecutorId(Seq(updatedPod))
-    new ExecutorPodsSnapshot(newExecutorPods)
+    val rpId = updatedPod.getMetadata.getLabels.get(SPARK_RESOURCE_PROFILE_ID_LABEL).toInt
+    val execIdToStates = toStatesByExecutorIdOrig(Seq(updatedPod))
+    val newExecutorPods = Map(rpId -> (executorPods(rpId) ++ execIdToStates))
+    new ExecutorPodsSnapshot(executorPods ++ newExecutorPods)
   }
 }
 
@@ -51,6 +53,12 @@ object ExecutorPodsSnapshot extends Logging {
 
   def setShouldCheckAllContainers(watchAllContainers: Boolean): Unit = {
     shouldCheckAllContainers = watchAllContainers
+  }
+
+  private def toStatesByExecutorIdOrig(executorPods: Seq[Pod]): Map[Long, ExecutorPodState] = {
+    executorPods.map { pod =>
+      (pod.getMetadata.getLabels.get(SPARK_EXECUTOR_ID_LABEL).toLong, toState(pod))
+    }.toMap
   }
 
   // TODO - rename
