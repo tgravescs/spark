@@ -124,7 +124,8 @@ private[spark] class ExecutorPodsAllocator(
 
     snapshots.map { sn =>
       sn.executorPods.map { case (rpId, execPodState) =>
-        val execIdToCreated = newlyCreatedExecutors(rpId)
+        val execIdToCreated =
+          newlyCreatedExecutors.getOrElse(rpId, mutable.LinkedHashMap.empty[Long, Long])
         execIdToCreated --= execPodState.keys
       }
     }
