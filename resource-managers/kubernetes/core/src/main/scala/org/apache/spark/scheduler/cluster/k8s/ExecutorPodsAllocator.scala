@@ -109,7 +109,7 @@ private[spark] class ExecutorPodsAllocator(
   // TODO - locking?
   def setTotalExpectedExecutors(
       resourceProfileToTotalExecs: Map[ResourceProfile, Int]): Unit = synchronized {
-    resourceProfileToTotalExecs.map { case (rp, numExecs) =>
+    resourceProfileToTotalExecs.foreach { case (rp, numExecs) =>
       if (!rpIdToResourceProfile.contains(rp.id)) {
         rpIdToResourceProfile(rp.id) = rp
       }
@@ -180,7 +180,8 @@ private[spark] class ExecutorPodsAllocator(
       _deletedExecutorIds = _deletedExecutorIds.filter(existingExecs.contains)
     }
 
-    // map the pods into per resource profile id so we can track them
+    // TODO - how much overhead? this was cleaner then storing it in the snapshot
+    // map the pods into per ResourceProfile id so we can check per ResourceProfile
     val rpIdToExecsAndPodState =
       mutable.HashMap[Int, mutable.LinkedHashMap[Long, ExecutorPodState]]()
     lastSnapshot.executorPods.foreach { case (execId, execPodState) =>
@@ -193,6 +194,7 @@ private[spark] class ExecutorPodsAllocator(
     var knownPendingCount = 0
     var totalRunningCount = 0
     totalExpectedExecutorsPerResourceProfileId.foreach { case (rpId, targetNum) =>
+      // TODO - do we check to see if any in lastSnapshot but not an rpId in expected?
 
       val snapshotsForRpId = rpIdToExecsAndPodState.getOrElse(rpId, mutable.LinkedHashMap.empty)
 
@@ -215,6 +217,8 @@ private[spark] class ExecutorPodsAllocator(
           // s"${newlyCreatedExecutors.size} unacknowledged.")
       }
 
+      // its expected newlyCreatedExecutors should be small since we only allocate in small
+      // batches - podAllocationSize
       val newlyCreatedExecutorsForRpId =
         newlyCreatedExecutors.filter { case (execid, (waitingRpId, _)) =>
           rpId == waitingRpId
@@ -264,8 +268,7 @@ private[spark] class ExecutorPodsAllocator(
         }
       }
 
-      if (newlyCreatedExecutorsForRpId.isEmpty
-        && knownPodCount < targetNum) {
+      if (newlyCreatedExecutorsForRpId.isEmpty && knownPodCount < targetNum) {
         requestNewExecutors(targetNum, knownPodCount, applicationId, rpId)
       }
     }

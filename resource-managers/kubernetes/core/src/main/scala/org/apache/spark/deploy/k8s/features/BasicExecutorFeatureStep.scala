@@ -86,7 +86,7 @@ private[spark] class BasicExecutorFeatureStep(
     }
   }
 
-  private val executorMemoryString = s"${executorMemoryMiB}Mi"
+  private val executorMemoryString = s"${executorMemoryMiB}m"
 
   private val executorCoresRequest =
     if (kubernetesConf.sparkConf.contains(KUBERNETES_EXECUTOR_REQUEST_CORES)) {
@@ -134,6 +134,8 @@ private[spark] class BasicExecutorFeatureStep(
     val executorCpuQuantity = new Quantity(executorCoresRequest)
 
     val executorResourceQuantities = buildExecutorResourcesQuantities(customResources.toSet)
+    // val executorResourceQuantities =
+    //   KubernetesUtils.buildResourcesQuantities(SPARK_DRIVER_PREFIX, kubernetesConf.sparkConf)
 
     val executorEnv: Seq[EnvVar] = {
         (Seq(
