@@ -216,10 +216,10 @@ private[spark] class ExecutorPodsAllocator(
     // executors than expected.
     totalExpectedExecutorsPerResourceProfileId.map { case (rpId, targetNum) =>
       // Do we need to check for missing?
-      val pendingExecs = currentPendingExecutors(rpId)
+      val pendingExecs = currentPendingExecutors.getOrElse(rpId, Map.empty[Long, ExecutorPodState])
       // TODO this was used for logging outside this, what do we do with it?
       var knownPendingCount = pendingExecs.size
-      val running = currentRunningCountPerRpId(rpId)
+      val running = currentRunningCountPerRpId.getOrElse(rpId, 0)
       val newlyCreatedForRpId = newlyCreatedExecutors(rpId)
       val numNewlyCreatedExecutorsForRpId = newlyCreatedForRpId.size
       val knownPodCount = running + knownPendingCount + numNewlyCreatedExecutorsForRpId
@@ -254,8 +254,8 @@ private[spark] class ExecutorPodsAllocator(
     }
 
     totalExpectedExecutorsPerResourceProfileId.map { case (rpId, targetNum) =>
-      val running = currentRunningCountPerRpId(rpId)
-      val pendingExecs = currentPendingExecutors(rpId)
+      val running = currentRunningCountPerRpId.getOrElse(rpId, 0)
+      val pendingExecs = currentPendingExecutors.getOrElse(rpId, Map.empty[Long, ExecutorPodState])
       val createdForRpId = newlyCreatedExecutors(rpId)
 
       if (createdForRpId.isEmpty
