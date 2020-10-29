@@ -323,7 +323,7 @@ class ExecutorPodsAllocatorSuite extends SparkFunSuite with BeforeAndAfter {
     verify(podOperations, times(7)).create(any())
     verify(podOperations).withLabelIn(SPARK_EXECUTOR_ID_LABEL, "5", "6")
     verify(podOperations).withLabelIn(SPARK_EXECUTOR_ID_LABEL, "7")
-    verify(podOperations).delete()
+    verify(podOperations, times(2)).delete()
     assert(podsAllocatorUnderTest.isDeleted("5"))
     assert(podsAllocatorUnderTest.isDeleted("6"))
     assert(podsAllocatorUnderTest.isDeleted("7"))
