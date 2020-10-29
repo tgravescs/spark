@@ -46,8 +46,8 @@ private[spark] class ExecutorPodsAllocator(
 
   private val EXECUTOR_ID_COUNTER = new AtomicLong(0L)
 
-  // TODO - verify locking
-  // ResourceProfile id -> total expected executors
+  // ResourceProfile id -> total expected executors per profile, currently we don't remove
+  // any resource profiles - https://issues.apache.org/jira/browse/SPARK-30749
   private val totalExpectedExecutorsPerResourceProfileId = new mutable.HashMap[Int, Int]
 
   private val rpIdToResourceProfile = new mutable.HashMap[Int, ResourceProfile]
@@ -100,19 +100,15 @@ private[spark] class ExecutorPodsAllocator(
     }
   }
 
-  // TODO - locking?
   private def getOrUpdateTotalNumExecutorsForRPId(rpId: Int): Int = synchronized {
     totalExpectedExecutorsPerResourceProfileId.getOrElseUpdate(rpId,
       SchedulerBackendUtils.getInitialTargetExecutorNumber(conf))
   }
 
-  // TODO - locking?
   def setTotalExpectedExecutors(
       resourceProfileToTotalExecs: Map[ResourceProfile, Int]): Unit = synchronized {
     resourceProfileToTotalExecs.foreach { case (rp, numExecs) =>
-      if (!rpIdToResourceProfile.contains(rp.id)) {
-        rpIdToResourceProfile(rp.id) = rp
-      }
+      rpIdToResourceProfile.getOrElseUpdate(rp.id, rp)
       if (numExecs != getOrUpdateTotalNumExecutorsForRPId(rp.id)) {
         logInfo(s"Driver requested a total number of $numExecs executor(s) " +
           s"for resource profile id: ${rp.id}.")
@@ -182,20 +178,23 @@ private[spark] class ExecutorPodsAllocator(
 
     // TODO - how much overhead? this was cleaner then storing it in the snapshot
     // map the pods into per ResourceProfile id so we can check per ResourceProfile
-    val rpIdToExecsAndPodState =
-      mutable.HashMap[Int, mutable.LinkedHashMap[Long, ExecutorPodState]]()
-    lastSnapshot.executorPods.foreach { case (execId, execPodState) =>
-      val rpId = execPodState.pod.getMetadata.getLabels.get(SPARK_RESOURCE_PROFILE_ID_LABEL).toInt
-      val execPods = rpIdToExecsAndPodState.getOrElseUpdate(rpId,
-        mutable.LinkedHashMap[Long, ExecutorPodState]())
-      execPods(execId) = execPodState
+    // fast path if not using other ResourceProfiles
+    val rpIdToExecsAndPodState = mutable.HashMap[Int, mutable.LinkedHashMap[Long, ExecutorPodState]]()
+    if (totalExpectedExecutorsPerResourceProfileId.size <= 1) {
+      rpIdToExecsAndPodState(ResourceProfile.DEFAULT_RESOURCE_PROFILE_ID) =
+        mutable.LinkedHashMap.empty ++= lastSnapshot.executorPods
+    } else {
+      lastSnapshot.executorPods.foreach { case (execId, execPodState) =>
+        val rpId = execPodState.pod.getMetadata.getLabels.get(SPARK_RESOURCE_PROFILE_ID_LABEL).toInt
+        val execPods = rpIdToExecsAndPodState.getOrElseUpdate(rpId,
+          mutable.LinkedHashMap[Long, ExecutorPodState]())
+        execPods(execId) = execPodState
+      }
     }
 
     var knownPendingCount = 0
     var totalRunningCount = 0
     totalExpectedExecutorsPerResourceProfileId.foreach { case (rpId, targetNum) =>
-      // TODO - do we check to see if any in lastSnapshot but not an rpId in expected?
-
       val snapshotsForRpId = rpIdToExecsAndPodState.getOrElse(rpId, mutable.LinkedHashMap.empty)
 
       val currentRunningCount = snapshotsForRpId.values.count {
