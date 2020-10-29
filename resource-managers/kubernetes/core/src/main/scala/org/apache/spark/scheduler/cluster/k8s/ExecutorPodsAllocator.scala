@@ -301,7 +301,7 @@ private[spark] class ExecutorPodsAllocator(
       expected: Int, running: Int, applicationId: String, resourceProfileId: Int): Unit = {
     val numExecutorsToAllocate = math.min(expected - running, podAllocationSize)
     logInfo(s"Going to request $numExecutorsToAllocate executors from Kubernetes for " +
-      s"ResourceProfile Id: $resourceProfileId.")
+      s"ResourceProfile Id: $resourceProfileId, target: $expected running: $running.")
     for ( _ <- 0 until numExecutorsToAllocate) {
       val newExecutorId = EXECUTOR_ID_COUNTER.incrementAndGet()
       val executorConf = KubernetesConf.createExecutorConf(
