@@ -48,7 +48,7 @@ private[spark] class ExecutorPodsAllocator(
 
   // ResourceProfile id -> total expected executors per profile, currently we don't remove
   // any resource profiles - https://issues.apache.org/jira/browse/SPARK-30749
-  private val totalExpectedExecutorsPerResourceProfileId = new mutable.HashMap[Int, Int]
+  private val totalExpectedExecutorsPerResourceProfileId = new mutable.LinkedHashMap[Int, Int]
 
   private val rpIdToResourceProfile = new mutable.HashMap[Int, ResourceProfile]
 
@@ -176,7 +176,6 @@ private[spark] class ExecutorPodsAllocator(
       _deletedExecutorIds = _deletedExecutorIds.filter(existingExecs.contains)
     }
 
-    // TODO - how much overhead? this was cleaner then storing it in the snapshot
     // map the pods into per ResourceProfile id so we can check per ResourceProfile
     // fast path if not using other ResourceProfiles
     val rpIdToExecsAndPodState = mutable.HashMap[Int, mutable.LinkedHashMap[Long, ExecutorPodState]]()
@@ -194,6 +193,8 @@ private[spark] class ExecutorPodsAllocator(
 
     var knownPendingCount = 0
     var totalRunningCount = 0
+    // This is going to request the executors in order the resource profiles were
+    // added. We aren't using any priorities based on the resource profiles.
     totalExpectedExecutorsPerResourceProfileId.foreach { case (rpId, targetNum) =>
       val snapshotsForRpId = rpIdToExecsAndPodState.getOrElse(rpId, mutable.LinkedHashMap.empty)
 
@@ -208,20 +209,19 @@ private[spark] class ExecutorPodsAllocator(
         case _ => false
       }
 
-      if (snapshotsForRpId.nonEmpty) {
-        logDebug(s"Pod for ResourceProfile Id: $rpId " +
-          s"allocation status: $currentRunningCount running, " +
-          s"${currentPendingExecutors.size} pending.")
-          // TODO add back?
-          // s"${newlyCreatedExecutors.size} unacknowledged.")
-      }
-
       // its expected newlyCreatedExecutors should be small since we only allocate in small
       // batches - podAllocationSize
       val newlyCreatedExecutorsForRpId =
-        newlyCreatedExecutors.filter { case (execid, (waitingRpId, _)) =>
-          rpId == waitingRpId
-        }
+      newlyCreatedExecutors.filter { case (execid, (waitingRpId, _)) =>
+        rpId == waitingRpId
+      }
+
+      if (snapshotsForRpId.nonEmpty) {
+        logDebug(s"Pod for ResourceProfile Id: $rpId " +
+          s"allocation status: $currentRunningCount running, " +
+          s"${currentPendingExecutors.size} pending. " +
+          s"${newlyCreatedExecutorsForRpId.size} unacknowledged.")
+      }
 
       // This variable is used later to print some debug logs. It's updated when cleaning up
       // excess pod requests, since currentPendingExecutors is immutable.
