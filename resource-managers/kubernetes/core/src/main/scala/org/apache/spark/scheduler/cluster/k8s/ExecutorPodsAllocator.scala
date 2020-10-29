@@ -17,8 +17,10 @@
 package org.apache.spark.scheduler.cluster.k8s
 
 import java.time.Instant
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 
+import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.util.control.NonFatal
 
@@ -48,7 +50,7 @@ private[spark] class ExecutorPodsAllocator(
 
   // ResourceProfile id -> total expected executors per profile, currently we don't remove
   // any resource profiles - https://issues.apache.org/jira/browse/SPARK-30749
-  private val totalExpectedExecutorsPerResourceProfileId = new mutable.LinkedHashMap[Int, Int]
+  private val totalExpectedExecutorsPerResourceProfileId = new ConcurrentHashMap[Int, Int]()
 
   private val rpIdToResourceProfile = new mutable.HashMap[Int, ResourceProfile]
 
@@ -67,6 +69,8 @@ private[spark] class ExecutorPodsAllocator(
 
   private val shouldDeleteExecutors = conf.get(KUBERNETES_DELETE_EXECUTORS)
 
+  private val initialTargetExecutors = SchedulerBackendUtils.getInitialTargetExecutorNumber(conf)
+
   private val driverPod = kubernetesDriverPodName
     .map(name => Option(kubernetesClient.pods()
       .withName(name)
@@ -78,10 +82,7 @@ private[spark] class ExecutorPodsAllocator(
   // ResourceProfile ID to Executor IDs where
   // Executor IDs that have been requested from Kubernetes but have not been detected in any
   // snapshot yet. Mapped to the timestamp when they were created.
-  // private val newlyCreatedExecutors = mutable.LinkedHashMap.empty[Long, Long]
-  // private val newlyCreatedExecutors = mutable.HashMap[Int, mutable.LinkedHashMap[Long, Long]]()
   private val newlyCreatedExecutors = mutable.LinkedHashMap[Long, (Int, Long)]()
-
 
   private val dynamicAllocationEnabled = Utils.isDynamicAllocationEnabled(conf)
 
@@ -100,9 +101,8 @@ private[spark] class ExecutorPodsAllocator(
     }
   }
 
-  private def getOrUpdateTotalNumExecutorsForRPId(rpId: Int): Int = synchronized {
-    totalExpectedExecutorsPerResourceProfileId.getOrElseUpdate(rpId,
-      SchedulerBackendUtils.getInitialTargetExecutorNumber(conf))
+  private def getOrUpdateTotalNumExecutorsForRPId(rpId: Int): Int = {
+    totalExpectedExecutorsPerResourceProfileId.computeIfAbsent(rpId, _ => initialTargetExecutors)
   }
 
   def setTotalExpectedExecutors(
@@ -124,7 +124,7 @@ private[spark] class ExecutorPodsAllocator(
 
   private def onNewSnapshots(
       applicationId: String,
-      snapshots: Seq[ExecutorPodsSnapshot]): Unit = synchronized {
+      snapshots: Seq[ExecutorPodsSnapshot]): Unit = {
 
     newlyCreatedExecutors --= snapshots.flatMap(_.executorPods.keys)
 
@@ -176,8 +176,6 @@ private[spark] class ExecutorPodsAllocator(
       _deletedExecutorIds = _deletedExecutorIds.filter(existingExecs.contains)
     }
 
-    logWarning("newly createdi is: " + newlyCreatedExecutors)
-
     // map the pods into per ResourceProfile id so we can check per ResourceProfile
     // fast path if not using other ResourceProfiles
     val rpIdToExecsAndPodState = mutable.HashMap[Int, mutable.LinkedHashMap[Long, ExecutorPodState]]()
@@ -193,23 +191,23 @@ private[spark] class ExecutorPodsAllocator(
       }
     }
 
-    var knownPendingCount = 0
-    var totalRunningCount = 0
-    // This is going to request the executors in order the resource profiles were
-    // added. We aren't using any priorities based on the resource profiles.
-    totalExpectedExecutorsPerResourceProfileId.foreach { case (rpId, targetNum) =>
+    var totalPendingCount = 0
+    // The order we request executors is not guaranteed.
+    totalExpectedExecutorsPerResourceProfileId.asScala.foreach { case (rpId, targetNum) =>
       val snapshotsForRpId = rpIdToExecsAndPodState.getOrElse(rpId, mutable.LinkedHashMap.empty)
 
       val currentRunningCount = snapshotsForRpId.values.count {
         case PodRunning(_) => true
         case _ => false
       }
-      totalRunningCount += currentRunningCount
 
       val currentPendingExecutors = snapshotsForRpId.filter {
         case (_, PodPending(_)) => true
         case _ => false
       }
+      // This variable is used later to print some debug logs. It's updated when cleaning up
+      // excess pod requests, since currentPendingExecutors is immutable.
+      var knownPendingCount = currentPendingExecutors.size
 
       // its expected newlyCreatedExecutors should be small since we only allocate in small
       // batches - podAllocationSize
@@ -226,10 +224,6 @@ private[spark] class ExecutorPodsAllocator(
           s"${currentPendingExecutors.size} pending. " +
           s"${newlyCreatedExecutorsForRpId.size} unacknowledged.")
       }
-
-      // This variable is used later to print some debug logs. It's updated when cleaning up
-      // excess pod requests, since currentPendingExecutors is immutable.
-      knownPendingCount += currentPendingExecutors.size
 
       // It's possible that we have outstanding pods that are outdated when dynamic allocation
       // decides to downscale the application. So check if we can release any pending pods early
@@ -276,31 +270,29 @@ private[spark] class ExecutorPodsAllocator(
       if (newlyCreatedExecutorsForRpId.isEmpty && knownPodCount < targetNum) {
         requestNewExecutors(targetNum, knownPodCount, applicationId, rpId)
       }
-    }
+      totalPendingCount += knownPendingCount
 
+      // The code below just prints debug messages, which are only useful when there's a change
+      // in the snapshot state. Since the messages are a little spammy, avoid them when we know
+      // there are no useful updates.
+      if (log.isDebugEnabled && snapshots.nonEmpty) {
+        val outstanding = knownPendingCount + newlyCreatedExecutorsForRpId.size
+        if (currentRunningCount >= targetNum && !dynamicAllocationEnabled) {
+          logDebug(s"Current number of running executors for ResourceProfile Id $rpId is " +
+            "equal to the number of requested executors. Not scaling up further.")
+        } else {
+          if (outstanding > 0) {
+            logDebug(s"Still waiting for $outstanding executors for ResourceProfile " +
+              s"Id $rpId before requesting more.")
+          }
+        }
+      }
+    }
     deletedExecutorIds = _deletedExecutorIds
 
     // Update the flag that helps the setTotalExpectedExecutors() callback avoid triggering this
     // update method when not needed.
-    hasPendingPods.set(knownPendingCount + newlyCreatedExecutors.size > 0)
-
-    // The code below just prints debug messages, which are only useful when there's a change
-    // in the snapshot state. Since the messages are a little spammy, avoid them when we know
-    // there are no useful updates.
-    if (!log.isDebugEnabled || snapshots.isEmpty) {
-      return
-    }
-
-    val totalExpected = totalExpectedExecutorsPerResourceProfileId.values.sum
-    if (totalRunningCount >= totalExpected && !dynamicAllocationEnabled) {
-      logDebug("Current number of running executors is equal to the number of requested" +
-        " executors. Not scaling up further.")
-    } else {
-      val outstanding = knownPendingCount + newlyCreatedExecutors.size
-      if (outstanding > 0) {
-        logDebug(s"Still waiting for $outstanding executors before requesting more.")
-      }
-    }
+    hasPendingPods.set(totalPendingCount + newlyCreatedExecutors.size > 0)
   }
 
   private def requestNewExecutors(
