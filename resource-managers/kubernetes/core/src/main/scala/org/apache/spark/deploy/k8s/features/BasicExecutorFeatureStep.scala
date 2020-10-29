@@ -67,8 +67,8 @@ private[spark] class BasicExecutorFeatureStep(
   private var pysparkMemoryMiB =
     kubernetesConf.get(PYSPARK_EXECUTOR_MEMORY).map(_.toInt).getOrElse(0).toLong
 
-  // TODO - https://github.com/apache/spark/pull/29477/files
-  // var offHeapMem =
+  private var memoryOffHeapMiB = Utils.executorOffHeapMemorySizeAsMb(kubernetesConf.sparkConf)
+
   private val customResources = new mutable.HashSet[ExecutorResourceRequest]
   resourceProfile.executorResources.foreach { case (resource, execReq) =>
     resource match {
@@ -78,7 +78,8 @@ private[spark] class BasicExecutorFeatureStep(
         memoryOverheadMiB = execReq.amount
       case ResourceProfile.PYSPARK_MEM =>
         pysparkMemoryMiB = execReq.amount
-      // case ResourceProfile.OFFHEAP_MEM =>
+      case ResourceProfile.OFFHEAP_MEM =>
+        memoryOffHeapMiB = execReq.amount.toInt
       case ResourceProfile.CORES =>
         executorCores = execReq.amount.toInt
       case rName =>
@@ -96,7 +97,8 @@ private[spark] class BasicExecutorFeatureStep(
     }
   private val executorLimitCores = kubernetesConf.get(KUBERNETES_EXECUTOR_LIMIT_CORES)
 
-  private val executorMemoryWithOverhead = executorMemoryMiB + memoryOverheadMiB
+  private val executorMemoryWithOverhead =
+    executorMemoryMiB + memoryOverheadMiB + memoryOffHeapMiB
   private val executorMemoryTotal =
     if (kubernetesConf.get(APP_RESOURCE_TYPE) == Some(APP_RESOURCE_TYPE_PYTHON)) {
       executorMemoryWithOverhead + pysparkMemoryMiB

@@ -34,7 +34,7 @@ import org.apache.spark.deploy.k8s.features.KubernetesFeaturesTestUtils.TestReso
 import org.apache.spark.internal.config
 import org.apache.spark.internal.config._
 import org.apache.spark.internal.config.Python._
-import org.apache.spark.resource.{ResourceID, ResourceProfile}
+import org.apache.spark.resource._
 import org.apache.spark.resource.ResourceUtils._
 import org.apache.spark.resource.TestResourceIDs._
 import org.apache.spark.rpc.RpcEndpointAddress
@@ -262,6 +262,55 @@ class BasicExecutorFeatureStepSuite extends SparkFunSuite with BeforeAndAfter {
     assert(!KubernetesFeaturesTestUtils.containerHasEnvVar(
       executor.container, SecurityManager.ENV_AUTH_SECRET))
   }
+
+  test("SPARK-32661 test executor offheap memory") {
+    baseConf.set(MEMORY_OFFHEAP_ENABLED, true)
+    baseConf.set("spark.memory.offHeap.size", "42m")
+
+    val step = new BasicExecutorFeatureStep(newExecutorConf(), new SecurityManager(baseConf),
+      defaultProfile(baseConf))
+    val executor = step.configurePod(SparkPod.initialPod())
+    // This is checking that basic executor + executorMemory = 1408 + 42 = 1450
+    assert(amountAndFormat(executor.container.getResources.getRequests.get("memory")) === "1450Mi")
+  }
+
+  test("basic resourceprofile") {
+    val rpb = new ResourceProfileBuilder()
+    val ereq = new ExecutorResourceRequests()
+    val treq = new TaskResourceRequests()
+    ereq.cores(4).memory("2g").memoryOverhead("1g").pysparkMemory("3g")
+    treq.cpus(2)
+    rpb.require(ereq).require(treq)
+    val rp = rpb.build
+    val step = new BasicExecutorFeatureStep(newExecutorConf(), new SecurityManager(baseConf), rp)
+    val executor = step.configurePod(SparkPod.initialPod())
+
+    assert(amountAndFormat(executor.container.getResources
+      .getLimits.get("memory")) === "6144Mi")
+    assert(amountAndFormat(executor.container.getResources
+      .getRequests.get("cpus")) === "4")
+  }
+
+  test("resourceprofile with gpus") {
+    val rpb = new ResourceProfileBuilder()
+    val ereq = new ExecutorResourceRequests()
+    val treq = new TaskResourceRequests()
+    ereq.cores(2).resource("gpu", 2, "/path/getGpusResources.sh", "nvidia.com")
+    treq.cpus(1)
+    rpb.require(ereq).require(treq)
+    val rp = rpb.build
+    val step = new BasicExecutorFeatureStep(newExecutorConf(), new SecurityManager(baseConf), rp)
+    val executor = step.configurePod(SparkPod.initialPod())
+
+    assert(amountAndFormat(executor.container.getResources
+      .getLimits.get("memory")) === "1408Mi")
+    assert(amountAndFormat(executor.container.getResources
+      .getRequests.get("cpus")) === "2")
+
+    assert(executor.container.getResources.getLimits.size() === 2)
+    assert(amountAndFormat(executor.container.getResources.getLimits.get("gpu")) === 2)
+  }
+
 
   // There is always exactly one controller reference, and it points to the driver pod.
   private def checkOwnerReferences(executor: Pod, driverPodUid: String): Unit = {
