@@ -175,7 +175,7 @@ private[spark] class ExecutorPodsAllocator(
       val existingExecs = lastSnapshot.executorPods.keySet
       _deletedExecutorIds = _deletedExecutorIds.filter(existingExecs.contains)
     }
-    
+
     logWarning("newly createdi is: " + newlyCreatedExecutors)
 
     // map the pods into per ResourceProfile id so we can check per ResourceProfile
@@ -213,8 +213,10 @@ private[spark] class ExecutorPodsAllocator(
 
       // its expected newlyCreatedExecutors should be small since we only allocate in small
       // batches - podAllocationSize
+      logWarning("getting newly created for rpid $rpId")
       val newlyCreatedExecutorsForRpId =
       newlyCreatedExecutors.filter { case (execid, (waitingRpId, _)) =>
+        logWarning(s"new ecreted filter $rpId checking: $waitingRpId")
         rpId == waitingRpId
       }
 
