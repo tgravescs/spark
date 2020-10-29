@@ -176,8 +176,8 @@ private[spark] class ExecutorPodsAllocator(
       _deletedExecutorIds = _deletedExecutorIds.filter(existingExecs.contains)
     }
 
-    // map the pods into per ResourceProfile id so we can check per ResourceProfile
-    // fast path if not using other ResourceProfiles
+    // Map the pods into per ResourceProfile id so we can check per ResourceProfile,
+    // add a fast path if not using other ResourceProfiles.
     val rpIdToExecsAndPodState = mutable.HashMap[Int, mutable.LinkedHashMap[Long, ExecutorPodState]]()
     if (totalExpectedExecutorsPerResourceProfileId.size <= 1) {
       rpIdToExecsAndPodState(ResourceProfile.DEFAULT_RESOURCE_PROFILE_ID) =
@@ -192,7 +192,7 @@ private[spark] class ExecutorPodsAllocator(
     }
 
     var totalPendingCount = 0
-    // The order we request executors is not guaranteed.
+    // The order we request executors for each ResourceProfile is not guaranteed.
     totalExpectedExecutorsPerResourceProfileId.asScala.foreach { case (rpId, targetNum) =>
       val snapshotsForRpId = rpIdToExecsAndPodState.getOrElse(rpId, mutable.LinkedHashMap.empty)
 
@@ -209,12 +209,10 @@ private[spark] class ExecutorPodsAllocator(
       // excess pod requests, since currentPendingExecutors is immutable.
       var knownPendingCount = currentPendingExecutors.size
 
-      // its expected newlyCreatedExecutors should be small since we only allocate in small
-      // batches - podAllocationSize
       val newlyCreatedExecutorsForRpId =
-      newlyCreatedExecutors.filter { case (execid, (waitingRpId, _)) =>
-        rpId == waitingRpId
-      }
+        newlyCreatedExecutors.filter { case (execid, (waitingRpId, _)) =>
+          rpId == waitingRpId
+        }
 
       if (snapshotsForRpId.nonEmpty) {
         logDebug(s"Pod for ResourceProfile Id: $rpId " +
@@ -292,7 +290,10 @@ private[spark] class ExecutorPodsAllocator(
   }
 
   private def requestNewExecutors(
-      expected: Int, running: Int, applicationId: String, resourceProfileId: Int): Unit = {
+      expected: Int,
+      running: Int,
+      applicationId: String,
+      resourceProfileId: Int): Unit = {
     val numExecutorsToAllocate = math.min(expected - running, podAllocationSize)
     logInfo(s"Going to request $numExecutorsToAllocate executors from Kubernetes for " +
       s"ResourceProfile Id: $resourceProfileId, target: $expected running: $running.")
