@@ -300,7 +300,8 @@ private[spark] class ExecutorPodsAllocator(
   private def requestNewExecutors(
       expected: Int, running: Int, applicationId: String, resourceProfileId: Int): Unit = {
     val numExecutorsToAllocate = math.min(expected - running, podAllocationSize)
-    logInfo(s"Going to request $numExecutorsToAllocate executors from Kubernetes.")
+    logInfo(s"Going to request $numExecutorsToAllocate executors from Kubernetes for " +
+      s"ResourceProfile Id: $resourceProfileId.")
     for ( _ <- 0 until numExecutorsToAllocate) {
       val newExecutorId = EXECUTOR_ID_COUNTER.incrementAndGet()
       val executorConf = KubernetesConf.createExecutorConf(
@@ -309,6 +310,8 @@ private[spark] class ExecutorPodsAllocator(
         applicationId,
         driverPod,
         resourceProfileId)
+      val profile = rpIdToResourceProfile(resourceProfileId)
+      logWarning(s"profile is $profile")
       val resolvedExecutorSpec = executorBuilder.buildFromFeatures(executorConf, secMgr,
         kubernetesClient, rpIdToResourceProfile(resourceProfileId))
       val executorPod = resolvedExecutorSpec.pod

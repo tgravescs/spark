@@ -256,7 +256,7 @@ class ExecutorPodsAllocatorSuite extends SparkFunSuite with BeforeAndAfter {
     verify(podOperations).delete()
   }
 
-  test("SPARK-33288: multile resource profiles") {
+  test("SPARK-33288: multiple resource profiles") {
     when(podOperations
       .withField("status.phase", "Pending"))
       .thenReturn(podOperations)
@@ -337,7 +337,6 @@ class ExecutorPodsAllocatorSuite extends SparkFunSuite with BeforeAndAfter {
     assert(!podsAllocatorUnderTest.isDeleted("5"))
     assert(!podsAllocatorUnderTest.isDeleted("6"))
     assert(!podsAllocatorUnderTest.isDeleted("7"))
-
   }
 
   private def executorPodAnswer(): Answer[KubernetesExecutorSpec] =
