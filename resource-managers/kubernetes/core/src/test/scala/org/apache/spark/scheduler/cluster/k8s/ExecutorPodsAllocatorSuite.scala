@@ -310,7 +310,7 @@ class ExecutorPodsAllocatorSuite extends SparkFunSuite with BeforeAndAfter {
     // Mark 4 as running, 5 and 7 as pending. Allocation cycle should do nothing.
     snapshotsStore.updatePod(runningExecutor(4, defaultProfile.id))
     snapshotsStore.updatePod(pendingExecutor(5, defaultProfile.id))
-    snapshotsStore.updatePod(pendingExecutor(7, defaultProfile.id))
+    snapshotsStore.updatePod(pendingExecutor(7, rp.id))
     snapshotsStore.notifySubscribers()
     verify(podOperations, times(7)).create(any())
     verify(podOperations, never()).delete()

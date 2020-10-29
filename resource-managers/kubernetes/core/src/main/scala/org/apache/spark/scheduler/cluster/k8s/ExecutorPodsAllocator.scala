@@ -213,7 +213,7 @@ private[spark] class ExecutorPodsAllocator(
 
       // its expected newlyCreatedExecutors should be small since we only allocate in small
       // batches - podAllocationSize
-      logWarning("getting newly created for rpid $rpId")
+      logWarning(s"getting newly created for rpid $rpId")
       val newlyCreatedExecutorsForRpId =
       newlyCreatedExecutors.filter { case (execid, (waitingRpId, _)) =>
         logWarning(s"new ecreted filter $rpId checking: $waitingRpId")
