@@ -256,6 +256,67 @@ class ExecutorPodsAllocatorSuite extends SparkFunSuite with BeforeAndAfter {
     verify(podOperations).delete()
   }
 
+  test("SPARK-33288: multile resource profiles") {
+    when(podOperations
+      .withField("status.phase", "Pending"))
+      .thenReturn(podOperations)
+    when(podOperations
+      .withLabel(SPARK_APP_ID_LABEL, TEST_SPARK_APP_ID))
+      .thenReturn(podOperations)
+    when(podOperations
+      .withLabel(SPARK_ROLE_LABEL, SPARK_POD_EXECUTOR_ROLE))
+      .thenReturn(podOperations)
+    when(podOperations
+      .withLabelIn(meq(SPARK_EXECUTOR_ID_LABEL), any()))
+      .thenReturn(podOperations)
+
+    val startTime = Instant.now.toEpochMilli
+    waitForExecutorPodsClock.setTime(startTime)
+
+    // Target 1 executor, make sure it's requested, even with an empty initial snapshot.
+    podsAllocatorUnderTest.setTotalExpectedExecutors(Map(defaultProfile -> 1))
+    verify(podOperations).create(podWithAttachedContainerForId(1))
+
+    // Mark executor as running, verify that subsequent allocation cycle is a no-op.
+    snapshotsStore.updatePod(runningExecutor(1))
+    snapshotsStore.notifySubscribers()
+    verify(podOperations, times(1)).create(any())
+    verify(podOperations, never()).delete()
+
+    // Request 3 more executors, make sure all are requested.
+    podsAllocatorUnderTest.setTotalExpectedExecutors(Map(defaultProfile -> 4))
+    snapshotsStore.notifySubscribers()
+    verify(podOperations).create(podWithAttachedContainerForId(2))
+    verify(podOperations).create(podWithAttachedContainerForId(3))
+    verify(podOperations).create(podWithAttachedContainerForId(4))
+
+    // Mark 2 as running, 3 as pending. Allocation cycle should do nothing.
+    snapshotsStore.updatePod(runningExecutor(2))
+    snapshotsStore.updatePod(pendingExecutor(3))
+    snapshotsStore.notifySubscribers()
+    verify(podOperations, times(4)).create(any())
+    verify(podOperations, never()).delete()
+
+    // Scale down to 1. Pending executors (both acknowledged and not) should be deleted.
+    waitForExecutorPodsClock.advance(executorIdleTimeout * 2)
+    podsAllocatorUnderTest.setTotalExpectedExecutors(Map(defaultProfile -> 1))
+    snapshotsStore.notifySubscribers()
+    verify(podOperations, times(4)).create(any())
+    verify(podOperations).withLabelIn(SPARK_EXECUTOR_ID_LABEL, "3", "4")
+    verify(podOperations).delete()
+    assert(podsAllocatorUnderTest.isDeleted("3"))
+    assert(podsAllocatorUnderTest.isDeleted("4"))
+
+    // Update the snapshot to not contain the deleted executors, make sure the
+    // allocator cleans up internal state.
+    snapshotsStore.updatePod(deletedExecutor(3))
+    snapshotsStore.updatePod(deletedExecutor(4))
+    snapshotsStore.removeDeletedExecutors()
+    snapshotsStore.notifySubscribers()
+    assert(!podsAllocatorUnderTest.isDeleted("3"))
+    assert(!podsAllocatorUnderTest.isDeleted("4"))
+  }
+
   private def executorPodAnswer(): Answer[KubernetesExecutorSpec] =
     (invocation: InvocationOnMock) => {
       val k8sConf: KubernetesExecutorConf = invocation.getArgument(0)

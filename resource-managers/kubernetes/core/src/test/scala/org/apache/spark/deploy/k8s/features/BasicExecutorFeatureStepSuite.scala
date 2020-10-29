@@ -286,7 +286,7 @@ class BasicExecutorFeatureStepSuite extends SparkFunSuite with BeforeAndAfter {
     val executor = step.configurePod(SparkPod.initialPod())
 
     assert(amountAndFormat(executor.container.getResources
-      .getRequests.get("cpus")) === "4")
+      .getRequests.get("cpu")) === "4")
     assert(amountAndFormat(executor.container.getResources
       .getLimits.get("memory")) === "6144Mi")
   }
@@ -305,7 +305,7 @@ class BasicExecutorFeatureStepSuite extends SparkFunSuite with BeforeAndAfter {
     assert(amountAndFormat(executor.container.getResources
       .getLimits.get("memory")) === "1408Mi")
     assert(amountAndFormat(executor.container.getResources
-      .getRequests.get("cpus")) === "2")
+      .getRequests.get("cpu")) === "2")
 
     assert(executor.container.getResources.getLimits.size() === 2)
     assert(amountAndFormat(executor.container.getResources.getLimits.get("gpu")) === 2)
@@ -333,7 +333,7 @@ class BasicExecutorFeatureStepSuite extends SparkFunSuite with BeforeAndAfter {
       ENV_SPARK_CONF_DIR -> SPARK_CONF_DIR_INTERNAL,
       ENV_EXECUTOR_POD_IP -> null,
       ENV_SPARK_USER -> Utils.getCurrentUserName(),
-      ENV_RESOURCE_PROFILE_ID -> 0)
+      ENV_RESOURCE_PROFILE_ID -> "0")
 
     val extraJavaOptsStart = additionalEnvVars.keys.count(_.startsWith(ENV_JAVA_OPT_PREFIX))
     val extraJavaOpts = Utils.sparkJavaOpts(conf, SparkConf.isExecutorStartupConf)
