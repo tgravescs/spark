@@ -281,53 +281,63 @@ class ExecutorPodsAllocatorSuite extends SparkFunSuite with BeforeAndAfter {
     rpb.require(ereq).require(treq)
     val rp = rpb.build
 
-    // Target 1 executor, make sure it's requested, even with an empty initial snapshot.
+    // TODO - this order depends on k8s scheduler order?
+
+    // Target 1 executor for default profile, 2 for other profile,
+    // make sure it's requested, even with an empty initial snapshot.
     podsAllocatorUnderTest.setTotalExpectedExecutors(Map(defaultProfile -> 1, rp -> 2))
     verify(podOperations).create(podWithAttachedContainerForId(1, defaultProfile.id))
     verify(podOperations).create(podWithAttachedContainerForId(2, rp.id))
     verify(podOperations).create(podWithAttachedContainerForId(3, rp.id))
 
-
     // Mark executor as running, verify that subsequent allocation cycle is a no-op.
-    snapshotsStore.updatePod(runningExecutor(3))
+    snapshotsStore.updatePod(runningExecutor(1, defaultProfile.id))
+    snapshotsStore.updatePod(runningExecutor(2, rp.id))
+    snapshotsStore.updatePod(runningExecutor(3, rp.id))
     snapshotsStore.notifySubscribers()
     verify(podOperations, times(3)).create(any())
     verify(podOperations, never()).delete()
 
-    /*
-    // Request 3 more executors, make sure all are requested.
-    podsAllocatorUnderTest.setTotalExpectedExecutors(Map(defaultProfile -> 4))
+    // Request 3 more executors for default profile and 1 more for other profile,
+    // make sure all are requested.
+    podsAllocatorUnderTest.setTotalExpectedExecutors(Map(defaultProfile -> 4, rp -> 1))
     snapshotsStore.notifySubscribers()
-    verify(podOperations).create(podWithAttachedContainerForId(2))
-    verify(podOperations).create(podWithAttachedContainerForId(3))
-    verify(podOperations).create(podWithAttachedContainerForId(4))
+    verify(podOperations).create(podWithAttachedContainerForId(4, defaultProfile.id))
+    verify(podOperations).create(podWithAttachedContainerForId(5, defaultProfile.id))
+    verify(podOperations).create(podWithAttachedContainerForId(6, defaultProfile.id))
+    verify(podOperations).create(podWithAttachedContainerForId(7, rp.id))
 
-    // Mark 2 as running, 3 as pending. Allocation cycle should do nothing.
-    snapshotsStore.updatePod(runningExecutor(2))
-    snapshotsStore.updatePod(pendingExecutor(3))
+    // Mark 4 as running, 5 and 7 as pending. Allocation cycle should do nothing.
+    snapshotsStore.updatePod(runningExecutor(4, defaultProfile.id))
+    snapshotsStore.updatePod(pendingExecutor(5, defaultProfile.id))
+    snapshotsStore.updatePod(pendingExecutor(7, defaultProfile.id))
     snapshotsStore.notifySubscribers()
-    verify(podOperations, times(4)).create(any())
+    verify(podOperations, times(7)).create(any())
     verify(podOperations, never()).delete()
 
-    // Scale down to 1. Pending executors (both acknowledged and not) should be deleted.
+    // Scale down to 1 for both resource profiles. Pending executors
+    // (both acknowledged and not) should be deleted.
     waitForExecutorPodsClock.advance(executorIdleTimeout * 2)
-    podsAllocatorUnderTest.setTotalExpectedExecutors(Map(defaultProfile -> 1))
+    podsAllocatorUnderTest.setTotalExpectedExecutors(Map(defaultProfile -> 1, rp -> 1))
     snapshotsStore.notifySubscribers()
-    verify(podOperations, times(4)).create(any())
-    verify(podOperations).withLabelIn(SPARK_EXECUTOR_ID_LABEL, "3", "4")
+    verify(podOperations, times(7)).create(any())
+    verify(podOperations).withLabelIn(SPARK_EXECUTOR_ID_LABEL, "5", "6", "7")
     verify(podOperations).delete()
-    assert(podsAllocatorUnderTest.isDeleted("3"))
-    assert(podsAllocatorUnderTest.isDeleted("4"))
+    assert(podsAllocatorUnderTest.isDeleted("5"))
+    assert(podsAllocatorUnderTest.isDeleted("6"))
+    assert(podsAllocatorUnderTest.isDeleted("7"))
 
     // Update the snapshot to not contain the deleted executors, make sure the
     // allocator cleans up internal state.
-    snapshotsStore.updatePod(deletedExecutor(3))
-    snapshotsStore.updatePod(deletedExecutor(4))
+    snapshotsStore.updatePod(deletedExecutor(5))
+    snapshotsStore.updatePod(deletedExecutor(6))
+    snapshotsStore.updatePod(deletedExecutor(7))
     snapshotsStore.removeDeletedExecutors()
     snapshotsStore.notifySubscribers()
-    assert(!podsAllocatorUnderTest.isDeleted("3"))
-    assert(!podsAllocatorUnderTest.isDeleted("4"))
-    */
+    assert(!podsAllocatorUnderTest.isDeleted("5"))
+    assert(!podsAllocatorUnderTest.isDeleted("6"))
+    assert(!podsAllocatorUnderTest.isDeleted("7"))
+
   }
 
   private def executorPodAnswer(): Answer[KubernetesExecutorSpec] =

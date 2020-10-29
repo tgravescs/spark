@@ -308,7 +308,7 @@ class BasicExecutorFeatureStepSuite extends SparkFunSuite with BeforeAndAfter {
       .getRequests.get("cpu")) === "2")
 
     assert(executor.container.getResources.getLimits.size() === 2)
-    assert(amountAndFormat(executor.container.getResources.getLimits.get("nvidia.com/gpu")) === 2)
+    assert(amountAndFormat(executor.container.getResources.getLimits.get("nvidia.com/gpu")) === "2")
   }
 
 
