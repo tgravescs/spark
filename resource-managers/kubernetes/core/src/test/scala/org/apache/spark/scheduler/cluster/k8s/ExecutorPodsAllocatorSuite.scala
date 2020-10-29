@@ -90,7 +90,7 @@ class ExecutorPodsAllocatorSuite extends SparkFunSuite with BeforeAndAfter {
     when(podOperations.withName(driverPodName)).thenReturn(driverPodOperations)
     when(driverPodOperations.get).thenReturn(driverPod)
     when(executorBuilder.buildFromFeatures(any(classOf[KubernetesExecutorConf]), meq(secMgr),
-      meq(kubernetesClient), meq(defaultProfile))).thenAnswer(executorPodAnswer())
+      meq(kubernetesClient), meq(any))).thenAnswer(executorPodAnswer())
     snapshotsStore = new DeterministicExecutorPodsSnapshotsStore()
     waitForExecutorPodsClock = new ManualClock(0L)
     podsAllocatorUnderTest = new ExecutorPodsAllocator(
@@ -342,6 +342,7 @@ class ExecutorPodsAllocatorSuite extends SparkFunSuite with BeforeAndAfter {
   private def executorPodAnswer(): Answer[KubernetesExecutorSpec] =
     (invocation: InvocationOnMock) => {
       val k8sConf: KubernetesExecutorConf = invocation.getArgument(0)
-      KubernetesExecutorSpec(executorPodWithId(k8sConf.executorId.toInt), Seq.empty)
+      KubernetesExecutorSpec(executorPodWithId(k8sConf.executorId.toInt,
+        k8sConf.resourceProfileId.toInt), Seq.empty)
   }
 }
