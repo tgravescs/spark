@@ -211,10 +211,8 @@ private[spark] class ExecutorPodsAllocator(
 
       // its expected newlyCreatedExecutors should be small since we only allocate in small
       // batches - podAllocationSize
-      logWarning(s"getting newly created for rpid $rpId")
       val newlyCreatedExecutorsForRpId =
       newlyCreatedExecutors.filter { case (execid, (waitingRpId, _)) =>
-        logWarning(s"new ecreted filter $rpId checking: $waitingRpId")
         rpId == waitingRpId
       }
 
@@ -233,8 +231,6 @@ private[spark] class ExecutorPodsAllocator(
       //
       // TODO: with dynamic allocation off, handle edge cases if we end up with more running
       // executors than expected.
-      logWarning(s"rp: $rpId running: $currentRunningCount pending: " +
-        s"${currentPendingExecutors.size} newly created: ${newlyCreatedExecutorsForRpId.size}")
       val knownPodCount = currentRunningCount + currentPendingExecutors.size +
         newlyCreatedExecutorsForRpId.size
 
@@ -309,7 +305,6 @@ private[spark] class ExecutorPodsAllocator(
         driverPod,
         resourceProfileId)
       val profile = rpIdToResourceProfile(resourceProfileId)
-      logWarning(s"profile is $profile")
       val resolvedExecutorSpec = executorBuilder.buildFromFeatures(executorConf, secMgr,
         kubernetesClient, rpIdToResourceProfile(resourceProfileId))
       val executorPod = resolvedExecutorSpec.pod
