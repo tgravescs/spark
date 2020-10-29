@@ -300,7 +300,7 @@ class ExecutorPodsAllocatorSuite extends SparkFunSuite with BeforeAndAfter {
 
     // Request 3 more executors for default profile and 1 more for other profile,
     // make sure all are requested.
-    podsAllocatorUnderTest.setTotalExpectedExecutors(Map(defaultProfile -> 4, rp -> 1))
+    podsAllocatorUnderTest.setTotalExpectedExecutors(Map(defaultProfile -> 4, rp -> 3))
     snapshotsStore.notifySubscribers()
     verify(podOperations).create(podWithAttachedContainerForId(4, defaultProfile.id))
     verify(podOperations).create(podWithAttachedContainerForId(5, defaultProfile.id))
