@@ -175,6 +175,8 @@ private[spark] class ExecutorPodsAllocator(
       val existingExecs = lastSnapshot.executorPods.keySet
       _deletedExecutorIds = _deletedExecutorIds.filter(existingExecs.contains)
     }
+    
+    logWarning("newly createdi is: " + newlyCreatedExecutors)
 
     // map the pods into per ResourceProfile id so we can check per ResourceProfile
     // fast path if not using other ResourceProfiles
@@ -235,6 +237,8 @@ private[spark] class ExecutorPodsAllocator(
       //
       // TODO: with dynamic allocation off, handle edge cases if we end up with more running
       // executors than expected.
+      logWarning(s"rp: $rpId running: $currentRunningCount pending: " +
+        s"${currentPendingExecutors.size} newly created: ${newlyCreatedExecutorsForRpId.size}")
       val knownPodCount = currentRunningCount + currentPendingExecutors.size +
         newlyCreatedExecutorsForRpId.size
 
