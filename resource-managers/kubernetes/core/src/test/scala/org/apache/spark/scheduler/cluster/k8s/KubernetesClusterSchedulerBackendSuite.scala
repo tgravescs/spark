@@ -38,7 +38,6 @@ import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages.RemoveExe
 import org.apache.spark.scheduler.cluster.CoarseGrainedSchedulerBackend
 import org.apache.spark.scheduler.cluster.k8s.ExecutorLifecycleTestUtils.TEST_SPARK_APP_ID
 
-
 class KubernetesClusterSchedulerBackendSuite extends SparkFunSuite with BeforeAndAfter {
 
   private val schedulerExecutorService = new DeterministicScheduler()

@@ -142,7 +142,6 @@ object ExecutorLifecycleTestUtils {
     podWithAttachedContainer
   }
 
-
   def executorPodWithId(executorId: Long, rpId: Int = DEFAULT_RESOURCE_PROFILE_ID): SparkPod = {
     val pod = new PodBuilder()
       .withNewMetadata()

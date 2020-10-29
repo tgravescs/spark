@@ -101,20 +101,14 @@ private[spark] class ExecutorPodsAllocator(
     }
   }
 
-  private def getOrUpdateTotalNumExecutorsForRPId(rpId: Int): Int = {
-    totalExpectedExecutorsPerResourceProfileId.computeIfAbsent(rpId, _ => initialTargetExecutors)
-  }
-
   def setTotalExpectedExecutors(
       resourceProfileToTotalExecs: Map[ResourceProfile, Int]): Unit = {
     resourceProfileToTotalExecs.foreach { case (rp, numExecs) =>
       rpIdToResourceProfile.getOrElseUpdate(rp.id, rp)
-      if (numExecs != getOrUpdateTotalNumExecutorsForRPId(rp.id)) {
-        logInfo(s"Driver requested a total number of $numExecs executor(s) " +
-          s"for resource profile id: ${rp.id}.")
-        totalExpectedExecutorsPerResourceProfileId.put(rp.id, numExecs)
-      }
+      totalExpectedExecutorsPerResourceProfileId.computeIfAbsent(rp.id, _ => numExecs)
     }
+    // TODO - change to debug
+    logWarning(s"Set total expected execs to $totalExpectedExecutorsPerResourceProfileId")
     if (!hasPendingPods.get()) {
       snapshotsStore.notifySubscribers()
     }
@@ -125,9 +119,7 @@ private[spark] class ExecutorPodsAllocator(
   private def onNewSnapshots(
       applicationId: String,
       snapshots: Seq[ExecutorPodsSnapshot]): Unit = {
-
     newlyCreatedExecutors --= snapshots.flatMap(_.executorPods.keys)
-
     // For all executors we've created against the API but have not seen in a snapshot
     // yet - check the current time. If the current time has exceeded some threshold,
     // assume that the pod was either never created (the API server never properly

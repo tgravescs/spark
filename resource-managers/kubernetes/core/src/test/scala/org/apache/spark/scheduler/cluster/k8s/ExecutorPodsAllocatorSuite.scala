@@ -56,7 +56,6 @@ class ExecutorPodsAllocatorSuite extends SparkFunSuite with BeforeAndAfter {
     .set(DYN_ALLOCATION_EXECUTOR_IDLE_TIMEOUT.key, "10s")
 
   private val defaultProfile: ResourceProfile = ResourceProfile.getOrCreateDefaultProfile(conf)
-
   private val podAllocationSize = conf.get(KUBERNETES_ALLOCATION_BATCH_SIZE)
   private val podAllocationDelay = conf.get(KUBERNETES_ALLOCATION_BATCH_DELAY)
   private val podCreationTimeout = math.max(podAllocationDelay * 5, 60000L)
@@ -280,8 +279,6 @@ class ExecutorPodsAllocatorSuite extends SparkFunSuite with BeforeAndAfter {
     treq.cpus(2)
     rpb.require(ereq).require(treq)
     val rp = rpb.build
-
-    // TODO - this order depends on k8s scheduler order?
 
     // Target 1 executor for default profile, 2 for other profile,
     // make sure it's requested, even with an empty initial snapshot.

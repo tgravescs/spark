@@ -136,8 +136,6 @@ private[spark] class BasicExecutorFeatureStep(
     val executorCpuQuantity = new Quantity(executorCoresRequest)
 
     val executorResourceQuantities = buildExecutorResourcesQuantities(customResources.toSet)
-    // val executorResourceQuantities =
-    //   KubernetesUtils.buildResourcesQuantities(SPARK_DRIVER_PREFIX, kubernetesConf.sparkConf)
 
     val executorEnv: Seq[EnvVar] = {
         (Seq(
