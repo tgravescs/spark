@@ -105,7 +105,7 @@ private[spark] class ExecutorPodsAllocator(
       resourceProfileToTotalExecs: Map[ResourceProfile, Int]): Unit = {
     resourceProfileToTotalExecs.foreach { case (rp, numExecs) =>
       rpIdToResourceProfile.getOrElseUpdate(rp.id, rp)
-      totalExpectedExecutorsPerResourceProfileId.computeIfAbsent(rp.id, _ => numExecs)
+      totalExpectedExecutorsPerResourceProfileId.put(rp.id, numExecs)
     }
     // TODO - change to debug
     logWarning(s"Set total expected execs to $totalExpectedExecutorsPerResourceProfileId")
