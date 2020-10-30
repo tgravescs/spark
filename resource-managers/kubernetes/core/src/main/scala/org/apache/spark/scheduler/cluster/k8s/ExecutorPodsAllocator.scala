@@ -69,8 +69,6 @@ private[spark] class ExecutorPodsAllocator(
 
   private val shouldDeleteExecutors = conf.get(KUBERNETES_DELETE_EXECUTORS)
 
-  private val initialTargetExecutors = SchedulerBackendUtils.getInitialTargetExecutorNumber(conf)
-
   private val driverPod = kubernetesDriverPodName
     .map(name => Option(kubernetesClient.pods()
       .withName(name)
@@ -79,7 +77,6 @@ private[spark] class ExecutorPodsAllocator(
         s"No pod was found named $kubernetesDriverPodName in the cluster in the " +
           s"namespace $namespace (this was supposed to be the driver pod.).")))
 
-  // ResourceProfile ID to Executor IDs where
   // Executor IDs that have been requested from Kubernetes but have not been detected in any
   // snapshot yet. Mapped to the (ResourceProfile id, timestamp) when they were created.
   private val newlyCreatedExecutors = mutable.LinkedHashMap[Long, (Int, Long)]()
@@ -107,8 +104,7 @@ private[spark] class ExecutorPodsAllocator(
       rpIdToResourceProfile.getOrElseUpdate(rp.id, rp)
       totalExpectedExecutorsPerResourceProfileId.put(rp.id, numExecs)
     }
-    // TODO - change to debug
-    logWarning(s"Set total expected execs to $totalExpectedExecutorsPerResourceProfileId")
+    logDebug(s"Set total expected execs to $totalExpectedExecutorsPerResourceProfileId")
     if (!hasPendingPods.get()) {
       snapshotsStore.notifySubscribers()
     }
@@ -127,7 +123,7 @@ private[spark] class ExecutorPodsAllocator(
     // both the creation and deletion events. In either case, delete the missing pod
     // if possible, and mark such a pod to be rescheduled below.
     val currentTime = clock.getTimeMillis()
-    val timedOut = newlyCreatedExecutors.flatMap { case (execId, (rpId, timeCreated)) =>
+    val timedOut = newlyCreatedExecutors.flatMap { case (execId, (_, timeCreated)) =>
       if (currentTime - timeCreated > podCreationTimeout) {
         Some(execId)
       } else {
@@ -186,14 +182,14 @@ private[spark] class ExecutorPodsAllocator(
     var totalPendingCount = 0
     // The order we request executors for each ResourceProfile is not guaranteed.
     totalExpectedExecutorsPerResourceProfileId.asScala.foreach { case (rpId, targetNum) =>
-      val snapshotsForRpId = rpIdToExecsAndPodState.getOrElse(rpId, mutable.LinkedHashMap.empty)
+      val podsForRpId = rpIdToExecsAndPodState.getOrElse(rpId, mutable.LinkedHashMap.empty)
 
-      val currentRunningCount = snapshotsForRpId.values.count {
+      val currentRunningCount = podsForRpId.values.count {
         case PodRunning(_) => true
         case _ => false
       }
 
-      val currentPendingExecutors = snapshotsForRpId.filter {
+      val currentPendingExecutors = podsForRpId.filter {
         case (_, PodPending(_)) => true
         case _ => false
       }
@@ -202,13 +198,13 @@ private[spark] class ExecutorPodsAllocator(
       var knownPendingCount = currentPendingExecutors.size
 
       val newlyCreatedExecutorsForRpId =
-        newlyCreatedExecutors.filter { case (execid, (waitingRpId, _)) =>
+        newlyCreatedExecutors.filter { case (_, (waitingRpId, _)) =>
           rpId == waitingRpId
         }
 
-      if (snapshotsForRpId.nonEmpty) {
-        logDebug(s"Pod for ResourceProfile Id: $rpId " +
-          s"allocation status: $currentRunningCount running, " +
+      if (podsForRpId.nonEmpty) {
+        logDebug(s"ResourceProfile Id: $rpId " +
+          s"pod allocation status: $currentRunningCount running, " +
           s"${currentPendingExecutors.size} pending. " +
           s"${newlyCreatedExecutorsForRpId.size} unacknowledged.")
       }
@@ -253,7 +249,8 @@ private[spark] class ExecutorPodsAllocator(
         }
       }
 
-      if (newlyCreatedExecutorsForRpId.isEmpty && knownPodCount < targetNum) {
+      if (newlyCreatedExecutorsForRpId.isEmpty
+        && knownPodCount < targetNum) {
         requestNewExecutors(targetNum, knownPodCount, applicationId, rpId)
       }
       totalPendingCount += knownPendingCount
@@ -297,7 +294,6 @@ private[spark] class ExecutorPodsAllocator(
         applicationId,
         driverPod,
         resourceProfileId)
-      val profile = rpIdToResourceProfile(resourceProfileId)
       val resolvedExecutorSpec = executorBuilder.buildFromFeatures(executorConf, secMgr,
         kubernetesClient, rpIdToResourceProfile(resourceProfileId))
       val executorPod = resolvedExecutorSpec.pod
