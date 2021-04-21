@@ -401,6 +401,7 @@ case class AdaptiveSparkPlanExec(
       // First have a quick check in the `stageCache` without having to traverse down the node.
       context.stageCache.get(e.canonicalized) match {
         case Some(existingStage) if conf.exchangeReuseEnabled =>
+          logWarning("reusing existing Stage: " + existingStage)
           val stage = reuseQueryStage(existingStage, e)
           val isMaterialized = stage.resultOption.get().isDefined
           CreateStageResult(
@@ -418,8 +419,15 @@ case class AdaptiveSparkPlanExec(
               // Check the `stageCache` again for reuse. If a match is found, ditch the new stage
               // and reuse the existing stage found in the `stageCache`, otherwise update the
               // `stageCache` with the new stage.
-              val queryStage = context.stageCache.getOrElseUpdate(e.canonicalized, newStage)
+
+              // val queryStage = context.stageCache.getOrElseUpdate(e.canonicalized, newStage)
+              // store based on updated query stage from newQueryStage since physical rules
+              // applied there that could change the canonicalized plan
+              logWarning("checking to reusing existing Stage: " + e.canonicalized + " against new stage " + newStage.plan.canonicalized)
+              val queryStage = context.stageCache.getOrElseUpdate(newStage.plan.canonicalized, newStage)
+
               if (queryStage.ne(newStage)) {
+                logWarning("reuse not equal so update: " + newStage.plan.canonicalized + " query stage: " + queryStage.plan.canonicalized)
                 newStage = reuseQueryStage(queryStage, e)
               }
             }
